@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Entrar — Admin SHOPLAB</title>
+  <link rel="stylesheet" href="../assets/css/admin.css">
+</head>
+<body data-admin-page="login">
+  <main class="login-page">
+    <section class="login-box">
+      <a class="logo" href="../index.html"><span class="logo-mark">⌬</span>SHOP<b>LAB</b></a>
+      <h1>Acesso administrativo</h1>
+      <p class="muted">Entre para gerenciar os dados reais da SHOPLAB.</p>
+      <div id="message" class="admin-message"></div>
+      <form id="login-form">
+        <div class="form-field">
+          <label for="password">Senha</label>
+          <input id="password" type="password" required autocomplete="current-password">
+        </div>
+        <div id="turnstile-widget"></div>
+        <button class="btn primary" type="submit" style="width:100%;margin-top:18px">Entrar</button>
+      </form>
+      <p class="muted" style="font-size:12px;margin-top:18px">A sessão usa cookie seguro e não armazena sua senha no navegador.</p>
+    </section>
+  </main>
+  <script type="module" src="../assets/js/admin.js"></script>
+</body>
+</html>
