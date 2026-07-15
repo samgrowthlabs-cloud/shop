@@ -13,8 +13,8 @@ export const getProductBySlug=async slug=>{
   const productOldPrice=Number(product.oldPrice||0),offerOldPrice=Number(primaryOffer.oldPrice||0);
   return{...product,score:product.score??product.editorialScore??product.editorial_score??0,editorialScore:product.editorialScore??product.editorial_score??null,description:product.description??product.fullDescription??product.shortDescription??product.full_description??product.short_description??'',price:productPrice>0?productPrice:offerPrice,oldPrice:productOldPrice>0?productOldPrice:offerOldPrice,store:product.store||primaryOffer.store||'',offerId:product.offerId||primaryOffer.id||'',icon:product.icon||({'Livros e e-books':'▤','Tecnologia':'⌘','Áudio':'♫','Produtividade':'✓'}[product.category]||'⌬')};
 };
-export const searchProducts=async({q='',category='',sort=''}={})=>{
-  const categorySlug=category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+export const searchProducts=async({q='',category='',categorySlug='',sort=''}={})=>{
+  categorySlug=categorySlug||category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   if(!C.USE_MOCK_DATA&&q)return withActivePromotions(await request(`/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort})}`));
   let products=C.USE_MOCK_DATA?await getProducts():await withActivePromotions(await request(`/api/v1/products?${new URLSearchParams({category:categorySlug,limit:'50'})}`));
   const normalized=q.toLocaleLowerCase('pt-BR');

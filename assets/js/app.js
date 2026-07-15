@@ -11,7 +11,7 @@ async function home(){const[p,c]=await Promise.all([getProducts(),getCategories(
 async function listing(){
   const q=params.get('q')||'',slug=params.get('slug')||'',initialCategory=params.get('category')||'',initialSort=params.get('sort')||'';
   const categories=await getCategories(),pageCategory=page==='category'?categories.find(item=>item.slug===slug):null;
-  let all=await searchProducts({q,category:pageCategory?.name||'',sort:''});
+  let all=await searchProducts({q,category:pageCategory?.name||'',categorySlug:pageCategory?.slug||'',sort:''});
   if(page==='brand'&&slug)all=all.filter(product=>(product.brand||'').toLocaleLowerCase('pt-BR')===decodeURIComponent(slug).replace(/-/g,' ').toLocaleLowerCase('pt-BR'));
   if(page==='author'&&slug)all=all.filter(product=>(product.author||'').toLocaleLowerCase('pt-BR')===decodeURIComponent(slug).replace(/-/g,' ').toLocaleLowerCase('pt-BR'));
   const prices=all.map(product=>Number(product.price)||0).filter(Boolean),priceFloor=prices.length?Math.floor(Math.min(...prices)/100)*100:0,priceCeil=prices.length?Math.ceil(Math.max(...prices)/100)*100:10000;
