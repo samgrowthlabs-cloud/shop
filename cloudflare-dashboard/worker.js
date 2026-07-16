@@ -1061,7 +1061,7 @@ async function createProductV2(req, env, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO products(id,name,slug,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
+      `INSERT INTO products(id,name,slug,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
     ).bind(
       productId,
       String(body.name).trim(),
@@ -1078,6 +1078,7 @@ async function createProductV2(req, env, id) {
       basePrice,
       comparePrice,
       body.isFeatured ? 1 : 0,
+      JSON.stringify(Array.isArray(body.specificationGroups) ? body.specificationGroups : []),
       status,
     ),
     ...insertOfferStatements(env, productId, offerResult.offers),
@@ -1138,7 +1139,7 @@ async function updateProductV2(req, env, productId, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   const results = await env.DB.batch([
     env.DB.prepare(
-      `UPDATE products SET name=?,slug=?,product_type=?,status=?,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE products SET name=?,slug=?,product_type=?,status=?,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(
       String(body.name).trim(),
       body.slug,
@@ -1154,6 +1155,7 @@ async function updateProductV2(req, env, productId, id) {
       basePrice,
       comparePrice,
       body.isFeatured ? 1 : 0,
+      JSON.stringify(Array.isArray(body.specificationGroups) ? body.specificationGroups : []),
       body.status || "draft",
       productId,
     ),
@@ -1441,7 +1443,7 @@ async function adminProductDetail(req, env, productId, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const product = await env.DB.prepare(
-    `SELECT id,name,slug,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured FROM products WHERE id=?`,
+    `SELECT id,name,slug,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson FROM products WHERE id=?`,
   )
     .bind(productId)
     .first();
@@ -1470,6 +1472,7 @@ async function adminProductDetail(req, env, productId, id) {
     env,
     {
       ...product,
+      specificationGroups: parse(product.specificationsJson, []),
       offers: offers.results || [],
       media: media.results || [],
       partners: partners.results || [],
