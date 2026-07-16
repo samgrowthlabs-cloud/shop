@@ -50,7 +50,7 @@ document.addEventListener('click',async event=>{
   const original=button.textContent,slug=button.dataset.shareProduct,name=button.dataset.shareName||'Produto SHOPLAB';
   button.disabled=true;button.textContent='Preparando...';
   try{
-    const shareUrl=`${C.API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location.origin)}`;
+    const shareUrl=`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;
     const data={title:name,text:`Confira ${name} na SHOPLAB`,url:shareUrl};
     if(navigator.share){
       await navigator.share(data);
@@ -60,7 +60,7 @@ document.addEventListener('click',async event=>{
       setTimeout(()=>button.textContent=original,1800);
       return;
     }
-  }catch(error){if(error.name!=='AbortError'){try{const shareUrl=`${C.API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location.origin)}`;await navigator.clipboard.writeText(shareUrl);button.textContent='Link copiado!';setTimeout(()=>button.textContent=original,1800);return}catch{}}}
+  }catch(error){if(error.name!=='AbortError'){try{const shareUrl=`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;await navigator.clipboard.writeText(shareUrl);button.textContent='Link copiado!';setTimeout(()=>button.textContent=original,1800);return}catch{}}}
   button.disabled=false;button.textContent=original;
 },true);
 

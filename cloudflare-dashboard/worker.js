@@ -3,6 +3,19 @@ const JSON_HEADERS = {
   "x-content-type-options": "nosniff",
 };
 const enc = new TextEncoder();
+const BUILT_IN_ORIGINS = ["https://shoplab.samgrowthlabs.com.br"];
+
+function allowedOrigins(env) {
+  return [
+    ...new Set([
+      ...BUILT_IN_ORIGINS,
+      ...String(env.ALLOWED_ORIGINS || "")
+        .split(",")
+        .map((origin) => origin.trim().replace(/\/+$/, ""))
+        .filter(Boolean),
+    ]),
+  ];
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -342,22 +355,19 @@ async function shareProductPage(req, env, slug) {
   if (!product) return new Response("Produto não encontrado", { status: 404 });
 
   const requestUrl = new URL(req.url);
-  const allowedOrigins = String(env.ALLOWED_ORIGINS || "")
-    .split(",")
-    .map((origin) => origin.trim().replace(/\/+$/, ""))
-    .filter(Boolean);
+  const configuredOrigins = allowedOrigins(env);
   const requestedSite = String(requestUrl.searchParams.get("site") || "")
     .trim()
     .replace(/\/+$/, "");
-  const siteOrigin = allowedOrigins.includes(requestedSite)
+  const siteOrigin = configuredOrigins.includes(requestedSite)
     ? requestedSite
-    : String(env.PUBLIC_SITE_URL || allowedOrigins[0] || "")
+    : String(env.PUBLIC_SITE_URL || configuredOrigins[0] || "")
         .trim()
         .replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(siteOrigin))
     return new Response("PUBLIC_SITE_URL não configurada", { status: 503 });
 
-  const productUrl = `${siteOrigin}/produto.html?slug=${encodeURIComponent(slug)}`;
+  const productUrl = `${siteOrigin}/produto?slug=${encodeURIComponent(slug)}`;
   let imageUrl = product.externalUrl || "";
   if (product.storageKey)
     imageUrl = `${requestUrl.origin}/media/${encodeURIComponent(product.storageKey)}`;
@@ -2704,10 +2714,7 @@ function respond(req, env, body, status = 200) {
 }
 function cors(req, env, res) {
   const origin = req.headers.get("origin"),
-    allowed = (env.ALLOWED_ORIGINS || "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
+    allowed = allowedOrigins(env);
   if (origin && allowed.includes(origin)) {
     res.headers.set("access-control-allow-origin", origin);
     res.headers.set("vary", "Origin");
