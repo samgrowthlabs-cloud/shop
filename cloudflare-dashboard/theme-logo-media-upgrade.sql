@@ -1,0 +1,2 @@
+ALTER TABLE seasonal_themes ADD COLUMN logo_height INTEGER NOT NULL DEFAULT 36;
+z

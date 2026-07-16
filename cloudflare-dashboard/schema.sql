@@ -107,6 +107,30 @@ CREATE TABLE IF NOT EXISTS events (
   query_text TEXT, metadata_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS banners (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, eyebrow TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+  message TEXT NOT NULL DEFAULT '', button_text TEXT NOT NULL DEFAULT 'Ver oferta', link_url TEXT NOT NULL,
+  desktop_storage_key TEXT NOT NULL, mobile_storage_key TEXT, alt_text TEXT NOT NULL DEFAULT '',
+  starts_at TEXT, ends_at TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+  sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS seasonal_themes (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, holiday TEXT NOT NULL DEFAULT '',
+  header_background TEXT NOT NULL DEFAULT '#ffffff', header_background_end TEXT NOT NULL DEFAULT '#ffffff',
+  header_gradient_enabled INTEGER NOT NULL DEFAULT 0 CHECK (header_gradient_enabled IN (0,1)), header_gradient_angle INTEGER NOT NULL DEFAULT 90,
+  header_text_color TEXT NOT NULL DEFAULT '#233330',
+  accent_color TEXT NOT NULL DEFAULT '#0a7c71', page_text_color TEXT NOT NULL DEFAULT '#233330',
+  muted_text_color TEXT NOT NULL DEFAULT '#687773', logo_text TEXT NOT NULL DEFAULT 'SHOPLAB', logo_text_color TEXT NOT NULL DEFAULT '#0a7c71', logo_height INTEGER NOT NULL DEFAULT 36,
+  logo_storage_key TEXT, logo_hover_storage_key TEXT, header_media_storage_key TEXT,
+  header_media_opacity REAL NOT NULL DEFAULT 0.35, header_media_position TEXT NOT NULL DEFAULT 'center', header_media_size TEXT NOT NULL DEFAULT 'cover',
+  header_media_scale INTEGER NOT NULL DEFAULT 100, header_media_repeat INTEGER NOT NULL DEFAULT 0 CHECK (header_media_repeat IN (0,1)),
+  starts_at TEXT, ends_at TEXT,
+  is_active INTEGER NOT NULL DEFAULT 0 CHECK (is_active IN (0,1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_status_category ON products(status, category_id);
 CREATE INDEX IF NOT EXISTS idx_products_updated ON products(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_products_views ON products(view_count DESC);
@@ -119,6 +143,8 @@ CREATE INDEX IF NOT EXISTS idx_products_base_price ON products(base_price_cents)
 CREATE INDEX IF NOT EXISTS idx_promotions_active_period ON promotions(is_active, starts_at, ends_at);
 CREATE INDEX IF NOT EXISTS idx_promotion_products_product ON promotion_products(product_id, promotion_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON admin_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_banners_active_period ON banners(is_active, starts_at, ends_at, sort_order);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_only_one_active_seasonal_theme ON seasonal_themes(is_active) WHERE is_active=1;
 
 INSERT OR IGNORE INTO categories (id,name,slug,icon,sort_order) VALUES
 ('cat_books','Livros e e-books','livros','▤',1),('cat_tech','Tecnologia','tecnologia','⌘',2),

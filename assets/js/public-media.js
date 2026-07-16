@@ -16,7 +16,7 @@ function renderDescriptions(data){
   if(!longText||longText===(shortText||'').trim())return;
   const analysis=document.querySelector('#conteudo > .section.alt'),section=document.createElement('section');section.className='section product-description-section';
   section.innerHTML=`<div class="container"><div class="section-head"><div><span class="eyebrow">DETALHES DO PRODUTO</span><h2>Descrição completa</h2></div></div><div class="long-description collapsed" id="long-description"><p>${safe(longText)}</p></div><button class="btn ghost description-toggle" type="button" aria-expanded="false" aria-controls="long-description">Mostrar mais</button></div>`;
-  if(analysis)analysis.insertAdjacentElement('afterend',section);else document.querySelector('#conteudo')?.append(section);
+  if(analysis)analysis.insertAdjacentElement('beforebegin',section);else document.querySelector('#conteudo')?.append(section);
   section.querySelector('.description-toggle').addEventListener('click',event=>{const content=section.querySelector('.long-description'),expanded=event.currentTarget.getAttribute('aria-expanded')==='true';content.classList.toggle('collapsed',expanded);event.currentTarget.setAttribute('aria-expanded',String(!expanded));event.currentTarget.textContent=expanded?'Mostrar mais':'Mostrar menos';if(expanded)section.scrollIntoView({behavior:'smooth',block:'start'})});
 }
 
@@ -43,6 +43,26 @@ async function detailMedia(){
 }
 
 document.addEventListener('click',async event=>{const link=event.target.closest('[data-offer]');if(!link)return;event.preventDefault();event.stopImmediatePropagation();const original=link.textContent;link.textContent='Abrindo oferta...';link.setAttribute('aria-busy','true');const product=await getProduct(link.dataset.offer);if(product?.offerId){location.href=`${C.API_BASE_URL}/go/${encodeURIComponent(product.slug)}/${encodeURIComponent(product.offerId)}`;return}link.textContent=original;link.removeAttribute('aria-busy');alert('Este produto ainda não possui um link afiliado ativo.')},true);
+
+document.addEventListener('click',async event=>{
+  const button=event.target.closest('[data-share-product]');
+  if(!button)return;
+  const original=button.textContent,slug=button.dataset.shareProduct,name=button.dataset.shareName||'Produto SHOPLAB';
+  button.disabled=true;button.textContent='Preparando...';
+  try{
+    const shareUrl=`${C.API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location.origin)}`;
+    const data={title:name,text:`Confira ${name} na SHOPLAB`,url:shareUrl};
+    if(navigator.share){
+      await navigator.share(data);
+    }else{
+      await navigator.clipboard.writeText(shareUrl);
+      button.textContent='Link copiado!';
+      setTimeout(()=>button.textContent=original,1800);
+      return;
+    }
+  }catch(error){if(error.name!=='AbortError'){try{const shareUrl=`${C.API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location.origin)}`;await navigator.clipboard.writeText(shareUrl);button.textContent='Link copiado!';setTimeout(()=>button.textContent=original,1800);return}catch{}}}
+  button.disabled=false;button.textContent=original;
+},true);
 
 function scan(){document.querySelectorAll('.product-card').forEach(cardMedia);detailMedia()}
 new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});

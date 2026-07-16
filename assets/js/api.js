@@ -5,6 +5,7 @@ async function withActivePromotions(products){if(C.USE_MOCK_DATA)return products
 export const getProducts=async()=>withActivePromotions(await request('/api/v1/products',{mock:'assets/mock/products.json'}));
 export const getTrendingProducts=async(limit=8)=>C.USE_MOCK_DATA?(await getProducts()).slice(0,limit):withActivePromotions(await request(`/api/v1/products/trending?limit=${limit}`));
 export const getCategories=()=>request('/api/v1/categories',{mock:'assets/mock/categories.json'});
+export const getSiteConfig=()=>C.USE_MOCK_DATA?Promise.resolve({banners:[],theme:null}):request('/api/v1/site-config');
 export const getProductBySlug=async slug=>{
   const product=C.USE_MOCK_DATA?(await getProducts()).find(item=>item.slug===slug):await request(`/api/v1/products/${encodeURIComponent(slug)}`);
   if(!product)return product;
