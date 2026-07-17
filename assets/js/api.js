@@ -2,7 +2,7 @@ import{SHOPLAB_CONFIG as C}from'./config.js';
 const cache=new Map();
 async function request(path,{mock,method='GET',body,signal}={}){const key=method+path;if(method==='GET'&&cache.has(key))return cache.get(key);const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),C.REQUEST_TIMEOUT);signal?.addEventListener('abort',()=>ctrl.abort());try{const url=C.USE_MOCK_DATA?mock:`${C.API_BASE_URL}${path}`;if(!url)throw new Error('API não configurada');const res=await fetch(url,{method,body:body instanceof FormData?body:body?JSON.stringify(body):undefined,headers:body&&!(body instanceof FormData)?{'Content-Type':'application/json'}:undefined,credentials:'include',signal:ctrl.signal});if(!res.ok)throw new Error(`Falha na requisição (${res.status})`);const json=await res.json(),data=json.data??json;if(method==='GET')cache.set(key,data);return data}finally{clearTimeout(timer)}}
 async function withActivePromotions(products){if(C.USE_MOCK_DATA)return products;const campaigns=await request('/api/v1/promotions'),promoted=new Map();for(const campaign of campaigns)for(const product of campaign.products||[]){const current=promoted.get(product.id);if(!current||Number(product.price)<Number(current.price))promoted.set(product.id,product)}return products.map(product=>promoted.get(product.id)||product)}
-export const getProducts=async()=>withActivePromotions(await request('/api/v1/products',{mock:'assets/mock/products.json'}));
+export const getProducts=async({store=''}={})=>withActivePromotions(await request(`/api/v1/products?${new URLSearchParams({store,limit:'50'})}`,{mock:'assets/mock/products.json'}));
 export const getTrendingProducts=async(limit=8)=>C.USE_MOCK_DATA?(await getProducts()).slice(0,limit):withActivePromotions(await request(`/api/v1/products/trending?limit=${limit}`));
 export const getCategories=()=>request('/api/v1/categories',{mock:'assets/mock/categories.json'});
 export const getSiteConfig=()=>C.USE_MOCK_DATA?Promise.resolve({banners:[],theme:null}):request('/api/v1/site-config');
@@ -14,14 +14,24 @@ export const getProductBySlug=async slug=>{
   const productOldPrice=Number(product.oldPrice||0),offerOldPrice=Number(primaryOffer.oldPrice||0);
   return{...product,score:product.score??product.editorialScore??product.editorial_score??0,editorialScore:product.editorialScore??product.editorial_score??null,description:product.description??product.fullDescription??product.shortDescription??product.full_description??product.short_description??'',price:productPrice>0?productPrice:offerPrice,oldPrice:productOldPrice>0?productOldPrice:offerOldPrice,store:product.store||primaryOffer.store||'',offerId:product.offerId||primaryOffer.id||'',icon:product.icon||({'Livros e e-books':'▤','Tecnologia':'⌘','Áudio':'♫','Produtividade':'✓'}[product.category]||'⌬')};
 };
-export const searchProducts=async({q='',category='',categorySlug='',sort=''}={})=>{
+export const searchProducts=async({q='',category='',categorySlug='',sort='',store=''}={})=>{
   categorySlug=categorySlug||category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   if(!C.USE_MOCK_DATA&&q)return withActivePromotions(await request(`/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort})}`));
-  let products=C.USE_MOCK_DATA?await getProducts():await withActivePromotions(await request(`/api/v1/products?${new URLSearchParams({category:categorySlug,limit:'50'})}`));
+  let products=C.USE_MOCK_DATA?await getProducts():await withActivePromotions(await request(`/api/v1/products?${new URLSearchParams({category:categorySlug,store,limit:'50'})}`));
   const normalized=q.toLocaleLowerCase('pt-BR');
   if(normalized)products=products.filter(product=>(product.name+' '+product.brand+' '+product.category).toLocaleLowerCase('pt-BR').includes(normalized));
   if(C.USE_MOCK_DATA&&category)products=products.filter(product=>product.category===category);
   return products.sort((a,b)=>sort==='price-asc'?a.price-b.price:sort==='discount'?b.discount-a.discount:0);
+};
+export const searchProductsWithMeta=async({q='',categorySlug='',sort=''}={})=>{
+  if(C.USE_MOCK_DATA)return{data:await searchProducts({q,categorySlug,sort}),meta:{intent:{understood:false}}};
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),C.REQUEST_TIMEOUT);
+  try{
+    const response=await fetch(`${C.API_BASE_URL}/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort})}`,{credentials:'include',signal:ctrl.signal});
+    if(!response.ok)throw new Error(`Falha na busca (${response.status})`);
+    const json=await response.json();
+    return{data:json.data||[],meta:json.meta||{}};
+  }finally{clearTimeout(timer)}
 };
 export const getPromotions=async()=>C.USE_MOCK_DATA?[{id:'mock',name:'Ofertas em destaque',slug:'ofertas',description:'Produtos com preços reduzidos.',couponCode:'',startsAt:new Date().toISOString(),endsAt:new Date(Date.now()+86400000).toISOString(),products:(await getProducts()).filter(product=>product.discount>0)}]:request('/api/v1/promotions');
 export const getRecommendations=async slug=>C.USE_MOCK_DATA?(await getProducts()).filter(p=>p.slug!==slug).slice(0,4):withActivePromotions(await request(`/api/v1/products/${encodeURIComponent(slug)}/related`));

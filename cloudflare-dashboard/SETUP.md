@@ -8,6 +8,8 @@
 4. Em seguida, cole e execute todo o conteúdo de `search-upgrade.sql` para criar ou atualizar o FTS5, os gatilhos de sincronização e os índices dos algoritmos. Ele pode ser executado novamente em um banco existente.
 5. Para ativar campanhas promocionais em um banco existente, execute também `promotion-upgrade.sql`. Ele apenas cria índices e preserva as promoções já cadastradas.
 6. Para adicionar preço normal ao cadastro de produtos, execute uma única vez `product-pricing-upgrade.sql`.
+7. Em bancos existentes, execute uma única vez `brand-store-logo-upgrade.sql` para permitir logos de marcas e lojas. Bancos novos já recebem essas colunas pelo `schema.sql`.
+8. Para permitir imagem ou GIF clicável e independente dos temas no destaque direito do cabeçalho, execute uma única vez `header-spotlight-upgrade.sql`. Bancos novos já recebem essa configuração pelo `schema.sql`.
 
 O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetários são armazenados em centavos.
 
@@ -17,6 +19,7 @@ O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetá
 2. Abra o editor, substitua o código pelo conteúdo de `worker.js` e publique.
 3. Settings → Bindings → Add → D1 Database. Use exatamente o nome `DB` e selecione o banco criado.
 4. Para imagens: crie um bucket R2 e adicione ao Worker o binding `MEDIA`. O editor de produtos usa esse binding para enviar, servir e remover imagens reais.
+5. Para a busca inteligente: adicione um binding **Workers AI** com o nome exato `AI`. Sem esse binding, ou se a inferência falhar, a busca continua funcionando automaticamente com FTS5, correção e sinônimos.
 
 ## 3. Variáveis e secrets
 
@@ -67,6 +70,11 @@ Como alternativa, altere os valores padrão somente em `assets/js/config.js`. N�
 - `POST /api/v1/admin/auth/login`
 - `POST /api/v1/admin/auth/logout`
 - `GET /api/v1/admin/auth/session`
+- `POST /api/v1/admin/ai/product-draft`
+- `GET|POST /api/v1/admin/brands`
+- `PUT|DELETE /api/v1/admin/brands/:id`
+- `GET|POST /api/v1/admin/partners`
+- `PUT|DELETE /api/v1/admin/partners/:id`
 - `POST /api/v1/admin/products`
 - `PUT /api/v1/admin/products/:id`
 

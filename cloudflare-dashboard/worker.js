@@ -65,6 +65,23 @@ export default {
           },
           503,
         );
+      if (/no such table:.*header_spotlight/i.test(detail))
+        return respond(
+          request,
+          env,
+          {
+            success: false,
+            data: null,
+            meta: null,
+            error: {
+              code: "HEADER_SPOTLIGHT_MIGRATION_REQUIRED",
+              message:
+                "Execute header-spotlight-upgrade.sql no banco D1 e publique novamente.",
+              requestId,
+            },
+          },
+          503,
+        );
       if (
         /no such column:.*(?:header_background_end|header_gradient_enabled|header_gradient_angle|header_media_storage_key|header_media_opacity|header_media_position|header_media_size|header_media_scale|header_media_repeat|logo_text_color|logo_height)/i.test(
           detail,
@@ -81,6 +98,23 @@ export default {
               code: "HEADER_THEME_MEDIA_MIGRATION_REQUIRED",
               message:
                 "Execute as migrações de mídia do tema no banco D1 e publique novamente.",
+              requestId,
+            },
+          },
+          503,
+        );
+      if (/no such column:.*logo_url/i.test(detail))
+        return respond(
+          request,
+          env,
+          {
+            success: false,
+            data: null,
+            meta: null,
+            error: {
+              code: "BRAND_STORE_LOGO_MIGRATION_REQUIRED",
+              message:
+                "Execute brand-store-logo-upgrade.sql no banco D1 e publique novamente.",
               requestId,
             },
           },
@@ -190,6 +224,8 @@ async function route(request, env, ctx, requestId) {
     return sessionStatus(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/dashboard")
     return adminDashboard(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/ai/product-draft")
+    return adminAiProductDraft(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/products")
     return adminProducts(request, env, url, requestId);
   if (
@@ -238,6 +274,14 @@ async function route(request, env, ctx, requestId) {
     return deleteCategory(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/partners")
     return adminPartners(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/brands")
+    return adminBrands(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/brands")
+    return createBrand(request, env, requestId);
+  if (request.method === "PUT" && path.startsWith("/api/v1/admin/brands/"))
+    return updateBrand(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && path.startsWith("/api/v1/admin/brands/"))
+    return deleteBrand(request, env, path.split("/").pop(), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/partners")
     return createPartner(request, env, requestId);
   if (request.method === "PUT" && path.startsWith("/api/v1/admin/partners/"))
@@ -246,6 +290,19 @@ async function route(request, env, ctx, requestId) {
     return deletePartner(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/banners")
     return adminBanners(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/header-spotlights")
+    return adminHeaderSpotlights(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/header-spotlights")
+    return createHeaderSpotlight(request, env, requestId);
+  if (
+    request.method === "POST" &&
+    /^\/api\/v1\/admin\/header-spotlights\/[^/]+\/media$/.test(path)
+  )
+    return uploadHeaderSpotlightMedia(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/header-spotlights\/[^/]+$/.test(path))
+    return updateHeaderSpotlight(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/header-spotlights\/[^/]+$/.test(path))
+    return deleteHeaderSpotlight(request, env, path.split("/").pop(), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/banners")
     return createBanner(request, env, requestId);
   if (request.method === "PUT" && path.startsWith("/api/v1/admin/banners/"))
@@ -297,12 +354,24 @@ async function listCategories(req, env, id) {
 }
 
 async function publicSiteConfig(req, env, id) {
-  const [banners, theme] = await env.DB.batch([
+  const [banners, theme, stores, brands, headerPromotions, headerSpotlights] = await env.DB.batch([
     env.DB.prepare(
       `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
     ),
     env.DB.prepare(
       `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
+    ),
+    env.DB.prepare(
+      `SELECT pa.id,pa.name,pa.slug,pa.logo_url logoUrl,COUNT(DISTINCT o.product_id) productCount FROM partners pa JOIN offers o ON o.partner_id=pa.id AND o.availability='available' JOIN products p ON p.id=o.product_id AND p.status='published' WHERE pa.is_active=1 GROUP BY pa.id ORDER BY productCount DESC,pa.name`,
+    ),
+    env.DB.prepare(
+      `SELECT b.id,b.name,b.slug,b.logo_url logoUrl,COUNT(p.id) productCount FROM brands b JOIN products p ON p.brand_id=b.id AND p.status='published' WHERE b.is_active=1 GROUP BY b.id ORDER BY productCount DESC,b.name`,
+    ),
+    env.DB.prepare(
+      `SELECT name,slug,coupon_code couponCode,rules_json rulesJson FROM promotions WHERE is_active=1 AND datetime(starts_at)<=CURRENT_TIMESTAMP AND datetime(ends_at)>=CURRENT_TIMESTAMP ORDER BY datetime(ends_at) LIMIT 3`,
+    ),
+    env.DB.prepare(
+      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
     ),
   ]);
   const origin = new URL(req.url).origin;
@@ -327,6 +396,16 @@ async function publicSiteConfig(req, env, id) {
             logoHoverUrl: mediaUrl(theme.results[0].logoHoverStorageKey),
           }
         : null,
+      headerSpotlights: (headerSpotlights.results || []).map((spotlight) => ({
+        ...spotlight,
+        mediaUrl: mediaUrl(spotlight.storageKey),
+      })),
+      stores: stores.results || [],
+      brands: brands.results || [],
+      headerPromotions: (headerPromotions.results || []).map((promotion) => ({
+        ...promotion,
+        ...parse(promotion.rulesJson, {}),
+      })),
     },
     id,
   );
@@ -393,12 +472,17 @@ async function shareProductPage(req, env, slug) {
 async function listProducts(req, env, url, id) {
   const limit = clamp(url.searchParams.get("limit"), 1, 50, 24),
     offset = clamp(url.searchParams.get("offset"), 0, 100000, 0),
-    category = url.searchParams.get("category");
+    category = url.searchParams.get("category"),
+    store = url.searchParams.get("store");
   let where = `p.status='published'`,
     args = [];
   if (category) {
     where += ` AND c.slug=?`;
     args.push(category);
+  }
+  if (store) {
+    where += ` AND EXISTS (SELECT 1 FROM offers store_offer JOIN partners store_partner ON store_partner.id=store_offer.partner_id WHERE store_offer.product_id=p.id AND store_offer.availability='available' AND store_partner.slug=? AND store_partner.is_active=1)`;
+    args.push(store);
   }
   const query = `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.updated_at updatedAt,c.name category,b.name brand,o.current_price_cents price,o.previous_price_cents oldPrice,pa.name store,o.id offerId FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id WHERE ${where} ORDER BY p.is_featured DESC,p.updated_at DESC LIMIT ? OFFSET ?`;
   const { results } = await env.DB.prepare(query)
@@ -565,7 +649,7 @@ async function trendingProducts(req, env, url, id) {
 
 async function relatedProducts(req, env, slug, id) {
   const source = await env.DB.prepare(
-    `SELECT id,category_id categoryId,brand_id brandId,product_type productType,editorial_score editorialScore FROM products WHERE slug=? AND status='published'`,
+    `SELECT id,name,slug,category_id categoryId,brand_id brandId,product_type productType,short_description shortDescription,full_description fullDescription,target_audience targetAudience,tags_json tagsJson,specifications_json specificationsJson,editorial_score editorialScore FROM products WHERE slug=? AND status='published'`,
   )
     .bind(slug)
     .first();
@@ -596,7 +680,7 @@ async function relatedProducts(req, env, slug, id) {
       MAX(0,12-ABS(COALESCE(p.editorial_score,50)-COALESCE(?,50))*0.3)+
       COALESCE(activity.clicks,0)*4+MIN(COALESCE(activity.views,0),20)*0.5+
       COALESCE(p.editorial_score,0)*0.08
-    ) DESC,p.updated_at DESC LIMIT 8`,
+    ) DESC,p.updated_at DESC LIMIT 30`,
   )
     .bind(
       source.id,
@@ -607,14 +691,103 @@ async function relatedProducts(req, env, slug, id) {
       source.editorialScore,
     )
     .all();
-  return ok(req, env, results.map(normalizeProduct), id, {
-    strategy: "manual+category+brand+type+score+activity",
+  const candidates = results.map(normalizeProduct);
+  const aiRanked = await rankRelatedProductsWithAi(env, source, candidates);
+  const response = ok(req, env, (aiRanked || candidates).slice(0, 8), id, {
+    strategy: aiRanked
+      ? "ai-context+manual+category+brand+type+score+activity"
+      : "manual+category+brand+type+score+activity",
+    aiRanked: Boolean(aiRanked),
+    candidatesEvaluated: candidates.length,
   });
+  response.headers.set("cache-control", "public, max-age=300");
+  return response;
+}
+
+const RELATED_PRODUCTS_SCHEMA = {
+  type: "object",
+  properties: {
+    productIds: {
+      type: "array",
+      maxItems: 8,
+      items: { type: "string" },
+    },
+  },
+  required: ["productIds"],
+  additionalProperties: false,
+};
+
+async function rankRelatedProductsWithAi(env, source, candidates) {
+  if (!env.AI || candidates.length < 2) return null;
+  try {
+    const sourceContext = {
+      name: source.name,
+      productType: source.productType,
+      shortDescription: source.shortDescription,
+      fullDescription: String(source.fullDescription || "").slice(0, 1800),
+      targetAudience: source.targetAudience,
+      tags: parse(source.tagsJson, []),
+      specifications: parse(source.specificationsJson, []).slice(0, 6),
+    };
+    const candidateContext = candidates.map((product) => ({
+      id: product.id,
+      name: product.name,
+      productType: product.productType,
+      category: product.category,
+      brand: product.brand,
+      shortDescription: String(product.shortDescription || "").slice(0, 350),
+      editorialScore: product.editorialScore,
+      price: product.price,
+    }));
+    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+      messages: [
+        {
+          role: "system",
+          content:
+            "Você reranqueia produtos relacionados de uma loja brasileira. Escolha somente IDs fornecidos. Priorize: mesma finalidade e público, mesmo tipo de produto, características compatíveis, alternativas diretas e complementos realmente úteis. Não relacione produtos apenas porque compartilham uma categoria ampla. Evite itens sem conexão prática. Retorne no máximo 8 IDs, do mais relevante ao menos relevante.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ source: sourceContext, candidates: candidateContext }),
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: RELATED_PRODUCTS_SCHEMA,
+      },
+      temperature: 0,
+      max_tokens: 300,
+    });
+    const value =
+      typeof result?.response === "string"
+        ? JSON.parse(result.response)
+        : result?.response;
+    const byId = new Map(candidates.map((product) => [product.id, product]));
+    const ids = Array.isArray(value?.productIds)
+      ? [...new Set(value.productIds)].filter((productId) => byId.has(productId))
+      : [];
+    if (!ids.length) return null;
+    const selected = ids.map((productId) => byId.get(productId));
+    const selectedIds = new Set(ids);
+    return [
+      ...selected,
+      ...candidates.filter((product) => !selectedIds.has(product.id)),
+    ];
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "ai_related_products_fallback",
+        productSlug: source.slug,
+        error: String(error?.message || error),
+      }),
+    );
+    return null;
+  }
 }
 
 async function getProductV2(req, env, slug, id) {
   const row = await env.DB.prepare(
-    `SELECT p.*,c.name category,c.slug categorySlug,b.name brand FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.slug=? AND p.status='published'`,
+    `SELECT p.*,c.name category,c.slug categorySlug,b.name brand,b.logo_url brandLogoUrl FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.slug=? AND p.status='published'`,
   )
     .bind(slug)
     .first();
@@ -630,7 +803,7 @@ async function getProductV2(req, env, slug, id) {
   const [offers, media, authors, recommendations, campaigns] =
     await env.DB.batch([
       env.DB.prepare(
-        `SELECT o.id,o.current_price_cents price,o.previous_price_cents oldPrice,o.currency,o.coupon_code coupon,o.installment_text installments,o.shipping_text shipping,o.availability,o.button_text buttonText,o.last_checked_at lastCheckedAt,pa.name store FROM offers o JOIN partners pa ON pa.id=o.partner_id WHERE o.product_id=? AND o.availability='available' AND (o.starts_at IS NULL OR datetime(o.starts_at)<=CURRENT_TIMESTAMP) AND (o.ends_at IS NULL OR datetime(o.ends_at)>=CURRENT_TIMESTAMP) ORDER BY o.is_primary DESC,o.priority DESC,o.current_price_cents`,
+        `SELECT o.id,o.current_price_cents price,o.previous_price_cents oldPrice,o.currency,o.coupon_code coupon,o.installment_text installments,o.shipping_text shipping,o.availability,o.button_text buttonText,o.last_checked_at lastCheckedAt,pa.name store,pa.logo_url storeLogoUrl FROM offers o JOIN partners pa ON pa.id=o.partner_id WHERE o.product_id=? AND o.availability='available' AND (o.starts_at IS NULL OR datetime(o.starts_at)<=CURRENT_TIMESTAMP) AND (o.ends_at IS NULL OR datetime(o.ends_at)>=CURRENT_TIMESTAMP) ORDER BY o.is_primary DESC,o.priority DESC,o.current_price_cents`,
       ).bind(row.id),
       env.DB.prepare(
         `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
@@ -654,6 +827,7 @@ async function getProductV2(req, env, slug, id) {
     price: offer.price ?? row.base_price_cents,
     oldPrice: offer.oldPrice ?? row.compare_at_price_cents,
     store: offer.store,
+    storeLogoUrl: offer.storeLogoUrl,
     offerId: offer.id,
   });
   const activePromotions = (campaigns.results || []).map((campaign) => ({
@@ -1220,6 +1394,9 @@ const SEARCH_SYNONYMS = {
   microfone: ["mic", "audio"],
   carregador: ["fonte", "energia"],
   cabo: ["adaptador", "conector"],
+  leitor: ["ereader", "kindle", "ebook", "leitura"],
+  ereader: ["leitor", "kindle", "ebook", "leitura"],
+  kindle: ["ereader", "leitor", "ebook", "leitura"],
 };
 
 const SEARCH_VOCABULARY = [
@@ -1296,18 +1473,46 @@ function buildFtsQuery(query) {
     .join(" OR ");
 }
 
+const SEARCH_STOP_WORDS = new Set([
+  "a", "ao", "aos", "as", "ate", "com", "da", "das", "de", "do", "dos",
+  "e", "em", "eu", "mais", "melhor", "menos", "na", "nas", "no", "nos",
+  "o", "os", "para", "por", "pra", "quero", "reais", "um", "uma",
+]);
+
+function buildIntentFtsQuery(query) {
+  const terms = correctedSearch(query)
+    .split(" ")
+    .filter((term) => term.length >= 2 && !SEARCH_STOP_WORDS.has(term));
+  const core = terms[0];
+  if (!core) return buildFtsQuery(query);
+  const expanded = new Set([core, ...(SEARCH_SYNONYMS[core] || [])]);
+  return [...expanded]
+    .flatMap((term) => term.split(" "))
+    .filter((term) => term.length >= 2 && !SEARCH_STOP_WORDS.has(term))
+    .slice(0, 12)
+    .map((term) => `"${term.replace(/"/g, "")}"*`)
+    .join(" OR ");
+}
+
 async function searchV2(req, env, url, ctx, id) {
   const originalQuery = (url.searchParams.get("q") || "").trim().slice(0, 100);
   const normalizedQuery = normalizeSearch(originalQuery);
-  const correctedQuery = correctedSearch(normalizedQuery);
   if (normalizedQuery.length < 2)
     return ok(req, env, [], id, { query: originalQuery, total: 0 });
-  const ftsQuery = buildFtsQuery(correctedQuery);
-  const category = normalizeSearch(url.searchParams.get("category")).replace(
+  const intent = await interpretSearchIntent(env, originalQuery);
+  const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
+  const ftsQuery = intent
+    ? buildIntentFtsQuery(correctedQuery)
+    : buildFtsQuery(correctedQuery);
+  const explicitCategory = normalizeSearch(url.searchParams.get("category")).replace(
     /\s+/g,
     "-",
   );
-  const sort = url.searchParams.get("sort");
+  const category = explicitCategory || intent?.category || "";
+  const brand = explicitCategory ? "" : intent?.brand || "";
+  const minPriceCents = toPriceCents(intent?.minPrice);
+  const maxPriceCents = toPriceCents(intent?.maxPrice);
+  const sort = url.searchParams.get("sort") || intent?.sort || "";
   const order =
     sort === "price-asc"
       ? "COALESCE(o.current_price_cents,2147483647) ASC,rank ASC"
@@ -1315,8 +1520,21 @@ async function searchV2(req, env, url, ctx, id) {
         ? "CASE WHEN o.previous_price_cents>o.current_price_cents THEN (o.previous_price_cents-o.current_price_cents)*1.0/o.previous_price_cents ELSE 0 END DESC,rank ASC"
         : "rank ASC,COALESCE(p.editorial_score,0) DESC,p.is_featured DESC,p.view_count DESC";
   const args = [ftsQuery];
+  let intentFilters = "";
   const categoryFilter = category ? " AND c.slug=?" : "";
   if (category) args.push(category);
+  if (brand) {
+    intentFilters += " AND lower(b.name)=?";
+    args.push(brand);
+  }
+  if (minPriceCents != null) {
+    intentFilters += " AND COALESCE(o.current_price_cents,p.base_price_cents)>=?";
+    args.push(minPriceCents);
+  }
+  if (maxPriceCents != null) {
+    intentFilters += " AND COALESCE(o.current_price_cents,p.base_price_cents)<=?";
+    args.push(maxPriceCents);
+  }
   let { results } = await env.DB.prepare(
     `
     SELECT p.id,p.name,p.slug,p.short_description shortDescription,
@@ -1330,14 +1548,14 @@ async function searchV2(req, env, url, ctx, id) {
     LEFT JOIN brands b ON b.id=p.brand_id
     LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
     LEFT JOIN partners pa ON pa.id=o.partner_id
-    WHERE products_fts MATCH ? AND p.status='published'${categoryFilter}
+    WHERE products_fts MATCH ? AND p.status='published'${categoryFilter}${intentFilters}
     ORDER BY ${order}
     LIMIT 50
   `,
   )
     .bind(...args)
     .all();
-  if (!results.length) {
+  if (!results.length && !intent) {
     const fallback = await env.DB.prepare(
       `${PRODUCT_CARD_SELECT} WHERE p.status='published' ORDER BY p.view_count DESC,p.editorial_score DESC LIMIT 200`,
     ).all();
@@ -1389,8 +1607,151 @@ async function searchV2(req, env, url, ctx, id) {
     normalizedQuery,
     correctedQuery,
     corrected: correctedQuery !== normalizedQuery,
+    intent: intent
+      ? {
+          understood: true,
+          searchTerms: intent.searchTerms,
+          category: category || null,
+          brand: brand || null,
+          minPrice: intent.minPrice,
+          maxPrice: intent.maxPrice,
+          sort: sort || null,
+          explanation: intent.explanation,
+        }
+      : { understood: false },
     total: results.length,
   });
+}
+
+const SEARCH_INTENT_SCHEMA = {
+  type: "object",
+  properties: {
+    searchTerms: { type: "string" },
+    category: { type: ["string", "null"] },
+    brand: { type: ["string", "null"] },
+    minPrice: { type: ["number", "null"] },
+    maxPrice: { type: ["number", "null"] },
+    sort: { type: ["string", "null"], enum: ["price-asc", "discount", null] },
+    explanation: { type: "string" },
+  },
+  required: ["searchTerms", "category", "brand", "minPrice", "maxPrice", "sort", "explanation"],
+  additionalProperties: false,
+};
+
+const ADMIN_PRODUCT_DRAFT_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" }, slug: { type: "string" },
+    shortDescription: { type: "string" }, fullDescription: { type: "string" },
+    categoryId: { type: ["string", "null"] },
+    productType: { type: "string", enum: ["affiliate", "book", "digital"] },
+    imageAlt: { type: "string" },
+    specifications: { type: "array", maxItems: 20, items: {
+      type: "object", properties: { name: { type: "string" }, value: { type: "string" } },
+      required: ["name", "value"], additionalProperties: false,
+    } },
+  },
+  required: ["name", "slug", "shortDescription", "fullDescription", "categoryId", "productType", "imageAlt", "specifications"],
+  additionalProperties: false,
+};
+
+async function adminAiProductDraft(req, env, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  if (!env.AI)
+    return fail(req, env, "AI_NOT_CONFIGURED", "O binding Workers AI chamado AI nÃ£o foi configurado", 503, id);
+  const body = await readJson(req, 24000);
+  const source = String(body.source || "").trim().slice(0, 12000);
+  const current = body.current && typeof body.current === "object" ? body.current : {};
+  if (!source && !String(current.name || "").trim() && !String(current.fullDescription || "").trim())
+    return fail(req, env, "VALIDATION_ERROR", "Informe um tÃ­tulo, descriÃ§Ã£o ou texto de origem", 422, id);
+  const categories = await env.DB.prepare(
+    "SELECT id,name FROM categories WHERE is_active=1 ORDER BY sort_order,name LIMIT 100",
+  ).all();
+  const categoryList = (categories.results || []).map((item) => `${item.name} (id=${item.id})`).join(", ");
+  try {
+    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+      messages: [
+        { role: "system", content: `VocÃª auxilia o cadastro editorial de produtos da SHOPLAB. Gere portuguÃªs brasileiro claro, objetivo e sem exageros. Preserve marca, modelo, capacidade e medidas. Nunca invente especificaÃ§Ãµes, avaliaÃ§Ãµes, preÃ§os, garantias ou benefÃ­cios. Se um dado nÃ£o estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hÃ­fen. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro fÃ­sico, digital para produto digital e affiliate nos demais casos. A descriÃ§Ã£o curta deve ter atÃ© 300 caracteres. imageAlt deve descrever o produto de forma curta.` },
+        { role: "user", content: JSON.stringify({ source, current }).slice(0, 16000) },
+      ],
+      response_format: { type: "json_schema", json_schema: ADMIN_PRODUCT_DRAFT_SCHEMA },
+      temperature: 0.2, max_tokens: 1200,
+    });
+    const raw = typeof result?.response === "string" ? JSON.parse(result.response) : result?.response;
+    if (!raw || typeof raw.name !== "string") throw new Error("Resposta estruturada invÃ¡lida");
+    const validCategories = new Set((categories.results || []).map((item) => item.id));
+    const slug = normalizeSearch(raw.slug || raw.name).replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
+    const specifications = (Array.isArray(raw.specifications) ? raw.specifications : [])
+      .map((item) => ({ name: String(item?.name || "").trim().slice(0, 100), value: String(item?.value || "").trim().slice(0, 300) }))
+      .filter((item) => item.name && item.value).slice(0, 20);
+    return ok(req, env, {
+      name: String(raw.name).trim().slice(0, 160), slug: slug.slice(0, 160),
+      shortDescription: String(raw.shortDescription || "").trim().slice(0, 500),
+      fullDescription: String(raw.fullDescription || "").trim().slice(0, 10000),
+      categoryId: validCategories.has(raw.categoryId) ? raw.categoryId : null,
+      productType: ["affiliate", "book", "digital"].includes(raw.productType) ? raw.productType : "affiliate",
+      imageAlt: String(raw.imageAlt || "").trim().slice(0, 250), specifications,
+    }, id);
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "admin_ai_product_draft_failed", requestId: id, error: String(error?.message || error) }));
+    return fail(req, env, "AI_GENERATION_FAILED", "NÃ£o foi possÃ­vel gerar as sugestÃµes agora", 502, id);
+  }
+}
+
+function toPriceCents(value) {
+  if (value == null || value === "") return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price > 0 ? Math.round(price * 100) : null;
+}
+
+function shouldInterpretSearch(query) {
+  const normalized = normalizeSearch(query);
+  return normalized.split(" ").filter(Boolean).length >= 3 ||
+    /\b(ate|acima|abaixo|menos|mais|barato|melhor|para|por|entre|reais)\b/.test(normalized);
+}
+
+async function interpretSearchIntent(env, originalQuery) {
+  if (!env.AI || !shouldInterpretSearch(originalQuery)) return null;
+  try {
+    const [categories, brands] = await env.DB.batch([
+      env.DB.prepare("SELECT name,slug FROM categories WHERE is_active=1 ORDER BY sort_order,name LIMIT 100"),
+      env.DB.prepare("SELECT name FROM brands ORDER BY name LIMIT 100"),
+    ]);
+    const categoryList = (categories.results || []).map((item) => `${item.name}=${item.slug}`).join(", ");
+    const brandList = (brands.results || []).map((item) => item.name).join(", ");
+    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+      messages: [
+        {
+          role: "system",
+          content: `Interprete buscas de um comparador brasileiro. searchTerms deve comecar pelo tipo canonico de produto que a pessoa quer, mesmo quando ela descreve apenas a finalidade. Exemplos: "dispositivo para ler" vira "leitor ereader"; "computador para faculdade" vira "notebook estudar"; "fone para correr" vira "fone esporte". Depois mantenha modelo e caracteristicas uteis, removendo conectivos, orcamento e ordenacao. Extraia apenas filtros pedidos ou inequivocos. Use somente um slug de categoria ou null: ${categoryList || "nenhuma"}. Use somente uma marca desta lista, em minusculas, ou null: ${brandList || "nenhuma"}. Precos sao em reais. sort: price-asc para menor preco, discount para desconto, ou null. Nunca invente dados. explanation deve ser uma frase curta em portugues.`,
+        },
+        { role: "user", content: originalQuery },
+      ],
+      response_format: { type: "json_schema", json_schema: SEARCH_INTENT_SCHEMA },
+      temperature: 0,
+      max_tokens: 250,
+    });
+    const value = result?.response;
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (!parsed || typeof parsed.searchTerms !== "string") return null;
+    const validCategories = new Set((categories.results || []).map((item) => item.slug));
+    const validBrands = new Set((brands.results || []).map((item) => normalizeSearch(item.name)));
+    const searchTerms = normalizeSearch(parsed.searchTerms).slice(0, 100);
+    if (searchTerms.length < 2) return null;
+    return {
+      searchTerms,
+      category: validCategories.has(parsed.category) ? parsed.category : null,
+      brand: validBrands.has(normalizeSearch(parsed.brand)) ? normalizeSearch(parsed.brand) : null,
+      minPrice: parsed.minPrice != null && Number(parsed.minPrice) > 0 ? Number(parsed.minPrice) : null,
+      maxPrice: parsed.maxPrice != null && Number(parsed.maxPrice) > 0 ? Number(parsed.maxPrice) : null,
+      sort: ["price-asc", "discount"].includes(parsed.sort) ? parsed.sort : null,
+      explanation: String(parsed.explanation || "").slice(0, 180),
+    };
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "ai_search_fallback", error: String(error?.message || error) }));
+    return null;
+  }
 }
 
 async function suggestionsV2(req, env, url, id) {
@@ -1456,7 +1817,7 @@ async function adminProductDetail(req, env, productId, id) {
       404,
       id,
     );
-  const [offers, media, partners] = await env.DB.batch([
+  const [offers, media, partners, brands] = await env.DB.batch([
     env.DB.prepare(
       `SELECT id,partner_id partnerId,affiliate_url affiliateUrl,current_price_cents currentPriceCents,previous_price_cents previousPriceCents,coupon_code couponCode,availability,button_text buttonText,is_primary isPrimary FROM offers WHERE product_id=? ORDER BY is_primary DESC,priority DESC`,
     ).bind(productId),
@@ -1464,8 +1825,9 @@ async function adminProductDetail(req, env, productId, id) {
       `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,is_primary isPrimary,sort_order sortOrder FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
     ).bind(productId),
     env.DB.prepare(
-      `SELECT id,name FROM partners WHERE is_active=1 ORDER BY name`,
+      `SELECT id,name,logo_url logoUrl FROM partners WHERE is_active=1 ORDER BY name`,
     ),
+    env.DB.prepare(`SELECT id,name,logo_url logoUrl FROM brands WHERE is_active=1 ORDER BY name`),
   ]);
   return ok(
     req,
@@ -1476,6 +1838,7 @@ async function adminProductDetail(req, env, productId, id) {
       offers: offers.results || [],
       media: media.results || [],
       partners: partners.results || [],
+      brands: brands.results || [],
     },
     id,
   );
@@ -2029,7 +2392,7 @@ async function adminPartners(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT pa.id,pa.name,pa.slug,pa.website_url websiteUrl,pa.is_active isActive,COUNT(o.id) offerCount FROM partners pa LEFT JOIN offers o ON o.partner_id=pa.id GROUP BY pa.id ORDER BY pa.name`,
+    `SELECT pa.id,pa.name,pa.slug,pa.website_url websiteUrl,pa.logo_url logoUrl,pa.is_active isActive,COUNT(o.id) offerCount FROM partners pa LEFT JOIN offers o ON o.partner_id=pa.id GROUP BY pa.id ORDER BY pa.name`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -2048,6 +2411,8 @@ function validatePartner(body) {
       return "Informe um site válido";
     }
   }
+  if (body.logoUrl && !safeImageUrl(body.logoUrl))
+    return "Informe uma URL HTTP ou HTTPS válida para o logo";
   return null;
 }
 
@@ -2060,7 +2425,7 @@ async function createPartner(req, env, id) {
     return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const partnerId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO partners(id,name,slug,website_url,is_active) VALUES(?,?,?,?,?)`,
+    `INSERT INTO partners(id,name,slug,website_url,logo_url,is_active) VALUES(?,?,?,?,?,?)`,
   )
     .bind(
       partnerId,
@@ -2069,6 +2434,7 @@ async function createPartner(req, env, id) {
       String(body.websiteUrl || "")
         .trim()
         .slice(0, 1000) || null,
+      safeImageUrl(body.logoUrl),
       body.isActive === false ? 0 : 1,
     )
     .run();
@@ -2093,7 +2459,7 @@ async function updatePartner(req, env, partnerId, id) {
   if (validation)
     return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE partners SET name=?,slug=?,website_url=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE partners SET name=?,slug=?,website_url=?,logo_url=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
   )
     .bind(
       String(body.name).trim().slice(0, 140),
@@ -2101,6 +2467,7 @@ async function updatePartner(req, env, partnerId, id) {
       String(body.websiteUrl || "")
         .trim()
         .slice(0, 1000) || null,
+      safeImageUrl(body.logoUrl),
       body.isActive === false ? 0 : 1,
       partnerId,
     )
@@ -2149,6 +2516,33 @@ async function deletePartner(req, env, partnerId, id) {
   return ok(req, env, { deleted: true }, id);
 }
 
+function safeImageUrl(value) {
+  if (!value) return null;
+  try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) ? String(url).slice(0, 1500) : null; }
+  catch { return null; }
+}
+
+async function adminBrands(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const { results } = await env.DB.prepare(`SELECT b.id,b.name,b.slug,b.description,b.website_url websiteUrl,b.logo_url logoUrl,b.is_active isActive,COUNT(p.id) productCount FROM brands b LEFT JOIN products p ON p.brand_id=b.id GROUP BY b.id ORDER BY b.name`).all();
+  return ok(req, env, results || [], id);
+}
+function validateBrand(body) {
+  if (!String(body?.name || "").trim()) return "Informe o nome da marca";
+  if (!/^[a-z0-9-]{2,100}$/.test(String(body.slug || ""))) return "Slug da marca inválido";
+  if (body.websiteUrl && !safeImageUrl(body.websiteUrl)) return "Informe uma URL válida para o site";
+  if (body.logoUrl && !safeImageUrl(body.logoUrl)) return "Informe uma URL válida para o logo";
+  return null;
+}
+async function createBrand(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const body=await readJson(req,20000),validation=validateBrand(body);if(validation)return fail(req,env,"VALIDATION_ERROR",validation,422,id);
+  const brandId=crypto.randomUUID();await env.DB.prepare(`INSERT INTO brands(id,name,slug,description,website_url,logo_url,is_active) VALUES(?,?,?,?,?,?,?)`).bind(brandId,String(body.name).trim().slice(0,140),body.slug,String(body.description||"").slice(0,1000),String(body.websiteUrl||"").slice(0,1000)||null,safeImageUrl(body.logoUrl),body.isActive===false?0:1).run();
+  return ok(req,env,{id:brandId},id);
+}
+async function updateBrand(req,env,brandId,id){if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);const body=await readJson(req,20000),validation=validateBrand(body);if(validation)return fail(req,env,"VALIDATION_ERROR",validation,422,id);const result=await env.DB.prepare(`UPDATE brands SET name=?,slug=?,description=?,website_url=?,logo_url=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(String(body.name).trim().slice(0,140),body.slug,String(body.description||"").slice(0,1000),String(body.websiteUrl||"").slice(0,1000)||null,safeImageUrl(body.logoUrl),body.isActive===false?0:1,brandId).run();if(!result.meta.changes)return fail(req,env,"BRAND_NOT_FOUND","Marca não encontrada",404,id);return ok(req,env,{id:brandId},id)}
+async function deleteBrand(req,env,brandId,id){if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);const used=await env.DB.prepare(`SELECT COUNT(*) total FROM products WHERE brand_id=?`).bind(brandId).first();if(Number(used?.total||0)>0)return fail(req,env,"BRAND_IN_USE","A marca está vinculada a produtos",409,id);await env.DB.prepare(`DELETE FROM brands WHERE id=?`).bind(brandId).run();return ok(req,env,{deleted:true},id)}
+
 function optionalDate(value) {
   if (!value) return null;
   const date = new Date(String(value));
@@ -2157,12 +2551,13 @@ function optionalDate(value) {
 
 function validDestination(value) {
   const destination = String(value || "").trim();
+  const localDestination = destination.replace(/^\.\//, "").replace(/^\//, "");
   if (
     /^(?:produto|categoria|promocoes|produtos|busca|novidades)\.html(?:[?#].*)?$/.test(
-      destination,
+      localDestination,
     )
   )
-    return destination;
+    return localDestination;
   try {
     const parsed = new URL(destination);
     return ["http:", "https:"].includes(parsed.protocol) ? destination : null;
@@ -2557,6 +2952,105 @@ async function uploadThemeLogoMedia(req, env, themeId, id) {
   return ok(req, env, { id: themeId, kind, storageKey }, id);
 }
 
+async function adminHeaderSpotlights(req, env, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const { results } = await env.DB.prepare(
+    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,updated_at updatedAt FROM header_spotlights ORDER BY sort_order,created_at`,
+  ).all();
+  return ok(req, env, results || [], id);
+}
+
+function headerSpotlightValues(body) {
+  return [
+    String(body.name || "").trim().slice(0, 140),
+    validDestination(body.linkUrl),
+    String(body.altText || "").slice(0, 250),
+    optionalDate(body.startsAt),
+    optionalDate(body.endsAt),
+    body.isActive === false ? 0 : 1,
+    clamp(body.sortOrder, -10000, 10000, 0),
+  ];
+}
+
+function validateHeaderSpotlight(body) {
+  const values = headerSpotlightValues(body);
+  if (!values[0]) return "Informe um nome para o destaque";
+  if (!values[1]) return "Informe um destino válido";
+  if (values[3] && values[4] && Date.parse(values[4]) <= Date.parse(values[3]))
+    return "O término deve ser posterior ao início";
+  return null;
+}
+
+async function createHeaderSpotlight(req, env, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const body = await readJson(req, 12000);
+  const validation = validateHeaderSpotlight(body);
+  if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
+  const spotlightId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order) VALUES(?,?,?,?,?,?,?,?)`,
+  ).bind(spotlightId, ...headerSpotlightValues(body)).run();
+  return ok(req, env, { id: spotlightId }, id);
+}
+
+async function updateHeaderSpotlight(req, env, spotlightId, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const body = await readJson(req, 12000);
+  const validation = validateHeaderSpotlight(body);
+  if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
+  const result = await env.DB.prepare(
+    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(...headerSpotlightValues(body), spotlightId).run();
+  if (!result.meta.changes)
+    return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
+  return ok(req, env, { id: spotlightId }, id);
+}
+
+async function uploadHeaderSpotlightMedia(req, env, spotlightId, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  if (!env.MEDIA)
+    return fail(req, env, "R2_NOT_CONFIGURED", "O binding R2 MEDIA não foi configurado", 503, id);
+  const current = await env.DB.prepare(
+    `SELECT storage_key storageKey FROM header_spotlights WHERE id=?`,
+  ).bind(spotlightId).first();
+  if (!current)
+    return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
+  const form = await req.formData();
+  let storageKey;
+  try {
+    storageKey = await storeSiteImage(
+      env,
+      form.get("file"),
+      "header-spotlights",
+      spotlightId,
+    );
+  } catch (error) {
+    return fail(req, env, "INVALID_FILE", error.message, 422, id);
+  }
+  await env.DB.prepare(
+    `UPDATE header_spotlights SET storage_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(storageKey, spotlightId).run();
+  if (current?.storageKey) await env.MEDIA.delete(current.storageKey);
+  return ok(req, env, { storageKey }, id);
+}
+
+async function deleteHeaderSpotlight(req, env, spotlightId, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const spotlight = await env.DB.prepare(
+    `SELECT storage_key storageKey FROM header_spotlights WHERE id=?`,
+  ).bind(spotlightId).first();
+  if (!spotlight)
+    return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
+  await env.DB.prepare(`DELETE FROM header_spotlights WHERE id=?`).bind(spotlightId).run();
+  if (spotlight.storageKey && env.MEDIA) await env.MEDIA.delete(spotlight.storageKey);
+  return ok(req, env, { deleted: true }, id);
+}
+
 async function deleteTheme(req, env, themeId, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
@@ -2573,8 +3067,11 @@ async function deleteTheme(req, env, themeId, id) {
   if (theme?.headerMediaStorageKey && env.MEDIA)
     await env.MEDIA.delete(theme.headerMediaStorageKey);
   if (env.MEDIA) {
-    const logoKeys = [theme?.logoStorageKey, theme?.logoHoverStorageKey].filter(Boolean);
-    if (logoKeys.length) await env.MEDIA.delete(logoKeys);
+    const mediaKeys = [
+      theme?.logoStorageKey,
+      theme?.logoHoverStorageKey,
+    ].filter(Boolean);
+    if (mediaKeys.length) await env.MEDIA.delete(mediaKeys);
   }
   return ok(req, env, { deleted: true }, id);
 }
