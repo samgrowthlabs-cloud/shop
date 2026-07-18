@@ -17,7 +17,7 @@ function attach(form){
   const open=html=>{panel.innerHTML=html;panel.classList.add('open');input.setAttribute('aria-expanded','true');activeIndex=-1};
   const header=(title,action='')=>`<div class="search-panel-title"><span>${title}</span>${action}</div>`;
   const smartAction=query=>`<a class="smart-search-action" role="option" href="${searchUrl(query)}"><span class="smart-search-icon">✦</span><span><b>Pesquisar com inteligência</b><small>Entender intenção, orçamento, categoria e alternativas</small></span><span class="smart-search-arrow">→</span></a>`;
-  const renderRecent=()=>{const items=recent();if(!items.length)return close();open(`${header('Pesquisas recentes','<button type="button" data-clear-history>Limpar histórico</button>')}<div class="recent-search-list">${items.map(item=>`<a class="recent-search-item" role="option" href="${searchUrl(item)}"><span class="history-icon">↗</span><span>${escapeHtml(item)}</span></a>`).join('')}</div>`)};
+  const renderRecent=()=>{const items=recent();if(!items.length)return close();open(`${header('Pesquisas recentes','<button type="button" data-clear-history aria-label="Limpar histórico" title="Limpar histórico"><img src="assets/icons/trash.svg" alt=""></button>')}<div class="recent-search-list">${items.map(item=>`<a class="recent-search-item" role="option" href="${searchUrl(item)}"><span class="history-icon">↗</span><span>${escapeHtml(item)}</span></a>`).join('')}</div>`)};
   const load=async()=>{
     const query=input.value.trim();if(query.length<2)return renderRecent();
     controller?.abort();controller=new AbortController();

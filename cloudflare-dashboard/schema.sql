@@ -102,15 +102,42 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id TEXT PRIMARY KEY, email TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','blocked')),
+    last_seen_at TEXT, blocked_until TEXT, moderation_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+CREATE TABLE IF NOT EXISTS user_sessions (id TEXT PRIMARY KEY,user_id TEXT NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,active_seconds INTEGER NOT NULL DEFAULT 0,ended_at TEXT);
+CREATE TABLE IF NOT EXISTS share_links (id TEXT PRIMARY KEY,user_id TEXT NOT NULL,product_slug TEXT NOT NULL,token TEXT NOT NULL UNIQUE,click_count INTEGER NOT NULL DEFAULT 0,unique_click_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,last_clicked_at TEXT,UNIQUE(user_id,product_slug));
+CREATE TABLE IF NOT EXISTS share_visits (id TEXT PRIMARY KEY,share_link_id TEXT NOT NULL,visitor_hash TEXT NOT NULL,clicked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,converted_user_id TEXT,UNIQUE(share_link_id,visitor_hash));
+CREATE TABLE IF NOT EXISTS referrals (id TEXT PRIMARY KEY,referrer_user_id TEXT NOT NULL,referred_user_id TEXT NOT NULL UNIQUE,share_link_id TEXT,status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','qualified','rejected')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,qualified_at TEXT);
+CREATE TABLE IF NOT EXISTS referral_rewards (id TEXT PRIMARY KEY,user_id TEXT NOT NULL,milestone INTEGER NOT NULL CHECK(milestone IN (5,10)),status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','redeemed','rejected')),admin_note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(user_id,milestone));
+CREATE TABLE IF NOT EXISTS gift_card_types (id TEXT PRIMARY KEY,name TEXT NOT NULL,slug TEXT NOT NULL UNIQUE,logo_storage_key TEXT,allowed_values_json TEXT NOT NULL DEFAULT '[]',instructions TEXT NOT NULL DEFAULT '',is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS reward_gift_cards (id TEXT PRIMARY KEY,reward_id TEXT NOT NULL UNIQUE,gift_card_type_id TEXT NOT NULL,value_cents INTEGER NOT NULL CHECK(value_cents>0),currency TEXT NOT NULL DEFAULT 'BRL',code_encrypted TEXT NOT NULL,pin_encrypted TEXT,expires_at TEXT,instructions TEXT NOT NULL DEFAULT '',delivered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(reward_id) REFERENCES referral_rewards(id) ON DELETE CASCADE,FOREIGN KEY(gift_card_type_id) REFERENCES gift_card_types(id));
+CREATE INDEX IF NOT EXISTS idx_gift_card_types_active ON gift_card_types(is_active,name);
+CREATE INDEX IF NOT EXISTS idx_reward_gift_cards_type ON reward_gift_cards(gift_card_type_id);
+CREATE TABLE IF NOT EXISTS manual_user_rewards (id TEXT PRIMARY KEY,user_id TEXT NOT NULL,title TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'delivered' CHECK(status IN ('delivered','redeemed','cancelled')),gift_card_type_id TEXT NOT NULL,value_cents INTEGER NOT NULL CHECK(value_cents>0),currency TEXT NOT NULL DEFAULT 'BRL',code_encrypted TEXT NOT NULL,pin_encrypted TEXT,expires_at TEXT,instructions TEXT NOT NULL DEFAULT '',email_status TEXT NOT NULL DEFAULT 'pending' CHECK(email_status IN ('pending','sent','failed','skipped')),email_id TEXT,email_error TEXT NOT NULL DEFAULT '',delivered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,redeemed_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(gift_card_type_id) REFERENCES gift_card_types(id));
+CREATE INDEX IF NOT EXISTS idx_manual_user_rewards_user ON manual_user_rewards(user_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_manual_user_rewards_email ON manual_user_rewards(email_status,created_at);
+CREATE TABLE IF NOT EXISTS user_favorites (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+CREATE TABLE IF NOT EXISTS user_ratings (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+CREATE TABLE IF NOT EXISTS user_cart (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity BETWEEN 1 AND 99),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+CREATE TABLE IF NOT EXISTS user_view_history (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY, event_type TEXT NOT NULL, product_slug TEXT, offer_id TEXT,
-  query_text TEXT, metadata_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  query_text TEXT, metadata_json TEXT NOT NULL DEFAULT '{}', user_id TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_events_user_created ON events(user_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_user_product ON events(user_id,product_slug,event_type);
 
 CREATE TABLE IF NOT EXISTS banners (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, eyebrow TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
   message TEXT NOT NULL DEFAULT '', button_text TEXT NOT NULL DEFAULT 'Ver oferta', link_url TEXT NOT NULL,
   desktop_storage_key TEXT NOT NULL, mobile_storage_key TEXT, alt_text TEXT NOT NULL DEFAULT '',
+  targeting_json TEXT NOT NULL DEFAULT '{}',
   starts_at TEXT, ends_at TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

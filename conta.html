@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Minha conta — SHOPLAB</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-auth-page="account">
+  <header class="header account-site-header">
+    <div class="container header-row">
+      <a class="logo header-brand" href="index.html" aria-label="SHOPLAB início"><span class="brand-images default-site-logo"><img class="brand-image brand-image-main" src="assets/img/shoplab-wordmark.png" alt="SHOPLAB"></span></a>
+      <form class="search" action="busca.html"><label class="sr-only" for="account-search">Pesquisar</label><input id="account-search" name="q" placeholder="O que você está procurando?" autocomplete="off"><button type="submit" aria-label="Pesquisar"><img src="assets/icons/search.svg" alt=""></button></form>
+    </div>
+    <nav class="subnav"><div class="container"><div class="desktop-nav-links"><a href="produtos.html">Todos os produtos</a><a href="categoria.html?slug=livros">Livros</a><a href="categoria.html?slug=tecnologia">Tecnologia</a><a href="promocoes.html">Ofertas</a><a href="novidades.html">Novidades</a><span class="nav-account-actions"><a class="nav-cart" href="#cart"><img src="assets/icons/cart.svg" alt=""><span>Carrinho</span><b id="account-cart-count" hidden>0</b></a><span class="account-avatar" id="header-account-avatar"></span><strong id="header-account-name">Minha conta</strong></span></div></div></nav>
+  </header>
+
+  <main class="account-dashboard">
+    <aside class="account-sidebar" aria-label="Navegação da conta">
+      <div class="account-sidebar-title"><span class="account-avatar large" id="sidebar-account-avatar"></span><div><strong id="sidebar-account-name">Minha conta</strong><small id="sidebar-account-email"></small></div></div>
+      <nav><a class="active" href="#profile"><img src="assets/icons/user.svg" alt="">Perfil</a><a href="#invites">Convites e recompensas</a><a href="#cart"><img src="assets/icons/cart.svg" alt="">Carrinho <b id="sidebar-cart-count">0</b></a><a href="#favorites"><img src="assets/icons/heart.svg" alt="">Produtos curtidos</a><a href="#ratings"><img src="assets/icons/star.svg" alt="">Minhas avaliações</a></nav>
+      <button id="sign-out" type="button"><img src="assets/icons/logout.svg" alt="">Sair da conta</button>
+    </aside>
+
+    <section class="account-dashboard-content">
+      <header class="account-welcome"><span class="account-avatar account-profile-avatar" id="profile-account-avatar"></span><div><span class="eyebrow">MINHA CONTA</span><h1 id="account-welcome-name">Olá!</h1><p id="account-email"></p></div></header>
+      <div class="account-summary-grid"><a href="#cart"><img src="assets/icons/cart.svg" alt=""><strong id="summary-cart-count">0</strong><span>Itens no carrinho</span></a><a href="#favorites"><img src="assets/icons/heart.svg" alt=""><strong id="summary-favorites-count">0</strong><span>Produtos curtidos</span></a><a href="#ratings"><img src="assets/icons/star.svg" alt=""><strong id="summary-ratings-count">0</strong><span>Avaliações feitas</span></a></div>
+
+      <section class="account-panel" id="profile"><div class="account-panel-heading"><img src="assets/icons/user.svg" alt=""><div><h2>Informações do seu perfil</h2><p>Atualize como seu nome aparece na SHOPLAB.</p></div></div><form id="account-form" class="account-profile-form"><label>Nome de exibição<input id="display-name" maxlength="80" autocomplete="name"></label><div id="auth-message" class="auth-message" aria-live="polite"></div><button class="btn primary">Salvar perfil</button></form></section>
+      <section class="account-panel" id="invites"><div class="account-panel-heading"><img src="assets/icons/share.svg" alt=""><div><h2>Convites e recompensas</h2><p>Compartilhe produtos usando sua conta. Cliques e novos membros qualificados aparecem aqui.</p></div></div><div id="referral-summary" class="referral-summary">Carregando seus convites…</div></section>
+      <section class="account-panel" id="cart"><div class="account-panel-heading"><img src="assets/icons/cart.svg" alt=""><div><h2>Carrinho</h2><p>Produtos que você pretende comprar.</p></div></div><div id="cart-list"></div></section>
+      <section class="account-panel" id="favorites"><div class="account-panel-heading"><img src="assets/icons/heart.svg" alt=""><div><h2>Produtos curtidos</h2><p>Itens marcados pelo coração. Curtir não altera a avaliação em estrelas.</p></div></div><div id="favorites-list"></div></section>
+      <section class="account-panel" id="ratings"><div class="account-panel-heading"><img src="assets/icons/star.svg" alt=""><div><h2>Suas avaliações</h2><p>Notas de 1 a 5 estrelas que entram na média pública.</p></div></div><div id="ratings-list"></div></section>
+    </section>
+  </main>
+  <script type="module" src="assets/js/auth-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS user_favorites (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+CREATE TABLE IF NOT EXISTS user_ratings (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+CREATE TABLE IF NOT EXISTS user_cart (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity BETWEEN 1 AND 99),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+CREATE TABLE IF NOT EXISTS user_view_history (user_id TEXT NOT NULL,product_slug TEXT NOT NULL,viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_slug));
+CREATE INDEX IF NOT EXISTS idx_user_history_recent ON user_view_history(user_id,viewed_at DESC);

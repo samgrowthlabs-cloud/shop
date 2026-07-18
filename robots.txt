@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
-Sitemap: https://shoplab.samgrowthlabs.com.br/sitemap.xml
+Sitemap: https://shoplab.com.br/sitemap.xml

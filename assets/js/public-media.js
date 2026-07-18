@@ -1,4 +1,5 @@
 import{SHOPLAB_CONFIG as C}from'./config.js';
+import{session,userApi}from'./auth.js';
 
 const cache=new Map();
 async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=fetch(`${C.API_BASE_URL}/api/v1/products/${encodeURIComponent(slug)}`).then(r=>r.ok?r.json():null).then(j=>j?.data||null).catch(()=>null);cache.set(slug,promise);return promise}
@@ -20,6 +21,24 @@ function renderDescriptions(data){
   section.querySelector('.description-toggle').addEventListener('click',event=>{const content=section.querySelector('.long-description'),expanded=event.currentTarget.getAttribute('aria-expanded')==='true';content.classList.toggle('collapsed',expanded);event.currentTarget.setAttribute('aria-expanded',String(!expanded));event.currentTarget.textContent=expanded?'Mostrar mais':'Mostrar menos';if(expanded)section.scrollIntoView({behavior:'smooth',block:'start'})});
 }
 
+function productSpecifications(data){return(data?.specificationGroups||[]).flatMap(group=>(group.items||group.specifications||[]).map(item=>({name:String(item.name||item.label||'').trim(),value:String(item.value||'').trim()}))).filter(item=>item.name&&item.value)}
+function specificationIcon(name){const key=name.toLocaleLowerCase('pt-BR');let icon='feature';if(/processador|cpu|chip/.test(key))icon='cpu';else if(/memória ram|memória suportada/.test(key))icon='ram';else if(/armazenamento|ssd|capacidade/.test(key))icon='storage';else if(/tela|resolução|monitor/.test(key))icon='monitor';else if(/placa de vídeo|gpu|gráfico/.test(key))icon='gpu';else if(/bateria|carregamento/.test(key))icon='battery';return`<img src="assets/icons/${icon}.svg" alt="">`}
+function renderProductInformation(data){
+  if(!data||document.querySelector('.product-information-sections'))return;
+  const specifications=productSpecifications(data),detailCopy=document.querySelector('.detail > div:last-child'),offer=detailCopy?.querySelector('.offer');
+  const productTitle=detailCopy?.querySelector('h1');if(productTitle&&data.brand&&!detailCopy.querySelector('.detail-brand')){const brandLogo=data.brandLogoUrl?`<img src="${safe(data.brandLogoUrl)}" alt="Logo ${safe(data.brand)}">`:'';productTitle.insertAdjacentHTML('afterend',`<div class="detail-brand">${brandLogo}<span><small>Marca</small><strong>${safe(data.brand)}</strong></span></div>`);const oldBrandText=[...detailCopy.querySelectorAll(':scope > p.muted')].find(item=>item.textContent.trim()===String(data.brand).trim());oldBrandText?.remove()}
+  const shareButton=detailCopy?.querySelector('.detail-share'),compareSvg='<img src="assets/icons/compare.svg" alt="">';if(shareButton&&!detailCopy.querySelector('.detail-favorite')){shareButton.innerHTML='<img src="assets/icons/share.svg" alt=""><span>Compartilhar</span>';shareButton.insertAdjacentHTML('beforebegin',`<button class="btn ghost detail-favorite icon-compare compare-product" type="button" data-compare-product="${safe(data.slug)}" data-compare-name="${safe(data.name)}" data-compare-category="${safe(data.category||'Sem categoria')}" aria-pressed="false">${compareSvg}<span>Comparar</span></button>`)}
+  if(offer){const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),logo=data.storeLogoUrl?`<img src="${safe(data.storeLogoUrl)}" alt="Logo ${safe(data.store||'da loja')}">`:'<span aria-hidden="true">🤝</span>';offer.innerHTML=`<small class="offer-label">Melhor preço encontrado</small><div class="price">${money(data.price)} ${Number(data.oldPrice)>Number(data.price)?`<span class="old">${money(data.oldPrice)}</span>`:''}</div><div class="offer-seller">${logo}<p>Vendido por <strong>${safe(data.store||'loja parceira')}</strong> · parceiro verificado</p><img class="offer-verified" src="assets/icons/verified.svg" alt="Verificado"></div><a class="btn primary" href="#" data-offer="${safe(data.slug)}">Ir para oferta <span aria-hidden="true">→</span></a><small class="offer-redirect"><img src="assets/icons/shield-check.svg" alt=""> Você será redirecionado para a loja parceira.</small>`}
+  const currentPrice=Number(data.price||0),oldPrice=Number(data.oldPrice||0),discount=oldPrice>currentPrice&&currentPrice>0?Math.round((1-currentPrice/oldPrice)*100):Number(data.discount||0),priceLine=offer?.querySelector('.price');if(priceLine&&discount>0&&!priceLine.querySelector('.detail-discount'))priceLine.insertAdjacentHTML('beforeend',` <span class="detail-discount">${discount}% OFF</span>`);
+  const priority=['Processador','Memória RAM','Armazenamento','Tamanho da tela','Tela','Placa de vídeo','Bateria','Resolução','Capacidade','Tipo'];
+  const highlights=[...priority.map(name=>specifications.find(item=>item.name.toLocaleLowerCase('pt-BR')===name.toLocaleLowerCase('pt-BR'))).filter(Boolean),...specifications].filter((item,index,list)=>list.findIndex(other=>other.name===item.name)===index).slice(0,4);
+  if(offer&&highlights.length)offer.insertAdjacentHTML('beforebegin',`<div class="product-tech-highlights">${highlights.map(item=>`<div><span>${specificationIcon(item.name)}</span><strong>${safe(item.value)}</strong><small>${safe(item.name)}</small></div>`).join('')}</div>`);
+  const oldAnalysis=document.querySelector('#conteudo > .section.alt'),information=document.createElement('div');information.className='product-information-sections';
+  information.innerHTML=specifications.length?`<section class="product-specifications-section"><div class="container"><div class="product-section-title"><span class="eyebrow">FICHA TÉCNICA</span><h2>Especificações completas</h2></div><dl class="product-specifications-grid">${specifications.map(item=>`<div><dt>${safe(item.name)}</dt><dd>${safe(item.value)}</dd></div>`).join('')}</dl></div></section>`:'';
+  if(oldAnalysis)oldAnalysis.replaceWith(information);else document.querySelector('#conteudo')?.append(information);
+  const description=document.querySelector('.product-description-section');if(description)information.insertAdjacentElement('afterend',description);
+}
+
 function openGallery(items,startIndex,name){
   let index=Math.max(0,Math.min(startIndex,items.length-1));
   const modal=document.createElement('div');modal.className='image-viewer';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Galeria de imagens do produto');
@@ -34,7 +53,7 @@ function openGallery(items,startIndex,name){
 
 async function detailMedia(){
   const box=document.querySelector('.detail-media');if(!box||box.dataset.mediaReady)return;box.dataset.mediaReady='1';
-  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;
+  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;
   const main=items.find(x=>x.isPrimary)||items[0],mainIndex=items.indexOf(main),visible=items.slice(0,4);
   const thumbs=visible.map((item,index)=>{const remaining=items.length-3,isMore=items.length>4&&index===3;return `<button type="button" class="${item.id===main.id?'active':''} ${isMore?'more-images':''}" data-index="${index}" aria-label="${isMore?`Ver mais ${remaining} imagens`:`Ver imagem ${index+1}`}"><img src="${url(item)}" alt="" loading="lazy">${isMore?`<span>+${remaining}</span>`:''}</button>`}).join('');
   box.innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${url(main)}" alt="${safe(main.altText||data.name||'Produto')}"></button>${items.length>1?`<div class="detail-thumbs">${thumbs}</div>`:''}`;
@@ -47,21 +66,21 @@ document.addEventListener('click',async event=>{const link=event.target.closest(
 document.addEventListener('click',async event=>{
   const button=event.target.closest('[data-share-product]');
   if(!button)return;
-  const original=button.textContent,slug=button.dataset.shareProduct,name=button.dataset.shareName||'Produto SHOPLAB';
+  const original=button.innerHTML,slug=button.dataset.shareProduct,name=button.dataset.shareName||'Produto SHOPLAB';
   button.disabled=true;button.textContent='Preparando...';
   try{
-    const shareUrl=`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;
+    const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON.stringify({slug})})).url:`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;
     const data={title:name,text:`Confira ${name} na SHOPLAB`,url:shareUrl};
     if(navigator.share){
       await navigator.share(data);
     }else{
       await navigator.clipboard.writeText(shareUrl);
       button.textContent='Link copiado!';
-      setTimeout(()=>button.textContent=original,1800);
+      setTimeout(()=>button.innerHTML=original,1800);
       return;
     }
-  }catch(error){if(error.name!=='AbortError'){try{const shareUrl=`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;await navigator.clipboard.writeText(shareUrl);button.textContent='Link copiado!';setTimeout(()=>button.textContent=original,1800);return}catch{}}}
-  button.disabled=false;button.textContent=original;
+  }catch(error){if(error.name!=='AbortError'){try{const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON.stringify({slug})})).url:`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;await navigator.clipboard.writeText(shareUrl);button.textContent='Link copiado!';setTimeout(()=>button.innerHTML=original,1800);return}catch{}}}
+  button.disabled=false;button.innerHTML=original;
 },true);
 
 function scan(){document.querySelectorAll('.product-card').forEach(cardMedia);detailMedia()}
