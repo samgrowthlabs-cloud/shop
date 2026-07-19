@@ -11,6 +11,8 @@
 7. Em bancos existentes, execute uma única vez `brand-store-logo-upgrade.sql` para permitir logos de marcas e lojas. Bancos novos já recebem essas colunas pelo `schema.sql`.
 8. Para permitir imagem ou GIF clicável e independente dos temas no destaque direito do cabeçalho, execute uma única vez `header-spotlight-upgrade.sql`. Bancos novos já recebem essa configuração pelo `schema.sql`.
 
+9. Para manter preços importados do Mercado Livre atualizados, execute uma única vez `mercadolivre-price-sync-upgrade.sql`.
+
 O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetários são armazenados em centavos.
 
 ## 2. Worker
@@ -21,6 +23,8 @@ O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetá
 4. Para imagens: crie um bucket R2 e adicione ao Worker o binding `MEDIA`. O editor de produtos usa esse binding para enviar, servir e remover imagens reais.
 5. Para a busca inteligente: adicione um binding **Workers AI** com o nome exato `AI`. Sem esse binding, ou se a inferência falhar, a busca continua funcionando automaticamente com FTS5, correção e sinônimos.
 
+6. Em **Settings → Triggers → Cron Triggers**, adicione `*/30 * * * *`. O Worker atualizará até 40 produtos do Mercado Livre por execução, começando pelos mais antigos.
+
 ## 3. Variáveis e secrets
 
 Em Settings → Variables and Secrets, cadastre:
@@ -28,6 +32,9 @@ Em Settings → Variables and Secrets, cadastre:
 - `ALLOWED_ORIGINS` como variável: domínio exato do frontend, sem barra final. Para mais de um, separe por vírgula.
 - `ADMIN_PASSWORD` como **secret**: senha longa e exclusiva do painel.
 - `TURNSTILE_SECRET_KEY` como **secret**: chave secreta do widget Turnstile.
+
+- `MERCADOLIVRE_CLIENT_ID` como **secret**: identificador da aplicação do Mercado Livre.
+- `MERCADOLIVRE_CLIENT_SECRET` como **secret**: segredo da aplicação do Mercado Livre.
 
 Nunca coloque esses valores em `worker.js` ou no frontend.
 

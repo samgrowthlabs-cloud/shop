@@ -115,6 +115,8 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"MANUAL_REWARDS_MIGRATION_REQUIRED",message:"Execute manual-user-rewards-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*redeemed_at/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"MANUAL_REWARD_REDEMPTION_MIGRATION_REQUIRED",message:"Execute manual-reward-redemption-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such column:.*price_(?:source|sync)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"PRICE_SYNC_MIGRATION_REQUIRED",message:"Execute mercadolivre-price-sync-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (
         /no such column:.*(?:header_background_end|header_gradient_enabled|header_gradient_angle|header_media_storage_key|header_media_opacity|header_media_position|header_media_size|header_media_scale|header_media_repeat|logo_text_color|logo_height)/i.test(
           detail,
@@ -188,6 +190,9 @@ export default {
       );
     }
   },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(syncMercadoLivrePrices(env, { limit: 40 }));
+  },
 };
 
 async function route(request, env, ctx, requestId) {
@@ -242,7 +247,7 @@ async function route(request, env, ctx, requestId) {
   if (request.method === "GET" && path === "/api/v1/search")
     return searchV2(request, env, url, ctx, requestId);
   if (request.method === "GET" && path === "/api/v1/search/suggestions")
-    return suggestionsV2(request, env, url, requestId);
+    return suggestionsV2(request, env, url, ctx, requestId);
   if (request.method === "GET" && path === "/api/v1/search/trending")
     return trendingSearches(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/ratings")
@@ -309,6 +314,10 @@ async function route(request, env, ctx, requestId) {
     return updateReferralReward(request, env, path.split("/").pop(), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/ai/product-draft")
     return adminAiProductDraft(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/products/import-link")
+    return adminImportProductLink(request, env, requestId);
+  if (request.method === "POST" && /^\/api\/v1\/admin\/products\/[^/]+\/sync-price$/.test(path))
+    return adminSyncProductPrice(request, env, path.split("/").at(-2), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/products")
     return adminProducts(request, env, url, requestId);
   if (
@@ -536,9 +545,16 @@ function htmlAttribute(value) {
 async function shareProductPage(req, env, slug) {
   const product = await env.DB.prepare(
     `SELECT p.id,p.name,p.short_description shortDescription,
+      COALESCE(o.current_price_cents,p.base_price_cents) price,
+      COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,
       (SELECT pm.storage_key FROM product_media pm WHERE pm.product_id=p.id AND pm.type='image' ORDER BY pm.is_primary DESC,pm.sort_order,pm.created_at LIMIT 1) storageKey,
       (SELECT pm.external_url FROM product_media pm WHERE pm.product_id=p.id AND pm.type='image' ORDER BY pm.is_primary DESC,pm.sort_order,pm.created_at LIMIT 1) externalUrl
-    FROM products p WHERE p.slug=? AND p.status='published'`,
+    FROM products p
+    LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
+      AND o.availability='available'
+      AND (o.starts_at IS NULL OR datetime(o.starts_at)<=CURRENT_TIMESTAMP)
+      AND (o.ends_at IS NULL OR datetime(o.ends_at)>=CURRENT_TIMESTAMP)
+    WHERE p.slug=? AND p.status='published'`,
   )
     .bind(slug)
     .first();
@@ -563,9 +579,22 @@ async function shareProductPage(req, env, slug) {
     imageUrl = `${requestUrl.origin}/media/${encodeURIComponent(product.storageKey)}`;
   if (imageUrl && !/^https?:\/\//i.test(imageUrl)) imageUrl = "";
   const title = `${product.name} — SHOPLAB`;
-  const description =
-    String(product.shortDescription || "").trim() ||
-    `Confira ${product.name} na SHOPLAB.`;
+  const price = Number(product.price || 0);
+  const oldPrice = Number(product.oldPrice || 0);
+  const money = (value) =>
+    (Number(value) / 100).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  const priceDescription = price
+    ? oldPrice > price
+      ? `De ${money(oldPrice)} por ${money(price)}.`
+      : `Por ${money(price)}.`
+    : "";
+  const productDescription = String(product.shortDescription || "").trim();
+  const description = [priceDescription, productDescription]
+    .filter(Boolean)
+    .join(" ") || `Confira ${product.name} na SHOPLAB.`;
   const imageMeta = imageUrl
     ? `<meta property="og:image" content="${htmlAttribute(imageUrl)}"><meta property="og:image:alt" content="${htmlAttribute(product.name)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${htmlAttribute(imageUrl)}">`
     : `<meta name="twitter:card" content="summary">`;
@@ -1261,6 +1290,19 @@ function nullableCents(value) {
   return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
 }
 
+function productPriceSyncInput(body) {
+  const source = body?.priceSource === "mercadolivre" ? "mercadolivre" : null;
+  const itemId = mercadoLivreItemId(body?.priceSourceItemId);
+  const offerId = mercadoLivreItemId(body?.priceSourceOfferId);
+  let sourceUrl = null;
+  try {
+    const parsed = new URL(String(body?.priceSourceUrl || ""));
+    if (parsed.protocol === "https:" && mercadoLivreHostname(parsed.hostname)) sourceUrl = String(parsed).slice(0, 2000);
+  } catch {}
+  const enabled = source && itemId && offerId && sourceUrl && body?.priceSyncEnabled !== false;
+  return { supplied: Object.prototype.hasOwnProperty.call(body || {}, "priceSource"), source: enabled ? source : null, itemId: enabled ? itemId : null, offerId: enabled ? offerId : null, sourceUrl: enabled ? sourceUrl : null, enabled: enabled ? 1 : 0 };
+}
+
 function normalizeAdminOffers(value, productType, basePrice, comparePrice) {
   const offers = Array.isArray(value) ? value.slice(0, 20) : [];
   if (productType === "affiliate" && !offers.length)
@@ -1343,7 +1385,8 @@ async function createProductV2(req, env, id) {
       422,
       id,
     );
-  const productId = crypto.randomUUID(),
+  const priceSync = productPriceSyncInput(body),
+    productId = crypto.randomUUID(),
     status = body.status || "draft",
     productType = body.productType || "affiliate",
     offerResult = normalizeAdminOffers(
@@ -1356,7 +1399,7 @@ async function createProductV2(req, env, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO products(id,name,slug,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
+      `INSERT INTO products(id,name,slug,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,price_source,price_source_item_id,price_source_offer_id,price_source_url,price_sync_enabled,price_synced_at,price_sync_status,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ?=1 THEN 'ok' ELSE NULL END,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
     ).bind(
       productId,
       String(body.name).trim(),
@@ -1374,6 +1417,13 @@ async function createProductV2(req, env, id) {
       comparePrice,
       body.isFeatured ? 1 : 0,
       JSON.stringify(Array.isArray(body.specificationGroups) ? body.specificationGroups : []),
+      priceSync.source,
+      priceSync.itemId,
+      priceSync.offerId,
+      priceSync.sourceUrl,
+      priceSync.enabled,
+      priceSync.enabled,
+      priceSync.enabled,
       status,
     ),
     ...insertOfferStatements(env, productId, offerResult.offers),
@@ -1423,7 +1473,8 @@ async function updateProductV2(req, env, productId, id) {
       422,
       id,
     );
-  const productType = body.productType || "affiliate",
+  const priceSync = productPriceSyncInput(body),
+    productType = body.productType || "affiliate",
     offerResult = normalizeAdminOffers(
       body.offers,
       productType,
@@ -1434,7 +1485,7 @@ async function updateProductV2(req, env, productId, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   const results = await env.DB.batch([
     env.DB.prepare(
-      `UPDATE products SET name=?,slug=?,product_type=?,status=?,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE products SET name=?,slug=?,product_type=?,status=?,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(
       String(body.name).trim(),
       body.slug,
@@ -1451,6 +1502,13 @@ async function updateProductV2(req, env, productId, id) {
       comparePrice,
       body.isFeatured ? 1 : 0,
       JSON.stringify(Array.isArray(body.specificationGroups) ? body.specificationGroups : []),
+      priceSync.supplied ? 1 : 0,priceSync.source,
+      priceSync.supplied ? 1 : 0,priceSync.itemId,
+      priceSync.supplied ? 1 : 0,priceSync.offerId,
+      priceSync.supplied ? 1 : 0,priceSync.sourceUrl,
+      priceSync.supplied ? 1 : 0,priceSync.enabled,
+      priceSync.supplied ? 1 : 0,priceSync.enabled,
+      priceSync.supplied ? 1 : 0,priceSync.enabled,
       body.status || "draft",
       productId,
     ),
@@ -1620,7 +1678,7 @@ async function searchV2(req, env, url, ctx, id) {
   const normalizedQuery = normalizeSearch(originalQuery);
   if (normalizedQuery.length < 2)
     return ok(req, env, [], id, { query: originalQuery, total: 0 });
-  const intent = await interpretSearchIntent(env, originalQuery);
+  const intent = await cachedSearchIntent(env, originalQuery, ctx);
   const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
   const ftsQuery = intent
     ? buildIntentFtsQuery(correctedQuery)
@@ -1778,6 +1836,463 @@ const ADMIN_PRODUCT_DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
+function mercadoLivreHostname(hostname) {
+  const value = String(hostname || "").toLowerCase();
+  return [
+    "mercadolivre.com.br",
+    "mercadolivre.com",
+    "mercadolibre.com.br",
+    "mercadolibre.com",
+    "meli.la",
+  ].some((domain) => value === domain || value.endsWith(`.${domain}`));
+}
+
+function mercadoLivreItemId(value) {
+  const match = String(value || "").match(/\bMLB-?(\d{8,})\b/i);
+  return match ? `MLB${match[1]}` : null;
+}
+
+function mercadoLivrePageData(html) {
+  const source = String(html || "");
+  const normalized = source.replace(/\\"/g, '"');
+  const visibleText = source
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&(?:aacute|Aacute);/g, "a")
+    .replace(/&(?:iacute|Iacute);/g, "i")
+    .replace(/\s+/g, " ");
+  const moneyMatches = [...visibleText.matchAll(/R\$\s*([0-9.]+)(?:,([0-9]{2}))?/g)];
+  const explicitPixMatch = visibleText.match(
+    /R\$\s*([0-9.]+)(?:,|\s+)([0-9]{2})(?:\s+\d+%\s*OFF)?\s+no\s+Pix(?:\s+ou\s+Saldo)?/i,
+  );
+  const pixPosition = visibleText.search(/no\s+Pix(?:\s+ou\s+Saldo)?/i);
+  const pixMatch = pixPosition < 0
+    ? null
+    : moneyMatches.filter((match) => match.index < pixPosition && pixPosition - match.index < 120).at(-1);
+  const selectedPixMatch = explicitPixMatch || pixMatch;
+  const pixPrice = selectedPixMatch
+    ? Number(`${selectedPixMatch[1].replace(/\./g, "")}.${selectedPixMatch[2] || "00"}`)
+    : 0;
+  let product = null;
+  const visit = (value) => {
+    if (!value || product) return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value !== "object") return;
+    const types = Array.isArray(value["@type"])
+      ? value["@type"]
+      : [value["@type"]];
+    if (types.some((type) => String(type).toLowerCase() === "product")) {
+      product = value;
+      return;
+    }
+    for (const child of Object.values(value)) visit(child);
+  };
+  for (const match of source.matchAll(
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
+  )) {
+    try { visit(JSON.parse(match[1])); } catch {}
+    if (product) break;
+  }
+  const offers = Array.isArray(product?.offers)
+    ? product.offers[0]
+    : product?.offers || {};
+  const numberFrom = (...values) => {
+    for (const value of values) {
+      const number = Number(String(value ?? "").replace(",", "."));
+      if (Number.isFinite(number) && number > 0) return number;
+    }
+    return 0;
+  };
+  const matchNumber = (...patterns) => {
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (match) return numberFrom(match[1]);
+    }
+    return 0;
+  };
+  const price = numberFrom(
+    offers?.price,
+    offers?.lowPrice,
+    matchNumber(
+      /<meta[^>]+(?:itemprop|property)=["'](?:price|product:price:amount)["'][^>]+content=["']([0-9.,]+)["']/i,
+      /"price"\s*:\s*([0-9]+(?:\.[0-9]+)?)/i,
+    ),
+  );
+  const previousPrice = numberFrom(
+    matchNumber(
+      /"original_price"\s*:\s*([0-9]+(?:\.[0-9]+)?)/i,
+      /"originalPrice"\s*:\s*([0-9]+(?:\.[0-9]+)?)/i,
+      /"regular_amount"\s*:\s*([0-9]+(?:\.[0-9]+)?)/i,
+    ),
+    Number(offers?.highPrice) > price ? offers.highPrice : 0,
+  );
+  const productImages = Array.isArray(product?.image)
+    ? product.image
+    : product?.image ? [product.image] : [];
+  return {
+    name: String(product?.name || "").trim(),
+    description: String(product?.description || "").trim(),
+    price,
+    pixPrice: Number.isFinite(pixPrice) && pixPrice > 0 ? pixPrice : 0,
+    previousPrice: previousPrice > price ? previousPrice : 0,
+    pictures: productImages.filter((url) => /^https:\/\//i.test(String(url))),
+  };
+}
+
+async function mercadoLivrePublicPageData(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:" || !mercadoLivreHostname(url.hostname)) return null;
+    const response = await fetch(url, {
+      redirect: "follow",
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "user-agent": "Mozilla/5.0 (compatible; SHOPLAB-Price-Sync/1.0)",
+      },
+    });
+    if (!response.ok) return null;
+    return mercadoLivrePageData((await response.text()).slice(0, 1000000));
+  } catch {
+    return null;
+  }
+}
+
+async function resolveMercadoLivreUrl(value) {
+  let url;
+  try { url = new URL(String(value || "").trim()); }
+  catch { throw new Error("Cole um link válido do Mercado Livre"); }
+  if (url.protocol !== "https:" || !mercadoLivreHostname(url.hostname))
+    throw new Error("O link deve pertencer ao Mercado Livre");
+  for (let index = 0; index < 8; index += 1) {
+    const directItemId = mercadoLivreItemId(`${url.pathname}${url.search}`);
+    const catalogPage = /\/p\/MLB-?\d+/i.test(url.pathname);
+    if (directItemId && !catalogPage)
+      return { url: String(url), itemIds: [directItemId], pageData: null };
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "user-agent": "Mozilla/5.0 (compatible; SHOPLAB-Product-Importer/1.0)",
+      },
+    });
+    const location = response.headers.get("location");
+    if (location) {
+      const next = new URL(location, url);
+      if (next.protocol !== "https:" || !mercadoLivreHostname(next.hostname))
+        throw new Error("O link encurtado redirecionou para um domínio não permitido");
+      url = next;
+      continue;
+    }
+    if (response.status === 403 && url.hostname.toLowerCase() === "meli.la")
+      throw new Error(
+        "O Mercado Livre bloqueou a abertura automática deste link curto. Abra o link em seu navegador, copie a URL completa do anúncio após o redirecionamento e cole-a no campo Link completo do produto.",
+      );
+    if (response.ok) {
+      const html = (await response.text()).slice(0, 1000000);
+      const pageData = mercadoLivrePageData(html);
+      const prioritized = [
+        ...html.matchAll(/(?:item[_-]?id|itemId)["'\s:=]+["']?(MLB-?\d{8,})/gi),
+        ...html.matchAll(/(?:canonical|og:url)[\s\S]{0,300}?(MLB-?\d{8,})/gi),
+        ...html.matchAll(/https:\/\/[^"'<>\s]*\/(MLB-?\d{8,})[^"'<>\s]*/gi),
+      ].map((entry) => mercadoLivreItemId(entry[1])).filter(Boolean);
+      const all = [...html.matchAll(/\bMLB-?\d{8,}\b/gi)]
+        .map((entry) => mercadoLivreItemId(entry[0]))
+        .filter(Boolean);
+      const itemIds = [...new Set([directItemId, ...prioritized, ...all].filter(Boolean))].slice(0, 30);
+      if (itemIds.length) return { url: String(url), itemIds, pageData };
+      const refreshTag = html.match(
+        /<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/i,
+      )?.[0];
+      const refreshContent = refreshTag?.match(
+        /\bcontent\s*=\s*["']([^"']+)["']/i,
+      )?.[1];
+      const refreshTarget = refreshContent
+        ?.match(/\burl\s*=\s*(.+)$/i)?.[1]
+        ?.trim()
+        .replace(/^["']|["']$/g, "");
+      const scriptTarget = html.match(
+        /(?:window\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']|(?:window\.)?location\.replace\(\s*["']([^"']+)["']/i,
+      );
+      const refresh = refreshTarget || scriptTarget?.[1] || scriptTarget?.[2];
+      if (refresh) {
+        const next = new URL(refresh.replace(/&amp;/g, "&"), url);
+        if (next.protocol !== "https:" || !mercadoLivreHostname(next.hostname))
+          throw new Error("A página intermediária apontou para um domínio não permitido");
+        url = next;
+        continue;
+      }
+    }
+    break;
+  }
+  throw new Error("Não encontrei o código MLB nesse link");
+}
+
+async function mercadoLivreAppToken(env) {
+  const clientId = String(env.MERCADOLIVRE_CLIENT_ID || "");
+  const clientSecret = String(env.MERCADOLIVRE_CLIENT_SECRET || "");
+  if (!clientId || !clientSecret)
+    throw new Error("Configure MERCADOLIVRE_CLIENT_ID e MERCADOLIVRE_CLIENT_SECRET no Worker");
+  const response = await fetch("https://api.mercadolibre.com/oauth/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.access_token)
+    throw new Error(`Mercado Livre recusou as credenciais: ${String(result.message || result.error || response.status).slice(0, 300)}`);
+  return result.access_token;
+}
+
+async function mercadoLivreJson(path, token, optional = false) {
+  const endpoint = `https://api.mercadolibre.com${path}`;
+  let response = await fetch(endpoint, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if ([401, 403].includes(response.status)) {
+    response = await fetch(endpoint, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "SHOPLAB-Product-Importer/1.0",
+      },
+    });
+  }
+  if (optional && response.status === 404) return null;
+  const result = await response.json().catch(() => ({}));
+  if (optional && [400, 403].includes(response.status)) return null;
+  if (!response.ok)
+    throw new Error(`Mercado Livre respondeu ${response.status}: ${String(result.message || result.error || "consulta recusada").slice(0, 300)}`);
+  return result;
+}
+
+function mercadoLivrePriceValues(item, prices, salePrice, fallback = {}) {
+  const rows = Array.isArray(prices?.prices) ? prices.prices : [];
+  const instantPayment = rows.find((price) => {
+    const context = JSON.stringify(price?.conditions || price?.metadata || {});
+    return /(?:pix|account_money|bank_transfer)/i.test(context) &&
+      !/(?:coupon|cupom)/i.test(context) && Number(price?.amount) > 0;
+  });
+  const promotional = rows.find((price) =>
+    ["promotion", "deal", "custom", "price_discount"].includes(
+      String(price.type || "").toLowerCase(),
+    ),
+  );
+  const standard = rows.find((price) => price.type === "standard") || rows[0] || {};
+  const current = Number(
+    instantPayment?.amount ?? salePrice?.amount ?? promotional?.amount ?? standard.amount ??
+    item?.price ?? fallback.price ?? fallback.sale_price ?? 0,
+  );
+  const previous = Number(
+    instantPayment?.regular_amount ?? salePrice?.regular_amount ?? promotional?.regular_amount ??
+    promotional?.original_amount ??
+    (Number(standard.amount) > current ? standard.amount : null) ??
+    item?.original_price ?? fallback.original_price ?? fallback.regular_amount ?? 0,
+  );
+  if (!Number.isFinite(current) || current <= 0)
+    throw new Error("O Mercado Livre não informou um preço público válido");
+  return {
+    currentPriceCents: Math.round(current * 100),
+    previousPriceCents: previous > current ? Math.round(previous * 100) : null,
+  };
+}
+
+async function mercadoLivrePriceSnapshot(token, sourceItemId, storedOfferId, sourceUrl) {
+  let offerId = mercadoLivreItemId(storedOfferId);
+  let fallback = {};
+  const sourceId = mercadoLivreItemId(sourceItemId);
+  if (!sourceId) throw new Error("Identificador de origem inválido");
+  if (offerId === sourceId) {
+    const direct = await mercadoLivreJson(`/items/${encodeURIComponent(sourceId)}`, token, true);
+    if (!direct?.id) throw new Error("O anúncio não está mais disponível");
+    fallback = direct;
+  } else {
+    const catalog = await mercadoLivreJson(`/products/${encodeURIComponent(sourceId)}/items`, token, true);
+    const rows = Array.isArray(catalog?.results) ? catalog.results : Array.isArray(catalog) ? catalog : [];
+    fallback = rows.find((row) => Boolean(row?.winner || row?.buy_box_winner)) ||
+      rows.filter((row) => mercadoLivreItemId(row?.item_id || row?.id) && Number(row?.price || row?.sale_price || 0) > 0)
+        .sort((a, b) => Number(a.price || a.sale_price) - Number(b.price || b.sale_price))[0] || {};
+    offerId = mercadoLivreItemId(fallback.item_id || fallback.id);
+  }
+  if (!offerId) throw new Error("Nenhuma oferta ativa foi encontrada para esse catálogo");
+  const [item, prices, salePrice, pageData] = await Promise.all([
+    mercadoLivreJson(`/items/${encodeURIComponent(offerId)}`, token, true),
+    mercadoLivreJson(`/items/${encodeURIComponent(offerId)}/prices`, token, true),
+    mercadoLivreJson(`/items/${encodeURIComponent(offerId)}/sale_price?context=channel_marketplace`, token, true),
+    mercadoLivrePublicPageData(sourceUrl),
+  ]);
+  const values = mercadoLivrePriceValues(item, prices, salePrice, fallback);
+  if (Number(pageData?.pixPrice) > 0)
+    values.currentPriceCents = Math.round(Number(pageData.pixPrice) * 100);
+  return { ...values, offerId, priceKind: Number(pageData?.pixPrice) > 0 ? "pix" : "marketplace" };
+}
+
+async function syncMercadoLivreProductPrice(env, product, token) {
+  try {
+    const price = await mercadoLivrePriceSnapshot(
+      token,
+      product.priceSourceItemId,
+      product.priceSourceOfferId,
+      product.priceSourceUrl,
+    );
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE products SET base_price_cents=?,compare_at_price_cents=?,price_source_offer_id=?,price_synced_at=CURRENT_TIMESTAMP,price_sync_status='ok',price_sync_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND price_sync_enabled=1`).bind(price.currentPriceCents,price.previousPriceCents,price.offerId,product.id),
+      env.DB.prepare(`UPDATE offers SET current_price_cents=?,previous_price_cents=?,last_checked_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM offers WHERE product_id=? ORDER BY is_primary DESC,priority DESC LIMIT 1)`).bind(price.currentPriceCents,price.previousPriceCents,product.id),
+    ]);
+    return { id: product.id, success: true, ...price };
+  } catch (error) {
+    const detail = String(error?.message || error).slice(0, 500);
+    await env.DB.prepare(`UPDATE products SET price_synced_at=CURRENT_TIMESTAMP,price_sync_status='error',price_sync_error=? WHERE id=?`).bind(detail,product.id).run();
+    console.warn(JSON.stringify({ event: "mercadolivre_price_sync_failed", productId: product.id, error: detail }));
+    return { id: product.id, success: false, error: detail };
+  }
+}
+
+async function syncMercadoLivrePrices(env, { limit = 40, productId = null } = {}) {
+  const args = [];
+  let filter = `price_sync_enabled=1 AND price_source='mercadolivre'`;
+  if (productId) { filter += " AND id=?"; args.push(productId); }
+  const { results } = await env.DB.prepare(`SELECT id,price_source_item_id priceSourceItemId,price_source_offer_id priceSourceOfferId,price_source_url priceSourceUrl FROM products WHERE ${filter} ORDER BY COALESCE(datetime(price_synced_at),datetime('1970-01-01')) LIMIT ?`).bind(...args,Math.max(1,Math.min(100,Number(limit)||40))).all();
+  if (!results?.length) return { processed: 0, updated: 0, failed: 0, items: [] };
+  const token = await mercadoLivreAppToken(env);
+  const items = [];
+  for (const product of results) items.push(await syncMercadoLivreProductPrice(env, product, token));
+  return { processed: items.length, updated: items.filter(item=>item.success).length, failed: items.filter(item=>!item.success).length, items };
+}
+
+async function adminSyncProductPrice(req, env, productId, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const product = await env.DB.prepare(`SELECT id,price_sync_enabled priceSyncEnabled FROM products WHERE id=?`).bind(productId).first();
+  if (!product) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, id);
+  if (!product.priceSyncEnabled) return fail(req, env, "PRICE_SYNC_DISABLED", "Ative a sincronização importando e salvando um produto do Mercado Livre", 409, id);
+  const result = await syncMercadoLivrePrices(env, { productId, limit: 1 });
+  if (!result.updated) return fail(req, env, "PRICE_SYNC_FAILED", result.items[0]?.error || "Não foi possível atualizar o preço", 502, id);
+  return ok(req, env, result.items[0], id);
+}
+
+async function adminImportProductLink(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  try {
+    const body = await readJson(req, 8000);
+    const source = await resolveMercadoLivreUrl(body.url);
+    const token = await mercadoLivreAppToken(env);
+    let item = null, itemId = "", resourceType = "item";
+    for (const candidate of source.itemIds || []) {
+      item = await mercadoLivreJson(`/items/${encodeURIComponent(candidate)}`, token, true);
+      if (item?.id) {
+        itemId = candidate;
+        resourceType = "item";
+        break;
+      }
+    }
+    if (!item) for (const candidate of source.itemIds || []) {
+      item = await mercadoLivreJson(`/products/${encodeURIComponent(candidate)}`, token, true);
+      if (item?.id) {
+        itemId = candidate;
+        resourceType = "catalog_product";
+        break;
+      }
+    }
+    if (!item) {
+      const detected = (source.itemIds || []).slice(0, 3).join(", ");
+      throw new Error(
+        detected
+          ? `O código ${detected} foi encontrado, mas o Mercado Livre não disponibilizou os dados desse anúncio. Confirme se a URL abre a página individual e se o anúncio está ativo.`
+          : "Nenhum código MLB foi encontrado. Copie a URL da página individual do produto, cujo endereço contém MLB seguido de números.",
+      );
+    }
+    const catalogItems = resourceType === "catalog_product"
+      ? await mercadoLivreJson(
+          `/products/${encodeURIComponent(itemId)}/items`,
+          token,
+          true,
+        )
+      : null;
+    const catalogRows = Array.isArray(catalogItems?.results)
+      ? catalogItems.results
+      : Array.isArray(catalogItems)
+        ? catalogItems
+        : [];
+    const catalogOffer =
+      catalogRows.find((offer) =>
+        Boolean(offer?.winner || offer?.buy_box_winner),
+      ) ||
+      catalogRows
+        .filter((offer) =>
+          mercadoLivreItemId(offer?.item_id || offer?.id) &&
+          Number(offer?.price || offer?.sale_price || 0) > 0,
+        )
+        .sort(
+          (a, b) =>
+            Number(a.price || a.sale_price) - Number(b.price || b.sale_price),
+        )[0] ||
+      catalogRows.find((offer) =>
+        mercadoLivreItemId(offer?.item_id || offer?.id),
+      );
+    const winnerItemId = mercadoLivreItemId(
+      item.buy_box_winner?.item_id || item.buy_box_winner?.id ||
+      catalogOffer?.item_id || catalogOffer?.id,
+    );
+    const priceItemId = resourceType === "item" ? itemId : winnerItemId;
+    const [description, prices, salePrice, winnerItem] = await Promise.all([
+      resourceType === "item"
+        ? mercadoLivreJson(`/items/${encodeURIComponent(itemId)}/description`, token, true)
+        : null,
+      priceItemId
+        ? mercadoLivreJson(`/items/${encodeURIComponent(priceItemId)}/prices`, token, true)
+        : null,
+      priceItemId
+        ? mercadoLivreJson(`/items/${encodeURIComponent(priceItemId)}/sale_price?context=channel_marketplace`, token, true)
+        : null,
+      resourceType === "catalog_product" && priceItemId
+        ? mercadoLivreJson(`/items/${encodeURIComponent(priceItemId)}`, token, true)
+        : null,
+    ]);
+    const priceValues = mercadoLivrePriceValues(
+      winnerItem || item,
+      prices,
+      salePrice,
+      {
+        price: catalogOffer?.price ?? catalogOffer?.sale_price ?? item.price ?? item.buy_box_winner?.price ?? source.pageData?.price,
+        original_price: catalogOffer?.original_price ?? catalogOffer?.regular_amount ?? item.original_price ?? item.buy_box_winner?.original_price ?? source.pageData?.previousPrice,
+      },
+    );
+    if (Number(source.pageData?.pixPrice) > 0)
+      priceValues.currentPriceCents = Math.round(Number(source.pageData.pixPrice) * 100);
+    const apiPictures = (Array.isArray(item.pictures) ? item.pictures : []).map((picture) => picture.secure_url || picture.url);
+    const pictures = [...new Set([...apiPictures, ...(source.pageData?.pictures || [])])].filter((url) => /^https:\/\//i.test(String(url))).slice(0, 12);
+    const specifications = (Array.isArray(item.attributes) ? item.attributes : [])
+      .map((attribute) => {
+        const name = String(attribute?.name || "").trim();
+        const value = String(attribute?.value_name || attribute?.value_struct?.number || "").trim();
+        return name && value ? { name, value } : null;
+      })
+      .filter(Boolean)
+      .slice(0, 30);
+    const attributesDescription = specifications.map((entry) => `${entry.name}: ${entry.value}`).join("\n");
+    const plainDescription = String(
+      description?.plain_text || item.short_description?.content || source.pageData?.description || attributesDescription,
+    ).trim();
+    const productName = String(item.title || item.name || source.pageData?.name || "").trim();
+    return ok(req, env, {
+      provider: "mercadolivre", itemId, priceItemId, resourceType, sourceUrl: source.url,
+      name: productName.slice(0, 160),
+      slug: normalizeSearch(productName).replace(/\s+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160),
+      shortDescription: plainDescription.slice(0, 500), fullDescription: plainDescription.slice(0, 30000),
+      basePriceCents: priceValues.currentPriceCents,
+      compareAtPriceCents: priceValues.previousPriceCents,
+      priceKind: Number(source.pageData?.pixPrice) > 0 ? "pix" : "marketplace",
+      pictures, specifications, permalink: String(item.permalink || source.url),
+    }, id);
+  } catch (error) {
+    return fail(req, env, "PRODUCT_IMPORT_FAILED", String(error?.message || error), 422, id);
+  }
+}
+
 async function adminAiProductDraft(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
@@ -1834,6 +2349,46 @@ function shouldInterpretSearch(query) {
     /\b(ate|acima|abaixo|menos|mais|barato|melhor|para|por|entre|reais)\b/.test(normalized);
 }
 
+function shouldEnhanceSuggestions(query) {
+  const normalized = normalizeSearch(query);
+  const words = normalized.split(" ").filter(Boolean);
+  return normalized.length >= 12 && words.length >= 3 &&
+    /\b(ate|acima|abaixo|menos|mais|barato|melhor|para|por|entre|reais|estudar|trabalhar|jogar|correr|presente)\b/.test(normalized);
+}
+
+async function cachedSearchIntent(env, originalQuery, ctx) {
+  if (!env.AI || !shouldInterpretSearch(originalQuery)) return null;
+  const normalized = normalizeSearch(originalQuery);
+  const cacheKey = new Request(
+    `https://search-intent.shoplab.internal/v1?q=${encodeURIComponent(normalized)}`,
+  );
+  try {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) return cached.json();
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "ai_search_cache_read_failed", error: String(error?.message || error) }));
+  }
+  const intent = await interpretSearchIntent(env, originalQuery);
+  if (!intent) return null;
+  try {
+    const response = new Response(JSON.stringify(intent), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "public, max-age=604800",
+      },
+    });
+    const write = caches.default.put(cacheKey, response);
+    if (ctx?.waitUntil)
+      ctx.waitUntil(write.catch((error) =>
+        console.warn(JSON.stringify({ event: "ai_search_cache_write_failed", error: String(error?.message || error) })),
+      ));
+    else await write;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "ai_search_cache_write_failed", error: String(error?.message || error) }));
+  }
+  return intent;
+}
+
 async function interpretSearchIntent(env, originalQuery) {
   if (!env.AI || !shouldInterpretSearch(originalQuery)) return null;
   try {
@@ -1877,11 +2432,8 @@ async function interpretSearchIntent(env, originalQuery) {
   }
 }
 
-async function suggestionsV2(req, env, url, id) {
-  const query = normalizeSearch(url.searchParams.get("q"));
-  if (query.length < 2) return ok(req, env, [], id);
-  const correctedQuery = correctedSearch(query),
-    ftsQuery = buildFtsQuery(correctedQuery);
+async function suggestionProducts(env, ftsQuery) {
+  if (!ftsQuery) return [];
   const { results } = await env.DB.prepare(
     `
     SELECT p.name,p.slug,c.name category,b.name brand,p.view_count viewCount,
@@ -1896,10 +2448,34 @@ async function suggestionsV2(req, env, url, id) {
     ORDER BY bm25(products_fts,0,8.0,3.0,2.0,1.0),p.view_count DESC
     LIMIT 8
   `,
-  )
-    .bind(ftsQuery)
-    .all();
-  return ok(req, env, results, id);
+  ).bind(ftsQuery).all();
+  return results || [];
+}
+
+async function suggestionsV2(req, env, url, ctx, id) {
+  const query = normalizeSearch(url.searchParams.get("q"));
+  if (query.length < 2) return ok(req, env, [], id);
+  const correctedQuery = correctedSearch(query),
+    ftsQuery = buildFtsQuery(correctedQuery);
+  const regular = await suggestionProducts(env, ftsQuery);
+  const aiRequested = url.searchParams.get("ai") === "1";
+  if (!aiRequested || !shouldEnhanceSuggestions(query))
+    return ok(req, env, regular, id, { aiUsed: false });
+  const intent = await cachedSearchIntent(env, query, ctx);
+  if (!intent?.searchTerms)
+    return ok(req, env, regular, id, { aiUsed: false });
+  const interpretedQuery = correctedSearch(intent.searchTerms);
+  const intelligent = interpretedQuery === correctedQuery
+    ? []
+    : await suggestionProducts(env, buildIntentFtsQuery(interpretedQuery));
+  const merged = [...intelligent, ...regular]
+    .filter((item, index, items) => items.findIndex((other) => other.slug === item.slug) === index)
+    .slice(0, 8);
+  return ok(req, env, merged, id, {
+    aiUsed: true,
+    interpretedQuery,
+    explanation: intent.explanation,
+  });
 }
 
 async function trendingSearches(req, env, id) {
@@ -1927,7 +2503,7 @@ async function adminProductDetail(req, env, productId, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const product = await env.DB.prepare(
-    `SELECT id,name,slug,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson FROM products WHERE id=?`,
+    `SELECT id,name,slug,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson,price_source priceSource,price_source_item_id priceSourceItemId,price_source_offer_id priceSourceOfferId,price_source_url priceSourceUrl,price_sync_enabled priceSyncEnabled,price_synced_at priceSyncedAt,price_sync_status priceSyncStatus,price_sync_error priceSyncError FROM products WHERE id=?`,
   )
     .bind(productId)
     .first();
@@ -2487,8 +3063,11 @@ async function deliverReferralGiftCard(req,env,rewardId,id){
 }
 
 async function sendRewardNotificationEmail(apiKey,from,accountUrl,reward,recipient){
-  const safeName=htmlAttribute(recipient.displayName||"cliente"),safeTitle=htmlAttribute(reward.title),safeReason=htmlAttribute(reward.reason),safeValue=(reward.valueCents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-  const payload={from,to:[recipient.email],subject:"Você foi recompensado pela SHOPLAB 🎁",html:`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Você foi recompensado pela SHOPLAB</title></head><body style="margin:0;background:#f3f7f6;font-family:Arial,sans-serif;color:#173b34"><div style="display:none;max-height:0;overflow:hidden">Entre na sua conta SHOPLAB para resgatar sua recompensa.</div><div style="max-width:600px;margin:0 auto;padding:32px 20px"><div style="background:#fff;border-radius:16px;padding:32px"><p style="margin:0 0 8px;color:#087268;font-weight:700">SHOPLAB RECOMPENSAS</p><h1>Você foi recompensado! 🎁</h1><p>Olá, ${safeName}.</p><p>Você recebeu <strong>${safeTitle}</strong> no valor de <strong>${safeValue}</strong>.</p>${safeReason?`<p>${safeReason}</p>`:""}<p>Entre no site da SHOPLAB para resgatar sua recompensa. Por segurança, o código está disponível somente dentro da sua conta.</p><p style="margin:28px 0 12px"><a href="${htmlAttribute(accountUrl)}" style="display:inline-block;padding:14px 22px;background:#087268;color:#fff;text-decoration:none;border-radius:10px;font-weight:700">Entrar no site e resgatar</a></p></div></div></body></html>`,text:`Olá, ${recipient.displayName||"cliente"}. Você foi recompensado pela SHOPLAB! Você recebeu ${reward.title}, no valor de ${safeValue}.${reward.reason?` ${reward.reason}`:""} Entre no site para resgatar sua recompensa: ${accountUrl}`,tags:[{name:"category",value:"manual_reward"},{name:"reward_id",value:reward.id.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,256)}]};
+  const safeName=htmlAttribute(recipient.displayName||"cliente"),safeTitle=htmlAttribute(reward.title),safeReason=htmlAttribute(reward.reason),safeValue=(reward.valueCents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}),safeAccountUrl=htmlAttribute(accountUrl);
+  const reasonBlock=safeReason?`<tr><td style="padding:0 32px 24px"><div style="background:#f4f8f7;border-left:4px solid #0a7b6f;border-radius:8px;padding:16px 18px"><p style="margin:0 0 6px;color:#526963;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Motivo da recompensa</p><p style="margin:0;color:#173b34;font-size:15px;line-height:1.6">${safeReason}</p></div></td></tr>`:"";
+  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Você recebeu uma recompensa da SHOPLAB</title></head><body style="margin:0;padding:0;background:#eef4f2;font-family:Arial,Helvetica,sans-serif;color:#173b34"><div style="display:none;max-height:0;overflow:hidden;opacity:0">Sua recompensa já está disponível na sua conta SHOPLAB.</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eef4f2"><tr><td align="center" style="padding:32px 16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #dfe9e6;border-radius:18px;overflow:hidden"><tr><td style="background:#0a5148;padding:24px 32px"><p style="margin:0;color:#ffffff;font-size:24px;font-weight:800;letter-spacing:.04em">SHOPLAB</p><p style="margin:5px 0 0;color:#cce7e1;font-size:13px">Recompensas</p></td></tr><tr><td style="padding:34px 32px 16px"><p style="margin:0 0 10px;color:#0a7b6f;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">Uma surpresa para você</p><h1 style="margin:0 0 18px;color:#173b34;font-size:28px;line-height:1.2">Você recebeu uma recompensa!</h1><p style="margin:0 0 14px;color:#405951;font-size:16px;line-height:1.65">Olá, ${safeName}.</p><p style="margin:0;color:#405951;font-size:16px;line-height:1.65">A SHOPLAB enviou <strong style="color:#173b34">${safeTitle}</strong>, no valor de <strong style="color:#0a7b6f">${safeValue}</strong>.</p></td></tr>${reasonBlock}<tr><td align="center" style="padding:4px 32px 28px"><a href="${safeAccountUrl}" style="display:inline-block;background:#0a7b6f;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:15px 24px;border-radius:10px">Acessar e resgatar recompensa</a></td></tr><tr><td style="padding:0 32px 30px"><div style="border-top:1px solid #e4ecea;padding-top:20px"><p style="margin:0 0 8px;color:#526963;font-size:13px;line-height:1.6"><strong>Importante:</strong> por segurança, o código da recompensa fica disponível somente na sua conta. A SHOPLAB nunca solicitará sua senha por e-mail.</p><p style="margin:0;color:#71837e;font-size:12px;line-height:1.6">Se o botão não funcionar, acesse: <a href="${safeAccountUrl}" style="color:#0a7b6f;word-break:break-all">${safeAccountUrl}</a></p></div></td></tr><tr><td style="background:#f7faf9;padding:20px 32px;text-align:center"><p style="margin:0;color:#71837e;font-size:12px;line-height:1.5">Esta é uma mensagem automática da SHOPLAB. Não responda a este e-mail.</p></td></tr></table></td></tr></table></body></html>`;
+  const text=`Você recebeu uma recompensa da SHOPLAB\n\nOlá, ${recipient.displayName||"cliente"}.\n\nRecompensa: ${reward.title}\nValor: ${safeValue}${reward.reason?`\nMotivo: ${reward.reason}`:""}\n\nAcesse sua conta para visualizar e resgatar com segurança: ${accountUrl}\n\nA SHOPLAB nunca solicitará sua senha por e-mail.`;
+  const payload={from,to:[recipient.email],subject:"Você recebeu uma recompensa da SHOPLAB",html,text,tags:[{name:"category",value:"manual_reward"},{name:"reward_id",value:reward.id.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,256)}]};
   try{
     const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{authorization:`Bearer ${apiKey}`,"content-type":"application/json","user-agent":"SHOPLAB-Worker/1.0","idempotency-key":`manual-reward-${reward.id}`},body:JSON.stringify(payload)});
     const result=await response.json().catch(()=>({}));
@@ -2506,13 +3085,6 @@ async function sendManualRewardEmail(env,reward,recipient){
   if(!apiKey||!from)return {status:"skipped",id:null,error:"RESEND_API_KEY ou REWARD_EMAIL_FROM não configurado"};
   const accountUrl=`${String(env.PUBLIC_SITE_URL||allowedOrigins(env)[0]||"").replace(/\/+$/,"")}/conta.html#invites`;
   return sendRewardNotificationEmail(apiKey,from,accountUrl,reward,recipient);
-  const safeName=htmlAttribute(recipient.displayName||"cliente"),safeTitle=htmlAttribute(reward.title),safeReason=htmlAttribute(reward.reason),safeValue=(reward.valueCents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-  try{
-    const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{authorization:`Bearer ${apiKey}`,"content-type":"application/json","user-agent":"SHOPLAB-Worker/1.0","idempotency-key":`manual-reward-${reward.id}`},body:JSON.stringify({from,to:[recipient.email],subject:`Você recebeu uma recompensa da SHOPLAB: ${reward.title}`,html:`<!doctype html><html lang="pt-BR"><body style="font-family:Arial,sans-serif;color:#173b34"><h1>Você recebeu uma recompensa 🎁</h1><p>Olá, ${safeName}.</p><p>A SHOPLAB enviou <strong>${safeTitle}</strong>, no valor de <strong>${safeValue}</strong>.</p>${safeReason?`<p>Motivo: ${safeReason}</p>`:""}<p>Por segurança, o código do gift card está disponível somente dentro da sua conta.</p><p><a href="${htmlAttribute(accountUrl)}" style="display:inline-block;padding:12px 18px;background:#087268;color:#fff;text-decoration:none;border-radius:8px">Ver minha recompensa</a></p></body></html>`,text:`Olá, ${recipient.displayName||"cliente"}. Você recebeu ${reward.title}, no valor de ${safeValue}, da SHOPLAB.${reward.reason?` Motivo: ${reward.reason}`:""} Acesse sua conta para visualizar o código: ${accountUrl}`,tags:[{name:"category",value:"manual_reward"},{name:"reward_id",value:reward.id.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,256)}]})});
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(String(result.message||result.name||`Resend ${response.status}`).slice(0,500));
-    return {status:"sent",id:String(result.id||"").slice(0,200)||null,error:""};
-  }catch(error){return {status:"failed",id:null,error:String(error?.message||error).slice(0,500)}}
 }
 
 async function createManualUserReward(req,env,userId,id){

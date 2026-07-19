@@ -44,6 +44,14 @@ CREATE TABLE IF NOT EXISTS products (
   not_recommended_for TEXT NOT NULL DEFAULT '', editorial_score INTEGER CHECK (editorial_score BETWEEN 0 AND 100),
   base_price_cents INTEGER CHECK (base_price_cents IS NULL OR base_price_cents >= 0),
   compare_at_price_cents INTEGER CHECK (compare_at_price_cents IS NULL OR compare_at_price_cents >= 0),
+  price_source TEXT,
+  price_source_item_id TEXT,
+  price_source_offer_id TEXT,
+  price_source_url TEXT,
+  price_sync_enabled INTEGER NOT NULL DEFAULT 0 CHECK (price_sync_enabled IN (0,1)),
+  price_synced_at TEXT,
+  price_sync_status TEXT,
+  price_sync_error TEXT,
   pros_json TEXT NOT NULL DEFAULT '[]', cons_json TEXT NOT NULL DEFAULT '[]', tags_json TEXT NOT NULL DEFAULT '[]',
   specifications_json TEXT NOT NULL DEFAULT '[]', book_details_json TEXT NOT NULL DEFAULT '{}',
   faqs_json TEXT NOT NULL DEFAULT '[]', seo_json TEXT NOT NULL DEFAULT '{}',
@@ -177,6 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_events_search_trends ON events(event_type, create
 CREATE INDEX IF NOT EXISTS idx_events_product_activity ON events(product_slug, event_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_products_ranking ON products(status, is_featured DESC, editorial_score DESC, view_count DESC, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_products_base_price ON products(base_price_cents);
+CREATE INDEX IF NOT EXISTS idx_products_price_sync ON products(price_sync_enabled, price_synced_at);
 CREATE INDEX IF NOT EXISTS idx_promotions_active_period ON promotions(is_active, starts_at, ends_at);
 CREATE INDEX IF NOT EXISTS idx_promotion_products_product ON promotion_products(product_id, promotion_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON admin_sessions(expires_at);

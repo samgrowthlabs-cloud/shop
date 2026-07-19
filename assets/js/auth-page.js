@@ -7,7 +7,7 @@ const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&
 const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const expiryDate=value=>{const text=String(value||''),date=new Date(text);if(!Number.isFinite(date.getTime()))return'—';return date.toLocaleDateString('pt-BR',{timeZone:/T00:00:00(?:\.000)?Z$/i.test(text)?'UTC':'America/Sao_Paulo'})};
 const message=(text,type='error')=>{const box=$('#auth-message');box.textContent=text;box.className=`auth-message ${type}`};
-acceptRedirectSession();
+let redirectError=null;try{acceptRedirectSession()}catch(error){redirectError=error}
 
 function rows(items,kind){
   const icon=kind==='favorites'?'heart':kind==='ratings'?'star':'cart';
@@ -52,6 +52,7 @@ async function init(){
   if(page==='callback'){location.replace('conta.html');return}
   if(page==='account'){await account();return enhanceReferralGiftCards()}
   const form=$('#auth-form');if(!form)return;
-  form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button[type=submit]');button.disabled=true;try{if(page==='signup'){await signUp({name:$('#name').value,email:$('#email').value,password:$('#password').value});message('Cadastro criado. Confira seu e-mail para confirmar a conta.','success');form.reset()}else if(page==='login'){await signIn($('#email').value,$('#password').value);location.replace(new URLSearchParams(location.search).get('next')||'conta.html')}else if(page==='recover'){await recover($('#email').value);message('Enviamos o link de recuperação, caso o e-mail esteja cadastrado.','success')}else if(page==='reset'){acceptRedirectSession();await updatePassword($('#password').value);message('Senha alterada. Você já pode entrar.','success')}}catch(error){message(error.message)}finally{button.disabled=false}};
+  if(page==='reset'&&redirectError)message(redirectError.message);
+  form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button[type=submit]');button.disabled=true;try{if(page==='signup'){await signUp({name:$('#name').value,email:$('#email').value,password:$('#password').value});message('Cadastro criado. Confira seu e-mail para confirmar a conta.','success');form.reset()}else if(page==='login'){await signIn($('#email').value,$('#password').value);location.replace(new URLSearchParams(location.search).get('next')||'conta.html')}else if(page==='recover'){await recover($('#email').value);message('Enviamos o link de recuperação, caso o e-mail esteja cadastrado.','success')}else if(page==='reset'){if(redirectError)throw redirectError;acceptRedirectSession();await updatePassword($('#password').value);form.reset();message('Senha alterada com sucesso. Agora você já pode entrar com a nova senha.','success')}}catch(error){message(error.message)}finally{button.disabled=false}};
 }
 init();

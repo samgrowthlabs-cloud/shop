@@ -2,6 +2,19 @@ import{getSiteConfig,cachedSiteConfig}from'./api.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
+function warmHeaderMedia(config){
+  const wide=matchMedia('(min-width:761px)').matches;
+  const urls=[config?.theme?.logoUrl,config?.theme?.headerMediaUrl,wide?(config?.headerSpotlights||[])[0]?.mediaUrl:null].filter(Boolean);
+  const loaded=[...document.head.querySelectorAll('link[data-header-preload]')].map(link=>link.href);
+  for(const url of new Set(urls)){
+    const absolute=new URL(url,location.href).href;
+    if(loaded.includes(absolute))continue;
+    const link=document.createElement('link');
+    link.rel='preload';link.as='image';link.href=absolute;link.dataset.headerPreload='true';
+    document.head.append(link);loaded.push(absolute);
+  }
+}
+
 export function applySiteTheme(theme){
   const root=document.documentElement;
   if(!theme){delete root.dataset.seasonalTheme;return}
@@ -36,7 +49,7 @@ export function applySiteTheme(theme){
 function themeLogo(theme){
   const brand=document.querySelector('.header-brand');
   if(!brand||!theme?.logoUrl)return;
-  brand.innerHTML=`<span class="brand-images"><img class="brand-image brand-image-main" src="${esc(theme.logoUrl)}" alt="${esc(theme.logoText||'SHOPLAB')}">${theme.logoHoverUrl?`<img class="brand-image brand-image-hover" src="${esc(theme.logoHoverUrl)}" alt="">`:''}</span>`;
+  brand.innerHTML=`<span class="brand-images"><img class="brand-image brand-image-main" src="${esc(theme.logoUrl)}" alt="${esc(theme.logoText||'SHOPLAB')}" width="420" height="72" decoding="async" fetchpriority="high">${theme.logoHoverUrl?`<img class="brand-image brand-image-hover" src="${esc(theme.logoHoverUrl)}" alt="" width="420" height="72" decoding="async">`:''}</span>`;
 }
 
 function headerSpotlight(config){
@@ -48,11 +61,14 @@ function headerSpotlight(config){
   item.className='header-highlight has-media';
   item.href=spotlight.linkUrl||'promocoes.html';
   item.title=spotlight.altText||spotlight.name||'Destaque SHOPLAB';
-  item.innerHTML=`<img src="${esc(spotlight.mediaUrl)}" alt="${esc(item.title)}">`;
+  const mediaQuery=matchMedia('(min-width:761px)'),source=esc(spotlight.mediaUrl);
+  item.innerHTML=`<img ${mediaQuery.matches?`src="${source}" `:''}data-src="${source}" alt="${esc(item.title)}" width="560" height="92" decoding="async" fetchpriority="high">`;
   row.append(item);
+  const syncMedia=()=>{const image=item.querySelector('img');if(mediaQuery.matches&&!image.getAttribute('src'))image.src=image.dataset.src;else if(!mediaQuery.matches)image.removeAttribute('src')};
+  mediaQuery.addEventListener?.('change',syncMedia);
 }
 
-function paintHeader(config){if(!config)return;applySiteTheme(config.theme);themeLogo(config.theme);headerSpotlight(config)}
+function paintHeader(config){if(!config)return;warmHeaderMedia(config);applySiteTheme(config.theme);themeLogo(config.theme);headerSpotlight(config)}
 
 export async function initSiteHeader(){
   paintHeader(cachedSiteConfig());

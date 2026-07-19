@@ -69,8 +69,10 @@ document.addEventListener('click',async event=>{
   const original=button.innerHTML,slug=button.dataset.shareProduct,name=button.dataset.shareName||'Produto SHOPLAB';
   button.disabled=true;button.textContent='Preparando...';
   try{
-    const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON.stringify({slug})})).url:`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;
-    const data={title:name,text:`Confira ${name} na SHOPLAB`,url:shareUrl};
+    const product=await getProduct(slug),money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),price=Number(product?.price||0),oldPrice=Number(product?.oldPrice||0);
+    const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON.stringify({slug})})).url:`${C.API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location.origin)}`;
+    const priceText=price?(oldPrice>price?`De ${money(oldPrice)} por ${money(price)}`:`Por ${money(price)}`):'';
+    const data={title:name,text:[`Confira ${name} na SHOPLAB`,priceText].filter(Boolean).join(' — '),url:shareUrl};
     if(navigator.share){
       await navigator.share(data);
     }else{
@@ -79,7 +81,7 @@ document.addEventListener('click',async event=>{
       setTimeout(()=>button.innerHTML=original,1800);
       return;
     }
-  }catch(error){if(error.name!=='AbortError'){try{const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON.stringify({slug})})).url:`${location.origin}/produto?slug=${encodeURIComponent(slug)}`;await navigator.clipboard.writeText(shareUrl);button.textContent='Link copiado!';setTimeout(()=>button.innerHTML=original,1800);return}catch{}}}
+  }catch(error){if(error.name!=='AbortError'){try{const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON.stringify({slug})})).url:`${C.API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location.origin)}`;await navigator.clipboard.writeText(shareUrl);button.textContent='Link copiado!';setTimeout(()=>button.innerHTML=original,1800);return}catch{}}}
   button.disabled=false;button.innerHTML=original;
 },true);
 
