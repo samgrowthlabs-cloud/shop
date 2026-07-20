@@ -93,3 +93,20 @@ O login exige um token Turnstile válido e cria uma sessão opaca em D1 com cook
 - O frontend administrativo atual ainda é demonstrativo; os endpoints estão prontos para a integração dos formulários.
 - Cadastre a sitekey pública do Turnstile apenas no HTML. A chave secreta fica exclusivamente no Worker.
 - Restrinja `ALLOWED_ORIGINS` ao domínio real. Não use `*` com cookies.
+
+## 6. SHOPLAB Premium com Mercado Pago
+
+1. Em um banco D1 existente, execute uma vez `premium-subscriptions-upgrade.sql`.
+2. No Mercado Pago, crie uma aplicação em **Suas integrações** e use primeiro as credenciais de teste.
+3. Abra **Webhooks** na aplicação para obter a assinatura secreta. O Worker envia `https://SEU-WORKER/api/v1/payments/mercadopago/webhook` como `notification_url` ao criar cada assinatura, como exigido pelo fluxo de Assinaturas. A notificação principal é `subscription_preapproval`.
+4. Copie a assinatura secreta gerada para o secret `MERCADOPAGO_WEBHOOK_SECRET` do Worker.
+5. Cadastre o Access Token como secret `MERCADOPAGO_ACCESS_TOKEN`.
+6. Configure `PUBLIC_SITE_URL` com a origem HTTPS do site, sem barra final.
+
+Variáveis opcionais do plano:
+
+- `PREMIUM_PLAN_NAME`: padrão `SHOPLAB Premium`.
+- `PREMIUM_MONTHLY_PRICE_CENTS`: padrão `990` (R$ 9,90).
+- `PREMIUM_AI_MONTHLY_LIMIT`: padrão `50` novas análises por mês.
+
+Nunca coloque o Access Token nem a assinatura do webhook no frontend. O status Premium somente é atualizado depois que o Worker valida o webhook e consulta a assinatura diretamente na API do Mercado Pago.

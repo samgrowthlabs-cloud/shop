@@ -85,6 +85,8 @@ export default {
           },
           503,
         );
+      if (/no such column:.*(?:spotlight_position_x|spotlight_position_y|spotlight_scale)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"HEADER_SPOTLIGHT_IMAGE_CONTROLS_MIGRATION_REQUIRED",message:"Execute header-spotlight-image-controls-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*user_profiles/i.test(detail))
         return respond(
           request,
@@ -107,6 +109,8 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PERSONALIZATION_MIGRATION_REQUIRED",message:"Execute personalized-recommendations-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*targeting_json/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"BANNER_PERSONALIZATION_MIGRATION_REQUIRED",message:"Execute banner-personalization-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such column:.*(?:desktop_position_x|desktop_position_y|desktop_scale|mobile_position_x|mobile_position_y|mobile_scale)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"BANNER_IMAGE_CONTROLS_MIGRATION_REQUIRED",message:"Execute banner-image-controls-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such (?:table|column):.*(?:user_sessions|share_links|share_visits|referrals|referral_rewards|last_seen_at|blocked_until|moderation_note)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"USER_ENGAGEMENT_MIGRATION_REQUIRED",message:"Execute user-engagement-referrals-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*(?:gift_card_types|reward_gift_cards)/i.test(detail))
@@ -155,6 +159,16 @@ export default {
           },
           503,
         );
+      if (/no such column:.*image_storage_key/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_MIGRATION_REQUIRED",message:"Execute category-image-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such column:.*image_scale/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_SCALE_MIGRATION_REQUIRED",message:"Execute category-image-scale-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such column:.*image_position_/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_POSITION_MIGRATION_REQUIRED",message:"Execute category-image-position-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*comparison_analysis_cache/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"COMPARISON_CACHE_MIGRATION_REQUIRED",message:"Execute comparison-analysis-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*(?:premium_subscriptions|premium_ai_usage)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_SUBSCRIPTIONS_MIGRATION_REQUIRED",message:"Execute premium-subscriptions-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/UNIQUE constraint failed/i.test(detail))
         return respond(
           request,
@@ -237,6 +251,10 @@ async function route(request, env, ctx, requestId) {
     );
   if (request.method === "GET" && path === "/api/v1/products")
     return listProductsV2(request, env, url, requestId);
+  if (request.method === "POST" && path === "/api/v1/comparisons/analyze")
+    return analyzeProductComparison(request, env, ctx, requestId);
+  if (request.method === "POST" && path === "/api/v1/payments/mercadopago/webhook")
+    return mercadoPagoWebhook(request, env);
   if (request.method === "GET" && path.startsWith("/api/v1/products/"))
     return getProductV2(
       request,
@@ -262,6 +280,12 @@ async function route(request, env, ctx, requestId) {
     return userProfile(request, env, requestId);
   if (path === "/api/v1/user/profile" && request.method === "PUT")
     return updateUserProfile(request, env, requestId);
+  if (path === "/api/v1/user/subscription" && request.method === "GET")
+    return userPremiumSubscription(request, env, requestId);
+  if (path === "/api/v1/user/subscription/checkout" && request.method === "POST")
+    return createPremiumCheckout(request, env, requestId);
+  if (path === "/api/v1/user/subscription/cancel" && request.method === "PUT")
+    return cancelPremiumSubscription(request, env, requestId);
   if (path === "/api/v1/user/library" && request.method === "GET")
     return userLibrary(request, env, requestId);
   if (path === "/api/v1/user/recommendations" && request.method === "GET")
@@ -308,6 +332,8 @@ async function route(request, env, ctx, requestId) {
     return createGiftCardType(request, env, requestId);
   if (request.method === "PUT" && /^\/api\/v1\/admin\/gift-card-types\/[^/]+$/.test(path))
     return updateGiftCardType(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/gift-card-types\/[^/]+$/.test(path))
+    return deleteGiftCardType(request, env, path.split("/").pop(), requestId);
   if (request.method === "PUT" && /^\/api\/v1\/admin\/referral-rewards\/[^/]+\/gift-card$/.test(path))
     return deliverReferralGiftCard(request, env, path.split("/").at(-2), requestId);
   if (request.method === "PUT" && /^\/api\/v1\/admin\/referral-rewards\/[^/]+$/.test(path))
@@ -440,15 +466,16 @@ async function route(request, env, ctx, requestId) {
 
 async function listCategories(req, env, id) {
   const { results } = await env.DB.prepare(
-    `SELECT c.id,c.name,c.slug,c.description,c.icon,COUNT(p.id) count FROM categories c LEFT JOIN products p ON p.category_id=c.id AND p.status='published' WHERE c.is_active=1 GROUP BY c.id ORDER BY c.sort_order,c.name`,
+    `SELECT c.id,c.name,c.slug,c.description,c.icon,c.image_storage_key imageStorageKey,c.image_scale imageScale,c.image_position_x imagePositionX,c.image_position_y imagePositionY,COUNT(p.id) count FROM categories c LEFT JOIN products p ON p.category_id=c.id AND p.status='published' WHERE c.is_active=1 GROUP BY c.id ORDER BY c.sort_order,c.name`,
   ).all();
-  return ok(req, env, results, id);
+  const origin=new URL(req.url).origin;
+  return ok(req, env, (results||[]).map(category=>({...category,imageUrl:category.imageStorageKey?`${origin}/media/${encodeURIComponent(category.imageStorageKey)}`:null})), id);
 }
 
 async function publicSiteConfig(req, env, id) {
   const [banners, theme, stores, brands, headerPromotions, headerSpotlights] = await env.DB.batch([
     env.DB.prepare(
-      `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,targeting_json targetingJson,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
+      `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
     ),
     env.DB.prepare(
       `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
@@ -463,7 +490,7 @@ async function publicSiteConfig(req, env, id) {
       `SELECT name,slug,coupon_code couponCode,rules_json rulesJson FROM promotions WHERE is_active=1 AND datetime(starts_at)<=CURRENT_TIMESTAMP AND datetime(ends_at)>=CURRENT_TIMESTAMP ORDER BY datetime(ends_at) LIMIT 3`,
     ),
     env.DB.prepare(
-      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
+      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
     ),
   ]);
   const origin = new URL(req.url).origin;
@@ -642,7 +669,7 @@ async function listProductsV2(req, env, url, id) {
     args.push(category);
   }
   const { results } = await env.DB.prepare(
-    `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id WHERE ${where} ORDER BY p.is_featured DESC,p.updated_at DESC LIMIT ? OFFSET ?`,
+    `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id LEFT JOIN product_media pm ON pm.id=(SELECT selected_media.id FROM product_media selected_media WHERE selected_media.product_id=p.id AND selected_media.type='image' ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at LIMIT 1) WHERE ${where} ORDER BY p.is_featured DESC,p.updated_at DESC LIMIT ? OFFSET ?`,
   )
     .bind(...args, limit, offset)
     .all();
@@ -655,7 +682,7 @@ async function publicPromotions(req, env, id) {
       `SELECT id,name,slug,description,coupon_code couponCode,starts_at startsAt,ends_at endsAt,rules_json rulesJson FROM promotions WHERE is_active=1 AND datetime(starts_at)<=CURRENT_TIMESTAMP AND datetime(ends_at)>=CURRENT_TIMESTAMP ORDER BY datetime(ends_at),name`,
     ),
     env.DB.prepare(
-      `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.view_count viewCount,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,pp.promotion_id promotionId FROM promotion_products pp JOIN products p ON p.id=pp.product_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id JOIN promotions pr ON pr.id=pp.promotion_id WHERE p.status='published' AND pr.is_active=1 AND datetime(pr.starts_at)<=CURRENT_TIMESTAMP AND datetime(pr.ends_at)>=CURRENT_TIMESTAMP ORDER BY p.is_featured DESC,p.editorial_score DESC`,
+      `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.view_count viewCount,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt,pp.promotion_id promotionId FROM promotion_products pp JOIN products p ON p.id=pp.product_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id LEFT JOIN product_media pm ON pm.id=(SELECT selected_media.id FROM product_media selected_media WHERE selected_media.product_id=p.id AND selected_media.type='image' ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at LIMIT 1) JOIN promotions pr ON pr.id=pp.promotion_id WHERE p.status='published' AND pr.is_active=1 AND datetime(pr.starts_at)<=CURRENT_TIMESTAMP AND datetime(pr.ends_at)>=CURRENT_TIMESTAMP ORDER BY p.is_featured DESC,p.editorial_score DESC`,
     ),
   ]);
   const items = (campaigns.results || []).map((campaign) => {
@@ -742,12 +769,19 @@ const PRODUCT_CARD_SELECT = `SELECT p.id,p.name,p.slug,p.product_type productTyp
   p.short_description shortDescription,p.editorial_score editorialScore,
   p.is_featured isFeatured,p.view_count viewCount,p.updated_at updatedAt,
   c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,
-  COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId
+  COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,
+  pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt
   FROM products p
   LEFT JOIN categories c ON c.id=p.category_id
   LEFT JOIN brands b ON b.id=p.brand_id
   LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
-  LEFT JOIN partners pa ON pa.id=o.partner_id`;
+  LEFT JOIN partners pa ON pa.id=o.partner_id
+  LEFT JOIN product_media pm ON pm.id=(
+    SELECT selected_media.id FROM product_media selected_media
+    WHERE selected_media.product_id=p.id AND selected_media.type='image'
+    ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at
+    LIMIT 1
+  )`;
 
 async function trendingProducts(req, env, url, id) {
   const limit = clamp(url.searchParams.get("limit"), 1, 20, 8);
@@ -856,6 +890,370 @@ const RELATED_PRODUCTS_SCHEMA = {
   required: ["productIds"],
   additionalProperties: false,
 };
+
+const PRODUCT_COMPARISON_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    criteria: {
+      type: "array",
+      maxItems: 24,
+      items: {
+        type: "object",
+        properties: {
+          label: { type: "string" },
+          explanation: { type: "string" },
+          winnerSlugs: { type: "array", maxItems: 3, items: { type: "string" } },
+          values: {
+            type: "array",
+            maxItems: 3,
+            items: {
+              type: "object",
+              properties: {
+                productSlug: { type: "string" },
+                sourceName: { type: ["string", "null"] },
+                assessment: { type: "string", enum: ["best", "good", "neutral", "weak"] },
+                note: { type: "string" },
+              },
+              required: ["productSlug", "sourceName", "assessment", "note"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["label", "explanation", "winnerSlugs", "values"],
+        additionalProperties: false,
+      },
+    },
+    recommendations: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          productSlug: { type: "string" },
+          bestFor: { type: "string" },
+          highlights: { type: "array", maxItems: 4, items: { type: "string" } },
+        },
+        required: ["productSlug", "bestFor", "highlights"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["summary", "criteria", "recommendations"],
+  additionalProperties: false,
+};
+
+function comparisonSpecifications(product) {
+  return parse(product.specificationsJson, [])
+    .flatMap((group) => group?.items || group?.specifications || [])
+    .map((item) => ({
+      name: String(item?.name || item?.label || "").trim().slice(0, 100),
+      value: String(item?.value ?? "").trim().slice(0, 300),
+    }))
+    .filter((item) => item.name && item.value)
+    .slice(0, 40);
+}
+
+function comparisonText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function comparisonEqualityKey(value) {
+  return comparisonText(value).replace(/\s+/g, "");
+}
+
+function canonicalComparisonLabel(value) {
+  const label = comparisonText(value);
+  const aliases = [
+    [/^(?:memoria ram|ram|memoria principal)$/, "Memória RAM"],
+    [/^(?:armazenamento|memoria interna|capacidade interna|ssd|hd)$/, "Armazenamento"],
+    [/^(?:tamanho da tela|tela em polegadas|diagonal da tela)$/, "Tamanho da tela"],
+    [/^(?:taxa de atualizacao|frequencia da tela|refresh rate)$/, "Taxa de atualização"],
+    [/^(?:resolucao|resolucao da tela)$/, "Resolução"],
+    [/^(?:processador|cpu|chipset principal)$/, "Processador"],
+    [/^(?:placa de video|gpu|chip grafico|graficos)$/, "Placa de vídeo"],
+    [/^(?:camera principal|camera traseira|camera posterior)$/, "Câmera principal"],
+    [/^(?:camera frontal|camera de selfie|selfie)$/, "Câmera frontal"],
+    [/^(?:bateria|capacidade da bateria)$/, "Bateria"],
+    [/^(?:sistema operacional|sistema|os)$/, "Sistema operacional"],
+    [/^(?:peso|peso do produto)$/, "Peso"],
+    [/^(?:conectividade|conexoes sem fio)$/, "Conectividade"],
+  ];
+  return aliases.find(([pattern]) => pattern.test(label))?.[1] || String(value).trim();
+}
+
+function comparisonNumber(label, rawValue) {
+  const value = String(rawValue || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (/resolucao/.test(comparisonText(label))) {
+    const resolution = value.match(/(\d{3,5})\s*[x×]\s*(\d{3,5})/);
+    if (resolution) return Number(resolution[1]) * Number(resolution[2]);
+  }
+  const match = value.match(/\d+(?:[.,]\d+)?/);
+  if (!match) return null;
+  let number = Number(match[0].replace(",", "."));
+  if (!Number.isFinite(number)) return null;
+  if (/\btb\b/.test(value)) number *= 1024;
+  if (/\bkg\b/.test(value)) number *= 1000;
+  if (/\bghz\b/.test(value)) number *= 1000;
+  return number;
+}
+
+function deterministicComparisonDirection(label) {
+  const value = comparisonText(label);
+  if (/(?:peso|tempo de resposta|latencia|consumo|tdp)/.test(value)) return "lower";
+  if (/(?:memoria ram|armazenamento|bateria|taxa de atualizacao|resolucao|brilho|nucleos|threads|clock|cache|camera|potencia|leitura|gravacao)/.test(value)) return "higher";
+  return null;
+}
+
+function rankComparisonValues(label, values) {
+  const direction = deterministicComparisonDirection(label);
+  if (!direction) return null;
+  const measured = values
+    .map((item) => ({ item, number: comparisonNumber(label, item.rawValue) }))
+    .filter((entry) => entry.number != null);
+  if (measured.length < 2) return null;
+  const equal = new Set(measured.map((entry) => entry.number)).size === 1;
+  if (equal) {
+    return {
+      equal: true,
+      winnerSlugs: [],
+      values: values.map((item) => ({ ...item, assessment: "neutral", note: "" })),
+    };
+  }
+  const target = direction === "higher"
+    ? Math.max(...measured.map((entry) => entry.number))
+    : Math.min(...measured.map((entry) => entry.number));
+  const winners = new Set(measured.filter((entry) => entry.number === target).map((entry) => entry.item.productSlug));
+  return {
+    equal: false,
+    winnerSlugs: [...winners],
+    values: values.map((item) => ({
+      ...item,
+      assessment: winners.has(item.productSlug) ? "best" : item.rawValue ? "neutral" : "weak",
+    })),
+  };
+}
+
+function fallbackProductComparison(products) {
+  const grouped = new Map();
+  for (const product of products) {
+    for (const specification of product.specifications) {
+      const label = canonicalComparisonLabel(specification.name);
+      const key = comparisonText(label);
+      if (!grouped.has(key)) grouped.set(key, { label, bySlug: new Map() });
+      grouped.get(key).bySlug.set(product.slug, specification.value);
+    }
+  }
+  const criteria = [...grouped.values()].map(({ label, bySlug }) => {
+    let values = products.map((product) => ({
+      productSlug: product.slug,
+      rawValue: bySlug.get(product.slug) || "",
+      displayValue: bySlug.get(product.slug) || "",
+      assessment: "neutral",
+      note: "",
+    }));
+    const ranked = rankComparisonValues(label, values);
+    if (ranked) values = ranked.values;
+    const presentValues = values.filter((item) => item.rawValue).map((item) => comparisonEqualityKey(item.rawValue));
+    const equal = presentValues.length >= 2 && new Set(presentValues).size === 1;
+    return {
+      label,
+      explanation: equal || ranked?.equal ? "" : ranked?.winnerSlugs.length ? "Comparação calculada pelos valores informados na ficha técnica." : "Valores informados pelo cadastro do produto.",
+      winnerSlugs: equal || ranked?.equal ? [] : ranked?.winnerSlugs || [],
+      values: equal ? values.map((item) => ({ ...item, assessment: "neutral", note: "" })) : values,
+    };
+  });
+  return {
+    aiUsed: false,
+    summary: "Compare os dados técnicos lado a lado. Campos numéricos compatíveis são avaliados automaticamente.",
+    criteria,
+    recommendations: [],
+  };
+}
+
+function sanitizeAiComparison(value, products, fallback) {
+  const bySlug = new Map(products.map((product) => [product.slug, product]));
+  const criteria = (Array.isArray(value?.criteria) ? value.criteria : []).slice(0, 24).map((criterion) => {
+    const label = String(criterion?.label || "").trim().slice(0, 100);
+    if (!label) return null;
+    let values = products.map((product) => {
+      const proposed = (criterion.values || []).find((item) => item?.productSlug === product.slug);
+      const sourceName = String(proposed?.sourceName || "").trim();
+      const source = product.specifications.find((item) => comparisonText(item.name) === comparisonText(sourceName));
+      return {
+        productSlug: product.slug,
+        rawValue: source?.value || "",
+        displayValue: source?.value || "",
+        assessment: ["best", "good", "neutral", "weak"].includes(proposed?.assessment) ? proposed.assessment : "neutral",
+        note: String(proposed?.note || "").trim().slice(0, 220),
+      };
+    });
+    if (!values.some((item) => item.rawValue)) return null;
+    const ranked = rankComparisonValues(label, values);
+    if (ranked) values = ranked.values;
+    const presentValues = values.filter((item) => item.rawValue).map((item) => comparisonEqualityKey(item.rawValue));
+    const equal = presentValues.length >= 2 && new Set(presentValues).size === 1;
+    if (equal) values = values.map((item) => ({ ...item, assessment: "neutral", note: "" }));
+    return {
+      label,
+      explanation: equal || ranked?.equal ? "" : String(criterion?.explanation || "").trim().slice(0, 300),
+      winnerSlugs: equal || ranked?.equal ? [] : ranked?.winnerSlugs || [...new Set((criterion.winnerSlugs || []).filter((slug) => bySlug.has(slug)))],
+      values,
+    };
+  }).filter(Boolean);
+  const recommendations = (Array.isArray(value?.recommendations) ? value.recommendations : [])
+    .filter((item) => bySlug.has(item?.productSlug))
+    .slice(0, 3)
+    .map((item) => ({
+      productSlug: item.productSlug,
+      productName: bySlug.get(item.productSlug).name,
+      bestFor: String(item.bestFor || "").trim().slice(0, 240),
+      highlights: (Array.isArray(item.highlights) ? item.highlights : []).map((entry) => String(entry).trim().slice(0, 160)).filter(Boolean).slice(0, 4),
+    }));
+  return {
+    aiUsed: true,
+    summary: String(value?.summary || fallback.summary).trim().slice(0, 600),
+    criteria: criteria.length ? criteria : fallback.criteria,
+    recommendations,
+  };
+}
+
+function cacheComparisonAtEdge(ctx, cacheKey, analysis) {
+  try {
+    const write = caches.default.put(cacheKey, new Response(JSON.stringify(analysis), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "public, max-age=31536000",
+      },
+    }));
+    if (ctx?.waitUntil) ctx.waitUntil(write.catch((error) => console.warn(JSON.stringify({ event: "comparison_cache_write_failed", error: String(error?.message || error) }))));
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "comparison_cache_write_failed", error: String(error?.message || error) }));
+  }
+}
+
+async function generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback }) {
+  try {
+    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+      messages: [
+        {
+          role: "system",
+          content: "Você é um especialista brasileiro em comparação técnica de produtos. Una critérios equivalentes mesmo quando os nomes forem diferentes, como RAM e Memória RAM. Use somente as especificações fornecidas. Em sourceName copie exatamente o nome do campo de origem daquele produto; use null quando não houver equivalente. Nunca invente, complete ou altere valores. Marque vencedor apenas quando houver vantagem técnica clara. Quando os valores forem iguais, não marque vencedor, não escreva nota de vantagem e deixe a explicação vazia. Critérios dependentes de uso também podem ficar sem vencedor. Explique em português simples por que uma característica diferente é melhor e para qual perfil cada produto é mais indicado. Não trate números maiores como melhores automaticamente quando o contexto não permitir.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ category: products[0].category, products: products.map(({ slug, name, productType, brand, specifications }) => ({ slug, name, productType, brand, specifications })) }),
+        },
+      ],
+      response_format: { type: "json_schema", json_schema: PRODUCT_COMPARISON_SCHEMA },
+      temperature: 0,
+      max_tokens: 2200,
+    });
+    const raw = typeof result?.response === "string" ? JSON.parse(result.response) : result?.response;
+    const analysis = sanitizeAiComparison(raw, products, fallback);
+    await env.DB.prepare(
+      `UPDATE comparison_analysis_cache SET product_slugs=?,analysis_json=?,updated_at=CURRENT_TIMESTAMP WHERE cache_key=?`,
+    ).bind(JSON.stringify([...slugs].sort()), JSON.stringify(analysis), version).run();
+    cacheComparisonAtEdge(ctx, cacheKey, analysis);
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "ai_product_comparison_failed", cacheKey: version, error: String(error?.message || error) }));
+    await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
+  }
+}
+
+async function reservePremiumAiGeneration(env, userId) {
+  const plan = premiumPlan(env);
+  const period = premiumPeriodKey();
+  const row = await env.DB.prepare(
+    `INSERT INTO premium_ai_usage(user_id,period_key,generations) VALUES(?,?,1)
+     ON CONFLICT(user_id,period_key) DO UPDATE SET generations=generations+1,updated_at=CURRENT_TIMESTAMP
+     WHERE generations<? RETURNING generations`,
+  ).bind(userId, period, plan.aiMonthlyLimit).first();
+  const used = Number(row?.generations || 0);
+  return { allowed: Boolean(row), used, limit: plan.aiMonthlyLimit, remaining: Math.max(0, plan.aiMonthlyLimit - used), period };
+}
+
+async function analyzeProductComparison(req, env, ctx, id) {
+  const body = await readJson(req, 4096);
+  const slugs = [...new Set((Array.isArray(body.slugs) ? body.slugs : []).map((slug) => String(slug).trim()).filter((slug) => /^[a-z0-9-]{2,160}$/.test(slug)))].slice(0, 3);
+  if (slugs.length < 2) return fail(req, env, "VALIDATION_ERROR", "Escolha pelo menos dois produtos para comparar", 422, id);
+  const placeholders = slugs.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(
+    `SELECT p.slug,p.name,p.product_type productType,p.specifications_json specificationsJson,p.updated_at updatedAt,c.id categoryId,c.name category,b.name brand FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.slug IN (${placeholders}) AND p.status='published'`,
+  ).bind(...slugs).all();
+  const bySlug = new Map((results || []).map((product) => [product.slug, product]));
+  const products = slugs.map((slug) => bySlug.get(slug)).filter(Boolean).map((product) => ({ ...product, specifications: comparisonSpecifications(product) }));
+  if (products.length !== slugs.length) return fail(req, env, "PRODUCT_NOT_FOUND", "Um dos produtos não está disponível", 404, id);
+  if (products.some((product) => product.categoryId !== products[0].categoryId)) return fail(req, env, "COMPARISON_CATEGORY_MISMATCH", "Compare produtos da mesma categoria", 422, id);
+  const fallback = fallbackProductComparison(products);
+  const user = await activeUser(req, env);
+  const premium = user ? await premiumSubscriptionData(env, user.id) : { premium: false, status: "free", plan: premiumPlan(env), usage: null };
+  const technicalResult = {
+    ...fallback,
+    premium: premium.premium,
+    premiumRequired: !premium.premium,
+    subscriptionStatus: premium.status,
+    plan: premium.plan,
+    usage: premium.usage,
+  };
+  if (!products.some((product) => product.specifications.length)) return ok(req, env, technicalResult, id);
+  if (!premium.premium) return ok(req, env, technicalResult, id);
+  const version = await sha256(products.map((product) => `${product.slug}:${product.updatedAt}:${JSON.stringify(product.specifications)}`).join("|"));
+  const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
+  try {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) return ok(req, env, { ...(await cached.json()), premium: true, usage: premium.usage }, id);
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "comparison_cache_read_failed", error: String(error?.message || error) }));
+  }
+  const durableCache = await env.DB.prepare(
+    `SELECT analysis_json analysisJson,updated_at updatedAt FROM comparison_analysis_cache WHERE cache_key=?`,
+  ).bind(version).first();
+  if (durableCache?.analysisJson) {
+    try {
+      const analysis = JSON.parse(durableCache.analysisJson);
+      if (analysis && typeof analysis === "object") {
+        cacheComparisonAtEdge(ctx, cacheKey, analysis);
+        return ok(req, env, { ...analysis, premium: true, usage: premium.usage }, id);
+      }
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "comparison_durable_cache_invalid", cacheKey: version, error: String(error?.message || error) }));
+    }
+  }
+  if (!env.AI) return ok(req, env, technicalResult, id);
+  let claimed = false;
+  if (!durableCache) {
+    const claim = await env.DB.prepare(
+      `INSERT OR IGNORE INTO comparison_analysis_cache(cache_key,product_slugs,analysis_json) VALUES(?,?,'null')`,
+    ).bind(version, JSON.stringify([...slugs].sort())).run();
+    claimed = Boolean(claim.meta.changes);
+  } else if (!durableCache.analysisJson || durableCache.analysisJson === "null") {
+    const claim = await env.DB.prepare(
+      `UPDATE comparison_analysis_cache SET updated_at=CURRENT_TIMESTAMP WHERE cache_key=? AND analysis_json='null' AND datetime(updated_at)<=datetime('now','-2 minutes')`,
+    ).bind(version).run();
+    claimed = Boolean(claim.meta.changes);
+  }
+  if (claimed) {
+    const usage = await reservePremiumAiGeneration(env, user.id);
+    if (!usage.allowed) {
+      await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
+      return ok(req, env, { ...technicalResult, premium: true, premiumRequired: false, quotaExceeded: true, usage }, id);
+    }
+    const generation = generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback });
+    if (ctx?.waitUntil) ctx.waitUntil(generation);
+    else await generation;
+    premium.usage = usage;
+  }
+  return ok(req, env, { ...fallback, premium: true, processing: true, usage: premium.usage }, id);
+}
 
 async function rankRelatedProductsWithAi(env, source, candidates) {
   if (!env.AI || candidates.length < 2) return null;
@@ -1720,6 +2118,7 @@ async function searchV2(req, env, url, ctx, id) {
       p.editorial_score editorialScore,p.is_featured isFeatured,p.view_count viewCount,
       c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,
       COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,
+      pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt,
       bm25(products_fts,0,10.0,4.0,3.0,1.0) rank
     FROM products_fts
     JOIN products p ON p.id=products_fts.product_id
@@ -1727,6 +2126,12 @@ async function searchV2(req, env, url, ctx, id) {
     LEFT JOIN brands b ON b.id=p.brand_id
     LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
     LEFT JOIN partners pa ON pa.id=o.partner_id
+    LEFT JOIN product_media pm ON pm.id=(
+      SELECT selected_media.id FROM product_media selected_media
+      WHERE selected_media.product_id=p.id AND selected_media.type='image'
+      ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at
+      LIMIT 1
+    )
     WHERE products_fts MATCH ? AND p.status='published'${categoryFilter}${intentFilters}
     ORDER BY ${order}
     LIMIT 50
@@ -3043,6 +3448,24 @@ async function saveGiftCardType(req,env,typeId,id,creating){
 async function createGiftCardType(req,env,id){return saveGiftCardType(req,env,crypto.randomUUID(),id,true)}
 async function updateGiftCardType(req,env,typeId,id){return saveGiftCardType(req,env,typeId,id,false)}
 
+async function deleteGiftCardType(req,env,typeId,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
+  const [type,referralUsage,manualUsage]=await env.DB.batch([
+    env.DB.prepare(`SELECT id,logo_storage_key logoStorageKey FROM gift_card_types WHERE id=?`).bind(typeId),
+    env.DB.prepare(`SELECT COUNT(*) total FROM reward_gift_cards WHERE gift_card_type_id=?`).bind(typeId),
+    env.DB.prepare(`SELECT COUNT(*) total FROM manual_user_rewards WHERE gift_card_type_id=?`).bind(typeId),
+  ]);
+  const row=type.results?.[0];
+  if(!row)return fail(req,env,"GIFT_CARD_TYPE_NOT_FOUND","Tipo de gift card não encontrado",404,id);
+  const usage=Number(referralUsage.results?.[0]?.total||0)+Number(manualUsage.results?.[0]?.total||0);
+  if(usage)return fail(req,env,"GIFT_CARD_TYPE_IN_USE","Este gift card já foi usado em recompensas. Desative o tipo para preservar o histórico dos usuários.",409,id);
+  await env.DB.prepare(`DELETE FROM gift_card_types WHERE id=?`).bind(typeId).run();
+  if(row.logoStorageKey&&env.MEDIA){
+    try{await env.MEDIA.delete(row.logoStorageKey)}catch(error){console.warn(JSON.stringify({event:"gift_card_type_logo_delete_failed",typeId,error:String(error?.message||error)}))}
+  }
+  return ok(req,env,{id:typeId,deleted:true},id);
+}
+
 async function deliverReferralGiftCard(req,env,rewardId,id){
   if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
   if(String(env.GIFT_CARD_ENCRYPTION_KEY||"").length<24)return fail(req,env,"GIFT_CARD_KEY_NOT_CONFIGURED","Configure o secret GIFT_CARD_ENCRYPTION_KEY com pelo menos 24 caracteres antes de entregar cartões",503,id);
@@ -3233,29 +3656,33 @@ async function adminCategories(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    "SELECT c.id,c.name,c.slug,c.description,c.icon,c.is_active isActive,c.sort_order sortOrder,COUNT(p.id) productCount FROM categories c LEFT JOIN products p ON p.category_id=c.id GROUP BY c.id ORDER BY c.sort_order,c.name",
+    "SELECT c.id,c.name,c.slug,c.description,c.icon,c.image_storage_key imageStorageKey,c.image_scale imageScale,c.image_position_x imagePositionX,c.image_position_y imagePositionY,c.is_active isActive,c.sort_order sortOrder,COUNT(p.id) productCount FROM categories c LEFT JOIN products p ON p.category_id=c.id GROUP BY c.id ORDER BY c.sort_order,c.name",
   ).all();
-  return ok(req, env, results, id);
+  const origin=new URL(req.url).origin;
+  return ok(req, env, (results||[]).map(category=>({...category,imageUrl:category.imageStorageKey?`${origin}/media/${encodeURIComponent(category.imageStorageKey)}`:null})), id);
 }
 
 async function createCategory(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
-  const body = await readJson(req, 20000);
-  if (!body.name || !/^[a-z0-9-]{2,100}$/.test(String(body.slug || "")))
+  if (!env.MEDIA)
+    return fail(req,env,"R2_NOT_CONFIGURED","O binding R2 MEDIA não foi configurado",503,id);
+  const form=await req.formData(),name=String(form.get("name")||"").trim(),slug=String(form.get("slug")||"");
+  if (!name || !/^[a-z0-9-]{2,100}$/.test(slug))
     return fail(req, env, "VALIDATION_ERROR", "Nome ou slug inválido", 422, id);
   const categoryId = crypto.randomUUID();
+  let imageStorageKey=null;
+  const image=form.get("image");
+  try{if(image instanceof File&&image.size)imageStorageKey=await storeSiteImage(env,image,"categories",categoryId)}catch(error){return fail(req,env,"INVALID_FILE",error.message,422,id)}
   await env.DB.prepare(
-    "INSERT INTO categories(id,name,slug,description,icon,is_active,sort_order) VALUES(?,?,?,?,?,?,?)",
+    "INSERT INTO categories(id,name,slug,description,icon,image_storage_key,image_scale,image_position_x,image_position_y,is_active,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
   )
     .bind(
       categoryId,
-      String(body.name).slice(0, 100),
-      body.slug,
-      String(body.description || "").slice(0, 1000),
-      String(body.icon || "⌬").slice(0, 8),
-      body.isActive === false ? 0 : 1,
-      Number(body.sortOrder) || 0,
+      name.slice(0, 100),slug,String(form.get("description")||"").slice(0,1000),
+      String(form.get("icon")||"⌬").slice(0,8),imageStorageKey,clamp(form.get("imageScale"),50,250,100),clamp(form.get("imagePositionX"),-100,100,0),clamp(form.get("imagePositionY"),-100,100,0),
+      String(form.get("isActive"))==="false"?0:1,
+      clamp(form.get("sortOrder"),-10000,10000,0),
     )
     .run();
   return respond(
@@ -3274,20 +3701,24 @@ async function createCategory(req, env, id) {
 async function updateCategory(req, env, categoryId, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
-  const body = await readJson(req, 20000);
-  if (!body.name || !/^[a-z0-9-]{2,100}$/.test(String(body.slug || "")))
+  if (!env.MEDIA)
+    return fail(req,env,"R2_NOT_CONFIGURED","O binding R2 MEDIA não foi configurado",503,id);
+  const current=await env.DB.prepare("SELECT image_storage_key imageStorageKey FROM categories WHERE id=?").bind(categoryId).first();
+  if(!current)return fail(req,env,"CATEGORY_NOT_FOUND","Categoria não encontrada",404,id);
+  const form=await req.formData(),name=String(form.get("name")||"").trim(),slug=String(form.get("slug")||"");
+  if (!name || !/^[a-z0-9-]{2,100}$/.test(slug))
     return fail(req, env, "VALIDATION_ERROR", "Nome ou slug inválido", 422, id);
+  let imageStorageKey=current.imageStorageKey;
+  const image=form.get("image");
+  try{if(image instanceof File&&image.size)imageStorageKey=await storeSiteImage(env,image,"categories",categoryId)}catch(error){return fail(req,env,"INVALID_FILE",error.message,422,id)}
   const result = await env.DB.prepare(
-    "UPDATE categories SET name=?,slug=?,description=?,icon=?,is_active=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+    "UPDATE categories SET name=?,slug=?,description=?,icon=?,image_storage_key=?,image_scale=?,image_position_x=?,image_position_y=?,is_active=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
   )
     .bind(
-      String(body.name).slice(0, 100),
-      body.slug,
-      String(body.description || "").slice(0, 1000),
-      String(body.icon || "⌬").slice(0, 8),
-      body.isActive === false ? 0 : 1,
-      Number(body.sortOrder) || 0,
-      categoryId,
+      name.slice(0,100),slug,String(form.get("description")||"").slice(0,1000),
+      String(form.get("icon")||"⌬").slice(0,8),imageStorageKey,clamp(form.get("imageScale"),50,250,100),clamp(form.get("imagePositionX"),-100,100,0),clamp(form.get("imagePositionY"),-100,100,0),
+      String(form.get("isActive"))==="false"?0:1,
+      clamp(form.get("sortOrder"),-10000,10000,0),categoryId,
     )
     .run();
   if (!result.meta.changes)
@@ -3299,7 +3730,8 @@ async function updateCategory(req, env, categoryId, id) {
       404,
       id,
     );
-  return ok(req, env, { id: categoryId }, id);
+  if(current.imageStorageKey&&current.imageStorageKey!==imageStorageKey)await env.MEDIA.delete(current.imageStorageKey);
+  return ok(req, env, { id: categoryId,imageStorageKey }, id);
 }
 
 async function deleteCategory(req, env, categoryId, id) {
@@ -3319,9 +3751,11 @@ async function deleteCategory(req, env, categoryId, id) {
       409,
       id,
     );
+  const category=await env.DB.prepare("SELECT image_storage_key imageStorageKey FROM categories WHERE id=?").bind(categoryId).first();
   await env.DB.prepare("DELETE FROM categories WHERE id=?")
     .bind(categoryId)
     .run();
+  if(category?.imageStorageKey&&env.MEDIA)await env.MEDIA.delete(category.imageStorageKey);
   return ok(req, env, { deleted: true }, id);
 }
 
@@ -3557,7 +3991,7 @@ async function adminBanners(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,targeting_json targetingJson,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,created_at createdAt FROM banners ORDER BY sort_order,created_at DESC`,
+    `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,created_at createdAt FROM banners ORDER BY sort_order,created_at DESC`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -3667,16 +4101,22 @@ async function saveBanner(req, env, bannerId, id, creating) {
     endsAt,
     String(form.get("isActive")) === "true" ? 1 : 0,
     clamp(form.get("sortOrder"), -10000, 10000, 0),
+    clamp(form.get("desktopPositionX"), 0, 100, 50),
+    clamp(form.get("desktopPositionY"), 0, 100, 50),
+    clamp(form.get("desktopScale"), 10, 400, 100),
+    clamp(form.get("mobilePositionX"), 0, 100, 50),
+    clamp(form.get("mobilePositionY"), 0, 100, 50),
+    clamp(form.get("mobileScale"), 10, 400, 100),
   ];
   if (creating)
     await env.DB.prepare(
-      `INSERT INTO banners(id,name,eyebrow,title,message,button_text,link_url,desktop_storage_key,mobile_storage_key,alt_text,targeting_json,starts_at,ends_at,is_active,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO banners(id,name,eyebrow,title,message,button_text,link_url,desktop_storage_key,mobile_storage_key,alt_text,targeting_json,starts_at,ends_at,is_active,sort_order,desktop_position_x,desktop_position_y,desktop_scale,mobile_position_x,mobile_position_y,mobile_scale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
       .bind(bannerId, ...values)
       .run();
   else
     await env.DB.prepare(
-      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,desktop_position_x=?,desktop_position_y=?,desktop_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     )
       .bind(...values, bannerId)
       .run();
@@ -3925,7 +4365,7 @@ async function adminHeaderSpotlights(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,updated_at updatedAt FROM header_spotlights ORDER BY sort_order,created_at`,
+    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,updated_at updatedAt FROM header_spotlights ORDER BY sort_order,created_at`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -3939,6 +4379,9 @@ function headerSpotlightValues(body) {
     optionalDate(body.endsAt),
     body.isActive === false ? 0 : 1,
     clamp(body.sortOrder, -10000, 10000, 0),
+    clamp(body.imagePositionX, 0, 100, 50),
+    clamp(body.imagePositionY, 0, 100, 50),
+    clamp(body.imageScale, 10, 400, 100),
   ];
 }
 
@@ -3959,7 +4402,7 @@ async function createHeaderSpotlight(req, env, id) {
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const spotlightId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order) VALUES(?,?,?,?,?,?,?,?)`,
+    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,spotlight_position_x,spotlight_position_y,spotlight_scale) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(spotlightId, ...headerSpotlightValues(body)).run();
   return ok(req, env, { id: spotlightId }, id);
 }
@@ -3971,7 +4414,7 @@ async function updateHeaderSpotlight(req, env, spotlightId, id) {
   const validation = validateHeaderSpotlight(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,spotlight_position_x=?,spotlight_position_y=?,spotlight_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
   ).bind(...headerSpotlightValues(body), spotlightId).run();
   if (!result.meta.changes)
     return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
@@ -4197,6 +4640,218 @@ async function activeUser(req, env) {
   if(profile?.status==="blocked")return null;
   if(profile?.blockedUntil&&Date.parse(profile.blockedUntil)>Date.now())return null;
   return user;
+}
+
+function premiumPlan(env) {
+  return {
+    name: String(env.PREMIUM_PLAN_NAME || "SHOPLAB Premium").slice(0, 100),
+    amountCents: clamp(env.PREMIUM_MONTHLY_PRICE_CENTS, 100, 10000000, 990),
+    currency: "BRL",
+    interval: "month",
+    aiMonthlyLimit: clamp(env.PREMIUM_AI_MONTHLY_LIMIT, 1, 100000, 50),
+  };
+}
+
+function premiumPeriodKey(date = new Date()) {
+  return date.toISOString().slice(0, 7);
+}
+
+async function mercadoPagoApi(env, path, options = {}) {
+  const accessToken = String(env.MERCADOPAGO_ACCESS_TOKEN || "");
+  if (!accessToken) throw new Error("MERCADOPAGO_ACCESS_TOKEN_NOT_CONFIGURED");
+  const response = await fetch(`https://api.mercadopago.com${path}`, {
+    ...options,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(`MERCADOPAGO_${response.status}:${String(result.message || result.error || "request_failed").slice(0, 300)}`);
+    error.status = response.status;
+    throw error;
+  }
+  return result;
+}
+
+function normalizedMercadoPagoSubscriptionStatus(value) {
+  const status = String(value || "").toLowerCase();
+  if (status === "authorized") return "authorized";
+  if (status === "paused") return "paused";
+  if (["cancelled", "canceled"].includes(status)) return "cancelled";
+  return "pending";
+}
+
+async function reconcileMercadoPagoSubscription(env, providerSubscriptionId, expectedUserId = null) {
+  const providerId = String(providerSubscriptionId || "").slice(0, 200);
+  if (!providerId) return null;
+  const existing = await env.DB.prepare(
+    `SELECT id,user_id userId FROM premium_subscriptions WHERE provider_subscription_id=?`,
+  ).bind(providerId).first();
+  if (!existing || (expectedUserId && existing.userId !== expectedUserId)) return null;
+  const remote = await mercadoPagoApi(env, `/preapproval/${encodeURIComponent(providerId)}`);
+  if (String(remote.external_reference || "") !== `shoplab:${existing.userId}`) {
+    throw new Error("MERCADOPAGO_EXTERNAL_REFERENCE_MISMATCH");
+  }
+  const status = normalizedMercadoPagoSubscriptionStatus(remote.status);
+  const amountCents = Math.round(Number(remote.auto_recurring?.transaction_amount || 0) * 100);
+  await env.DB.prepare(
+    `UPDATE premium_subscriptions SET status=?,payer_email=?,amount_cents=CASE WHEN ?>0 THEN ? ELSE amount_cents END,currency=?,checkout_url=COALESCE(?,checkout_url),next_payment_at=?,provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(
+    status,
+    String(remote.payer_email || "").slice(0, 320),
+    amountCents,
+    amountCents,
+    String(remote.auto_recurring?.currency_id || "BRL").slice(0, 8),
+    remote.init_point || null,
+    remote.next_payment_date || null,
+    remote.last_modified || new Date().toISOString(),
+    existing.id,
+  ).run();
+  return { ...remote, localStatus: status, userId: existing.userId };
+}
+
+async function premiumSubscriptionData(env, userId, { reconcilePending = false } = {}) {
+  let subscription = await env.DB.prepare(
+    `SELECT id,status,provider_subscription_id providerSubscriptionId,payer_email payerEmail,amount_cents amountCents,currency,checkout_url checkoutUrl,next_payment_at nextPaymentAt,created_at createdAt,updated_at updatedAt FROM premium_subscriptions WHERE user_id=?`,
+  ).bind(userId).first();
+  if (reconcilePending && subscription?.status === "pending" && subscription.providerSubscriptionId && env.MERCADOPAGO_ACCESS_TOKEN) {
+    try {
+      await reconcileMercadoPagoSubscription(env, subscription.providerSubscriptionId, userId);
+      subscription = await env.DB.prepare(
+        `SELECT id,status,provider_subscription_id providerSubscriptionId,payer_email payerEmail,amount_cents amountCents,currency,checkout_url checkoutUrl,next_payment_at nextPaymentAt,created_at createdAt,updated_at updatedAt FROM premium_subscriptions WHERE user_id=?`,
+      ).bind(userId).first();
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "premium_subscription_reconcile_failed", userId, error: String(error?.message || error) }));
+    }
+  }
+  const plan = premiumPlan(env);
+  const usage = await env.DB.prepare(
+    `SELECT generations FROM premium_ai_usage WHERE user_id=? AND period_key=?`,
+  ).bind(userId, premiumPeriodKey()).first();
+  const used = Number(usage?.generations || 0);
+  return {
+    premium: subscription?.status === "authorized",
+    status: subscription?.status || "free",
+    subscription: subscription || null,
+    plan,
+    usage: { used, limit: plan.aiMonthlyLimit, remaining: Math.max(0, plan.aiMonthlyLimit - used), period: premiumPeriodKey() },
+  };
+}
+
+async function userPremiumSubscription(req, env, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
+  const data = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
+  const response = ok(req, env, data, id);
+  response.headers.set("cache-control", "private, no-store, max-age=0");
+  return response;
+}
+
+async function createPremiumCheckout(req, env, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para assinar", 401, id);
+  if (!env.MERCADOPAGO_ACCESS_TOKEN)
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento Premium ainda não foi configurado", 503, id);
+  const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
+  if (current.premium) return ok(req, env, current, id);
+  if (current.status === "pending" && current.subscription?.checkoutUrl)
+    return ok(req, env, { ...current, checkoutUrl: current.subscription.checkoutUrl }, id);
+  const plan = premiumPlan(env);
+  const siteOrigin = String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "");
+  const workerOrigin = new URL(req.url).origin;
+  if (!/^https:\/\//i.test(siteOrigin))
+    return fail(req, env, "PUBLIC_SITE_URL_REQUIRED", "Configure PUBLIC_SITE_URL com o endereço HTTPS do site", 503, id);
+  let checkout;
+  try {
+    checkout = await mercadoPagoApi(env, "/preapproval", {
+      method: "POST",
+      headers: { "x-idempotency-key": crypto.randomUUID() },
+      body: JSON.stringify({
+        reason: `${plan.name} - ${plan.aiMonthlyLimit} análises inteligentes por mês`,
+        external_reference: `shoplab:${user.id}`,
+        payer_email: user.email,
+        auto_recurring: {
+          frequency: 1,
+          frequency_type: "months",
+          transaction_amount: plan.amountCents / 100,
+          currency_id: plan.currency,
+        },
+        back_url: `${siteOrigin}/conta.html#premium`,
+        notification_url: `${workerOrigin}/api/v1/payments/mercadopago/webhook`,
+        status: "pending",
+      }),
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ event: "premium_checkout_creation_failed", userId: user.id, error: String(error?.message || error) }));
+    return fail(req, env, "CHECKOUT_CREATION_FAILED", "Não foi possível abrir o pagamento no Mercado Pago agora", 502, id);
+  }
+  if (!checkout.id || !/^https:\/\//i.test(String(checkout.init_point || "")))
+    return fail(req, env, "CHECKOUT_CREATION_FAILED", "O Mercado Pago não retornou um checkout válido", 502, id);
+  await env.DB.prepare(
+    `INSERT INTO premium_subscriptions(id,user_id,provider,provider_subscription_id,status,payer_email,amount_cents,currency,checkout_url,next_payment_at,provider_updated_at) VALUES(?,?,'mercadopago',?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET provider_subscription_id=excluded.provider_subscription_id,status=excluded.status,payer_email=excluded.payer_email,amount_cents=excluded.amount_cents,currency=excluded.currency,checkout_url=excluded.checkout_url,next_payment_at=excluded.next_payment_at,provider_updated_at=excluded.provider_updated_at,updated_at=CURRENT_TIMESTAMP`,
+  ).bind(
+    crypto.randomUUID(), user.id, String(checkout.id), normalizedMercadoPagoSubscriptionStatus(checkout.status),
+    user.email, plan.amountCents, plan.currency, String(checkout.init_point), checkout.next_payment_date || null,
+    checkout.last_modified || new Date().toISOString(),
+  ).run();
+  return ok(req, env, { checkoutUrl: String(checkout.init_point), status: normalizedMercadoPagoSubscriptionStatus(checkout.status), plan }, id);
+}
+
+async function cancelPremiumSubscription(req, env, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
+  const current = await env.DB.prepare(
+    `SELECT provider_subscription_id providerSubscriptionId,status FROM premium_subscriptions WHERE user_id=?`,
+  ).bind(user.id).first();
+  if (!current?.providerSubscriptionId)
+    return fail(req, env, "SUBSCRIPTION_NOT_FOUND", "Assinatura não encontrada", 404, id);
+  if (current.status === "cancelled") return ok(req, env, { status: "cancelled", premium: false }, id);
+  try {
+    await mercadoPagoApi(env, `/preapproval/${encodeURIComponent(current.providerSubscriptionId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "canceled" }),
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ event: "premium_subscription_cancel_failed", userId: user.id, error: String(error?.message || error) }));
+    return fail(req, env, "SUBSCRIPTION_CANCEL_FAILED", "Não foi possível cancelar a assinatura no Mercado Pago agora", 502, id);
+  }
+  await env.DB.prepare(
+    `UPDATE premium_subscriptions SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE user_id=?`,
+  ).bind(user.id).run();
+  return ok(req, env, { status: "cancelled", premium: false }, id);
+}
+
+async function mercadoPagoWebhookSignature(req, dataId, secret) {
+  const signatureParts = Object.fromEntries(String(req.headers.get("x-signature") || "").split(",").map((part) => part.trim().split("=", 2)));
+  const timestamp = signatureParts.ts || "";
+  const received = String(signatureParts.v1 || "").toLowerCase();
+  const requestId = String(req.headers.get("x-request-id") || "");
+  if (!timestamp || !received || !requestId || !dataId || !secret) return false;
+  const normalizedId = /^[a-zA-Z0-9]+$/.test(dataId) ? dataId.toLowerCase() : dataId;
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = await crypto.subtle.sign("HMAC", key, enc.encode(`id:${normalizedId};request-id:${requestId};ts:${timestamp};`));
+  return safeEqual(bytesToHex(new Uint8Array(digest)), received);
+}
+
+async function mercadoPagoWebhook(req, env) {
+  const body = await req.json().catch(() => ({}));
+  const url = new URL(req.url);
+  const dataId = String(url.searchParams.get("data.id") || url.searchParams.get("data_id") || body?.data?.id || "").slice(0, 300);
+  const valid = await mercadoPagoWebhookSignature(req, dataId, String(env.MERCADOPAGO_WEBHOOK_SECRET || ""));
+  if (!valid) return new Response(null, { status: 401 });
+  const topic = String(body.type || body.topic || url.searchParams.get("type") || url.searchParams.get("topic") || "");
+  if (topic === "subscription_preapproval" && dataId) {
+    try {
+      await reconcileMercadoPagoSubscription(env, dataId);
+    } catch (error) {
+      console.error(JSON.stringify({ event: "mercadopago_webhook_reconcile_failed", providerSubscriptionId: dataId, error: String(error?.message || error) }));
+      return new Response(null, { status: 500 });
+    }
+  }
+  return new Response(null, { status: 200 });
 }
 async function personalizedRecommendations(req, env, id) {
   const user = await activeUser(req, env);

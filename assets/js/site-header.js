@@ -62,6 +62,10 @@ function headerSpotlight(config){
   item.href=spotlight.linkUrl||'promocoes.html';
   item.title=spotlight.altText||spotlight.name||'Destaque SHOPLAB';
   const mediaQuery=matchMedia('(min-width:761px)'),source=esc(spotlight.mediaUrl);
+  const control=(value,min,max,fallback)=>{const number=Number(value);return Math.min(max,Math.max(min,Number.isFinite(number)?number:fallback))};
+  item.style.setProperty('--spotlight-x',`${control(spotlight.imagePositionX,0,100,50)}%`);
+  item.style.setProperty('--spotlight-y',`${control(spotlight.imagePositionY,0,100,50)}%`);
+  item.style.setProperty('--spotlight-scale',String(control(spotlight.imageScale,10,400,100)/100));
   item.innerHTML=`<img ${mediaQuery.matches?`src="${source}" `:''}data-src="${source}" alt="${esc(item.title)}" width="560" height="92" decoding="async" fetchpriority="high">`;
   row.append(item);
   const syncMedia=()=>{const image=item.querySelector('img');if(mediaQuery.matches&&!image.getAttribute('src'))image.src=image.dataset.src;else if(!mediaQuery.matches)image.removeAttribute('src')};

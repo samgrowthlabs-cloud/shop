@@ -6,6 +6,10 @@ CREATE TABLE IF NOT EXISTS categories (
   slug TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
   icon TEXT NOT NULL DEFAULT '⌬',
+  image_storage_key TEXT,
+  image_scale INTEGER NOT NULL DEFAULT 100 CHECK (image_scale BETWEEN 50 AND 250),
+  image_position_x INTEGER NOT NULL DEFAULT 0 CHECK (image_position_x BETWEEN -100 AND 100),
+  image_position_y INTEGER NOT NULL DEFAULT 0 CHECK (image_position_y BETWEEN -100 AND 100),
   parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -145,6 +149,9 @@ CREATE TABLE IF NOT EXISTS banners (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, eyebrow TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
   message TEXT NOT NULL DEFAULT '', button_text TEXT NOT NULL DEFAULT 'Ver oferta', link_url TEXT NOT NULL,
   desktop_storage_key TEXT NOT NULL, mobile_storage_key TEXT, alt_text TEXT NOT NULL DEFAULT '',
+  desktop_position_x INTEGER NOT NULL DEFAULT 50, desktop_position_y INTEGER NOT NULL DEFAULT 50,
+  desktop_scale INTEGER NOT NULL DEFAULT 100, mobile_position_x INTEGER NOT NULL DEFAULT 50,
+  mobile_position_y INTEGER NOT NULL DEFAULT 50, mobile_scale INTEGER NOT NULL DEFAULT 100,
   targeting_json TEXT NOT NULL DEFAULT '{}',
   starts_at TEXT, ends_at TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -169,12 +176,49 @@ CREATE TABLE IF NOT EXISTS seasonal_themes (
 CREATE TABLE IF NOT EXISTS header_spotlights (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, storage_key TEXT,
   link_url TEXT NOT NULL DEFAULT 'promocoes.html', alt_text TEXT NOT NULL DEFAULT '',
+  spotlight_position_x INTEGER NOT NULL DEFAULT 50, spotlight_position_y INTEGER NOT NULL DEFAULT 50,
+  spotlight_scale INTEGER NOT NULL DEFAULT 100,
   starts_at TEXT, ends_at TEXT,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS comparison_analysis_cache (
+  cache_key TEXT PRIMARY KEY,
+  product_slugs TEXT NOT NULL,
+  analysis_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS premium_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  provider TEXT NOT NULL DEFAULT 'mercadopago',
+  provider_subscription_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','authorized','paused','cancelled')),
+  payer_email TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL CHECK(amount_cents > 0),
+  currency TEXT NOT NULL DEFAULT 'BRL',
+  checkout_url TEXT,
+  next_payment_at TEXT,
+  provider_updated_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS premium_ai_usage (
+  user_id TEXT NOT NULL,
+  period_key TEXT NOT NULL,
+  generations INTEGER NOT NULL DEFAULT 0 CHECK(generations >= 0),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(user_id, period_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_premium_subscriptions_provider_id ON premium_subscriptions(provider_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_premium_subscriptions_status ON premium_subscriptions(status, updated_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_products_status_category ON products(status, category_id);
 CREATE INDEX IF NOT EXISTS idx_products_updated ON products(updated_at DESC);
@@ -191,6 +235,7 @@ CREATE INDEX IF NOT EXISTS idx_promotion_products_product ON promotion_products(
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON admin_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_banners_active_period ON banners(is_active, starts_at, ends_at, sort_order);
 CREATE INDEX IF NOT EXISTS idx_header_spotlights_active ON header_spotlights(is_active, starts_at, ends_at, sort_order);
+CREATE INDEX IF NOT EXISTS idx_comparison_analysis_cache_updated ON comparison_analysis_cache(updated_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_only_one_active_seasonal_theme ON seasonal_themes(is_active) WHERE is_active=1;
 
 INSERT OR IGNORE INTO categories (id,name,slug,icon,sort_order) VALUES

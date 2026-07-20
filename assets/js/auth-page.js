@@ -15,10 +15,26 @@ function rows(items,kind){
   return `<div class="account-list">${items.map(item=>{const image=item.storageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(item.storageKey)}`:item.externalUrl||'';return`<article><a class="account-product-thumb" href="produto.html?slug=${encodeURIComponent(item.slug)}" aria-label="Ver ${esc(item.name||item.slug)}">${image?`<img src="${esc(image)}" alt="${esc(item.altText||item.name||'Produto')}" loading="lazy" decoding="async">`:`<img class="fallback" src="assets/icons/${icon}.svg" alt="">`}</a><a class="account-product-copy" href="produto.html?slug=${encodeURIComponent(item.slug)}"><strong>${esc(item.name||String(item.slug).replaceAll('-',' '))}</strong>${item.price!=null?`<small>${money(item.price)}</small>`:''}</a>${kind==='cart'?`<div class="account-item-side"><button class="btn ghost" type="button" data-remove-cart="${esc(item.slug)}" data-cart-quantity="${Number(item.quantity)||1}">Remover</button></div>`:''}${kind==='favorites'?'<img class="account-status-icon favorite" src="assets/icons/heart.svg" alt="Produto curtido">':''}${kind==='ratings'?`<span class="account-rating" aria-label="${Number(item.rating)} de 5 estrelas">${'★'.repeat(Number(item.rating))}${'☆'.repeat(5-Number(item.rating))}</span>`:''}</article>`}).join('')}</div>`;
 }
 
+function renderPremiumSubscription(data){
+  const target=$('#premium-subscription');if(!target||!data)return;
+  const nav=$('.account-sidebar nav');if(nav&&!nav.querySelector('a[href="#premium"]'))nav.querySelector('a[href="#invites"]')?.insertAdjacentHTML('beforebegin','<a href="#premium">Premium</a>');
+  const plan=data.plan||{},usage=data.usage||{},price=money((data.premium&&data.subscription?.amountCents)||plan.amountCents||0),status=data.status||'free';
+  if(data.premium){target.innerHTML=`<div class="premium-plan-state active"><span class="premium-status">PLANO ATIVO</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3><strong>${price}<small>/mês</small></strong><p>Você tem ${Number(usage.remaining||0)} de ${Number(usage.limit||0)} novas análises inteligentes disponíveis neste mês. Resultados já armazenados no cache não consomem sua cota.</p><div class="premium-usage"><span style="width:${Math.min(100,Math.round(Number(usage.used||0)/Math.max(1,Number(usage.limit||1))*100))}%"></span></div><button class="btn ghost" id="cancel-premium" type="button">Cancelar assinatura</button></div>`;bindPremiumActions();return}
+  const pending=status==='pending';
+  target.innerHTML=`<div class="premium-plan-state"><span class="premium-status">${pending?'PAGAMENTO PENDENTE':'PLANO MENSAL'}</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3><strong>${price}<small>/mês</small></strong><ul><li>${Number(plan.aiMonthlyLimit||50)} novas comparações inteligentes por mês</li><li>Explicações claras sobre as diferenças</li><li>Recomendações para cada tipo de uso</li><li>Comparações em cache sem consumir novamente</li></ul><button class="btn primary" id="subscribe-premium" type="button">${pending?'Continuar pagamento':'Assinar com Mercado Pago'}</button><small>Pagamento recorrente processado com segurança pelo Mercado Pago. Você pode cancelar quando quiser.</small></div>`;bindPremiumActions();
+}
+
+function bindPremiumActions(){
+  const subscribe=$('#subscribe-premium');if(subscribe)subscribe.onclick=async()=>{subscribe.disabled=true;subscribe.textContent='Abrindo pagamento…';try{const result=await userApi('subscription/checkout',{method:'POST'});if(result.checkoutUrl)location.href=result.checkoutUrl;else renderPremiumSubscription(result)}catch(error){message(error.message);subscribe.disabled=false;subscribe.textContent='Tentar novamente'}};
+  const cancel=$('#cancel-premium');if(cancel)cancel.onclick=async()=>{if(!confirm('Deseja cancelar a renovação da assinatura Premium?'))return;cancel.disabled=true;try{await userApi('subscription/cancel',{method:'PUT'});renderPremiumSubscription(await userApi('subscription'))}catch(error){message(error.message);cancel.disabled=false}};
+}
+
 async function account(){
   const user=await currentUser();
   if(!user){location.replace('entrar.html?next=conta.html');return}
-  const [profile,library]=await Promise.all([apiProfile(),syncAccountLibrary()]);
+  const [profile,library,subscription]=await Promise.all([apiProfile(),syncAccountLibrary(),userApi('subscription').catch(()=>null)]);
+  renderPremiumSubscription(subscription);
+  if(!subscription&&$('#premium-subscription'))$('#premium-subscription').innerHTML='<p>Não foi possível carregar o plano Premium agora. Tente atualizar a página.</p>';
   startPresence();
   const displayName=profile.displayName||user.user_metadata?.display_name||user.email?.split('@')[0]||'Minha conta',initials=displayName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase(),avatar=user.user_metadata?.avatar_url||user.user_metadata?.picture||'';
   const paintAvatar=id=>{const target=$(id);if(target)target.innerHTML=avatar?`<img src="${esc(avatar)}" alt="Foto de ${esc(displayName)}" referrerpolicy="no-referrer">`:`<b>${esc(initials)}</b>`};
