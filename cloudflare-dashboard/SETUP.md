@@ -94,19 +94,37 @@ O login exige um token Turnstile válido e cria uma sessão opaca em D1 com cook
 - Cadastre a sitekey pública do Turnstile apenas no HTML. A chave secreta fica exclusivamente no Worker.
 - Restrinja `ALLOWED_ORIGINS` ao domínio real. Não use `*` com cookies.
 
-## 6. SHOPLAB Premium com Mercado Pago
+## 6. SHOPLAB Premium com Stripe
 
-1. Em um banco D1 existente, execute uma vez `premium-subscriptions-upgrade.sql`.
-2. No Mercado Pago, crie uma aplicação em **Suas integrações** e use primeiro as credenciais de teste.
-3. Abra **Webhooks** na aplicação para obter a assinatura secreta. O Worker envia `https://SEU-WORKER/api/v1/payments/mercadopago/webhook` como `notification_url` ao criar cada assinatura, como exigido pelo fluxo de Assinaturas. A notificação principal é `subscription_preapproval`.
-4. Copie a assinatura secreta gerada para o secret `MERCADOPAGO_WEBHOOK_SECRET` do Worker.
-5. Cadastre o Access Token como secret `MERCADOPAGO_ACCESS_TOKEN`.
-6. Configure `PUBLIC_SITE_URL` com a origem HTTPS do site, sem barra final.
+1. Em um banco D1 existente, execute uma vez `premium-subscriptions-upgrade.sql` e depois `premium-settings-upgrade.sql`.
+2. No Stripe Dashboard, ative primeiro o **modo de teste**.
+3. Em **Developers → API keys**, copie a chave secreta de teste (`sk_test_...`) para o secret `STRIPE_SECRET_KEY` do Worker. Não é necessário colocar a chave publicável no frontend porque o projeto usa Stripe Checkout hospedado.
+4. Em **Developers → Webhooks**, crie um endpoint apontando para `https://SEU-WORKER/api/v1/payments/stripe/webhook`.
+5. Selecione estes eventos: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded` e `invoice.payment_failed`.
+6. Abra o endpoint criado, revele o **Signing secret** (`whsec_...`) e salve-o no Worker como secret `STRIPE_WEBHOOK_SECRET`.
+7. Configure `PUBLIC_SITE_URL` com a origem HTTPS do site, sem barra final.
+8. Em **Settings → Payment methods** no Stripe, habilite os meios desejados. O Checkout mostra automaticamente apenas os meios compatíveis com o país, moeda e tipo de cobrança. Pagamentos recorrentes podem ter opções diferentes do passe avulso.
 
 Variáveis opcionais do plano:
 
 - `PREMIUM_PLAN_NAME`: padrão `SHOPLAB Premium`.
 - `PREMIUM_MONTHLY_PRICE_CENTS`: padrão `990` (R$ 9,90).
+- `PREMIUM_PASS_PRICE_CENTS`: preço do passe avulso; por padrão usa o preço mensal.
+- `PREMIUM_PASS_DAYS`: duração do passe avulso; padrão `30` dias.
 - `PREMIUM_AI_MONTHLY_LIMIT`: padrão `50` novas análises por mês.
+- `PREMIUM_PROMO_LABEL`: texto exibido quando houver preço promocional.
+- `PREMIUM_PROMO_MONTHLY_PRICE_CENTS`: preço promocional mensal em centavos.
+- `PREMIUM_PROMO_PASS_PRICE_CENTS`: preço promocional do passe em centavos.
+- `PREMIUM_PROMO_ENDS_AT`: término opcional da promoção em data ISO.
+- `PREMIUM_EMAIL_FROM`: remetente dos e-mails Premium; se ausente, usa `REWARD_EMAIL_FROM`.
 
-Nunca coloque o Access Token nem a assinatura do webhook no frontend. O status Premium somente é atualizado depois que o Worker valida o webhook e consulta a assinatura diretamente na API do Mercado Pago.
+Nunca coloque `STRIPE_SECRET_KEY` nem `STRIPE_WEBHOOK_SECRET` no frontend. O status Premium somente é atualizado depois que o Worker valida a assinatura do webhook e confere valor, moeda, usuário e identificadores da sessão Stripe.
+
+### Preço, promoção e comparação Premium
+
+- Acesse `admin/premium.html` para definir os preços mensal e avulso, duração do passe, limite mensal de novas análises e promoções com data de início e término.
+- Alterações de preço valem para novos checkouts. Assinaturas Stripe existentes continuam com o preço aceito quando foram contratadas.
+- A comparação Premium usa por padrão `@cf/qwen/qwen3-30b-a3b-fp8`, com resposta estruturada e cache no AI Gateway. O modelo pode ser trocado pela variável `PREMIUM_COMPARISON_AI_MODEL`.
+- Defina opcionalmente `AI_GATEWAY_ID` com o identificador do seu AI Gateway. Se não for definido, o Worker usa o gateway `default`.
+- O AI Gateway mantém observabilidade e cache de inferência por 30 dias. O resultado final também é persistido no D1 e no Cache API por versão dos produtos; abrir novamente a mesma comparação não consome outra análise. Mudanças de preço, ficha técnica ou versão do algoritmo geram automaticamente uma análise nova.
+- O resultado Premium inclui diferença exata de preço, decisão sobre valer a pena pagar mais, evidências utilizadas, confiança, dados ausentes e notas comparativas por perfil de uso.

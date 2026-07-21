@@ -39,7 +39,7 @@ export const searchProductsWithMeta=async({q='',categorySlug='',sort=''}={})=>{
 export const getPromotions=async()=>C.USE_MOCK_DATA?[{id:'mock',name:'Ofertas em destaque',slug:'ofertas',description:'Produtos com preços reduzidos.',couponCode:'',startsAt:new Date().toISOString(),endsAt:new Date(Date.now()+86400000).toISOString(),products:(await getProducts()).filter(product=>product.discount>0)}]:request('/api/v1/promotions');
 export const getRecommendations=async slug=>C.USE_MOCK_DATA?(await getProducts()).filter(p=>p.slug!==slug).slice(0,4):withActivePromotions(await request(`/api/v1/products/${encodeURIComponent(slug)}/related`));
 export const getProductOffers=async slug=>(await getProductBySlug(slug))?.offers||[];
-export const getComparisonAnalysis=slugs=>request('/api/v1/comparisons/analyze',{method:'POST',body:{slugs},timeout:30000});
+export const getComparisonAnalysis=slugs=>request('/api/v1/comparisons/analyze',{method:'POST',body:{slugs},timeout:90000});
 export const trackEvent=event=>C.USE_MOCK_DATA?Promise.resolve({mock:true,event}):request('/api/v1/events',{method:'POST',body:event});
 export const loginAdmin=credentials=>request('/api/v1/admin/auth/login',{method:'POST',body:credentials});
 export const logoutAdmin=()=>request('/api/v1/admin/auth/logout',{method:'POST'});

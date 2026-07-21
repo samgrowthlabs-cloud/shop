@@ -88,12 +88,25 @@ export function bindComparisonUI() {
 
 function renderRecommendations(analysis, products) {
   if (!analysis) return '';
+  const verdict = analysis.verdict || null;
+  const bestValue = verdict ? products.find(product => product.slug === verdict.bestValueSlug) : null;
+  const bestOverall = verdict ? products.find(product => product.slug === verdict.bestOverallSlug) : null;
+  const price = analysis.priceComparison || null;
+  const cheaper = price ? products.find(product => product.slug === price.cheaperSlug) : null;
+  const expensive = price ? products.find(product => product.slug === price.moreExpensiveSlug) : null;
+  const priceHtml = price && cheaper && expensive ? `<div class="comparison-price-gap"><small>Diferença de preço calculada</small><strong>${safe(expensive.name)} custa ${money(price.differenceCents)} a mais</strong><span>${Number(price.differencePercent || 0)}% acima de ${safe(cheaper.name)}</span></div>` : '';
+  const worthLabel = verdict?.worthPayingMore === 'yes' ? 'Sim' : verdict?.worthPayingMore === 'no' ? 'Não' : 'Depende do uso';
+  const worthHtml = verdict ? `<div class="comparison-worth"><small>Vale pagar a diferença?</small><strong>${worthLabel}</strong><p>${safe(verdict.worthPayingMoreReason || '')}</p></div>` : '';
+  const evidenceHtml = verdict?.evidence?.length ? `<div class="comparison-evidence"><strong>Evidências usadas</strong><ul>${verdict.evidence.map(item => `<li>${safe(item)}</li>`).join('')}</ul></div>` : '';
+  const verdictHtml = verdict ? `<article class="comparison-verdict"><div><span class="eyebrow">VEREDITO DA IA</span><h3>${safe(verdict.headline || 'Conclusão da comparação')}</h3></div><p>${safe(verdict.reasoning || analysis.summary)}</p><div class="comparison-verdict-winners">${bestValue ? `<span><small>Melhor custo-benefício</small><strong>${safe(bestValue.name)}</strong></span>` : ''}${bestOverall ? `<span><small>Melhor no geral</small><strong>${safe(bestOverall.name)}</strong></span>` : ''}<span><small>Confiança</small><strong>${verdict.confidence === 'high' ? 'Alta' : verdict.confidence === 'medium' ? 'Média' : 'Baixa'}</strong></span></div><div class="comparison-decision-grid">${priceHtml}${worthHtml}</div>${verdict.tradeoffs?.length ? `<ul>${verdict.tradeoffs.map(item => `<li>${safe(item)}</li>`).join('')}</ul>` : ''}${evidenceHtml}</article>` : '';
+  const scoreLabels = [['performance', 'Desempenho'], ['value', 'Custo-benefício'], ['work', 'Trabalho'], ['gaming', 'Jogos'], ['study', 'Estudos'], ['portability', 'Portabilidade']];
+  const scoresHtml = analysis.profileScores?.length ? `<section class="comparison-profile-scores"><div><span class="eyebrow">NOTAS POR PERFIL</span><h3>Qual combina mais com seu uso?</h3><small>Notas relativas somente entre os produtos desta comparação.</small></div><div class="comparison-score-products">${analysis.profileScores.map(item => `<article><h4>${safe(item.productName || products.find(product => product.slug === item.productSlug)?.name || item.productSlug)}</h4>${scoreLabels.map(([key, label]) => `<div class="comparison-score-row"><span>${label}</span><meter min="0" max="100" value="${Number(item[key] || 0)}"></meter><strong>${Number(item[key] || 0)}</strong></div>`).join('')}<small>Confiança: ${item.confidence === 'high' ? 'alta' : item.confidence === 'medium' ? 'média' : 'baixa'}</small>${item.missingData?.length ? `<p>Dados ausentes: ${safe(item.missingData.join(', '))}</p>` : ''}</article>`).join('')}</div></section>` : '';
   const recommendations = (analysis.recommendations || []).map(item => {
     const product = products.find(entry => entry.slug === item.productSlug);
     if (!product) return '';
     return `<article class="comparison-recommendation"><span>Melhor para</span><h3>${safe(product.name)}</h3><p>${safe(item.bestFor || 'Quem procura este conjunto de características.')}</p>${item.highlights?.length ? `<ul>${item.highlights.map(highlight => `<li>${safe(highlight)}</li>`).join('')}</ul>` : ''}</article>`;
   }).join('');
-  return `<section class="container comparison-intelligence"><div class="comparison-intelligence-heading"><div><span class="eyebrow">${analysis.aiUsed ? 'ANÁLISE INTELIGENTE SHOPLAB' : 'ANÁLISE TÉCNICA SHOPLAB'}</span><h2>Onde cada produto se destaca</h2></div><span class="comparison-method">Regras exatas + ${analysis.aiUsed ? 'IA para interpretar os textos' : 'ficha técnica'}</span></div><p class="comparison-summary">${safe(analysis.summary)}</p>${recommendations ? `<div class="comparison-recommendations">${recommendations}</div>` : ''}<small class="comparison-disclaimer">A análise usa somente os dados cadastrados na ficha técnica. Confirme detalhes importantes no fabricante antes da compra.</small></section>`;
+  return `<section class="container comparison-intelligence"><div class="comparison-intelligence-heading"><div><span class="eyebrow">${analysis.aiUsed ? 'SHOPLAB PREMIUM · ANÁLISE POR IA' : 'ANÁLISE TÉCNICA SHOPLAB'}</span><h2>Onde cada produto se destaca</h2></div><span class="comparison-method">${analysis.aiUsed ? 'Algoritmo Premium · preço + ficha normalizada + contexto de uso' : 'Preço + ficha técnica + regras exatas'}</span></div>${verdictHtml}${scoresHtml}<p class="comparison-summary">${safe(analysis.summary)}</p>${recommendations ? `<div class="comparison-recommendations">${recommendations}</div>` : ''}<small class="comparison-disclaimer">A análise usa somente os dados cadastrados, sem inventar desempenho. Confirme detalhes importantes no fabricante antes da compra.</small></section>`;
 }
 
 function renderComparisonLoading() {
@@ -132,7 +145,7 @@ function renderSpecificationRows(criteria, products) {
     const comparableValues = values
       .map(value => normalizedComparisonValue(value?.displayValue || value?.rawValue))
       .filter(Boolean);
-    const equal = comparableValues.length >= 2 && new Set(comparableValues).size === 1;
+    const equal = comparableValues.length === products.length && new Set(comparableValues).size === 1;
     const explanation = !equal && criterion.explanation
       ? `<small class="criterion-explanation">${safe(criterion.explanation)}</small>`
       : '';

@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS comparison_analysis_cache (
 CREATE TABLE IF NOT EXISTS premium_subscriptions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL UNIQUE,
-  provider TEXT NOT NULL DEFAULT 'mercadopago',
+  provider TEXT NOT NULL DEFAULT 'stripe',
   provider_subscription_id TEXT UNIQUE,
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','authorized','paused','cancelled')),
   payer_email TEXT NOT NULL,
@@ -217,8 +217,38 @@ CREATE TABLE IF NOT EXISTS premium_ai_usage (
   PRIMARY KEY(user_id, period_key)
 );
 
+CREATE TABLE IF NOT EXISTS premium_pass_payments (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  provider_preference_id TEXT UNIQUE,
+  provider_payment_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','cancelled','refunded')),
+  payer_email TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL CHECK(amount_cents > 0),
+  currency TEXT NOT NULL DEFAULT 'BRL',
+  checkout_url TEXT,
+  paid_at TEXT,
+  access_expires_at TEXT,
+  provider_updated_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS premium_notification_log (
+  event_key TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  recipient TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('sent','failed','skipped')),
+  provider_message_id TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_premium_subscriptions_provider_id ON premium_subscriptions(provider_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_premium_subscriptions_status ON premium_subscriptions(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_premium_pass_payments_user ON premium_pass_payments(user_id, status, access_expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_premium_pass_payments_preference ON premium_pass_payments(provider_preference_id);
 
 CREATE INDEX IF NOT EXISTS idx_products_status_category ON products(status, category_id);
 CREATE INDEX IF NOT EXISTS idx_products_updated ON products(updated_at DESC);
@@ -251,3 +281,19 @@ INSERT OR IGNORE INTO offers (id,product_id,partner_id,affiliate_url,current_pri
 ('offer_habits','prod_habits','partner_demo','https://example.com/oferta/habitos',4490,6990,1),
 ('offer_ssd','prod_ssd','partner_demo','https://example.com/oferta/ssd',36990,44990,1),
 ('offer_headphone','prod_headphone','partner_demo','https://example.com/oferta/fone',27990,34990,1);
+CREATE TABLE IF NOT EXISTS premium_settings (
+  id TEXT PRIMARY KEY CHECK (id = 'default'),
+  plan_name TEXT NOT NULL DEFAULT 'SHOPLAB Premium',
+  monthly_price_cents INTEGER NOT NULL DEFAULT 990,
+  pass_price_cents INTEGER NOT NULL DEFAULT 990,
+  pass_days INTEGER NOT NULL DEFAULT 30,
+  ai_monthly_limit INTEGER NOT NULL DEFAULT 50,
+  promotion_enabled INTEGER NOT NULL DEFAULT 0,
+  promotion_label TEXT,
+  promotion_monthly_price_cents INTEGER,
+  promotion_pass_price_cents INTEGER,
+  promotion_starts_at TEXT,
+  promotion_ends_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT OR IGNORE INTO premium_settings(id) VALUES('default');

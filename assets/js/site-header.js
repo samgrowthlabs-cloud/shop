@@ -1,6 +1,22 @@
 import{getSiteConfig,cachedSiteConfig}from'./api.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const PREMIUM_BRAND_KEY='shoplab:premium-brand';
+
+export function cachedPremiumBrand(){
+  try{return sessionStorage.getItem(PREMIUM_BRAND_KEY)==='1'}catch{return false}
+}
+
+export function setPremiumBrand(active){
+  const enabled=Boolean(active);
+  try{sessionStorage.setItem(PREMIUM_BRAND_KEY,enabled?'1':'0')}catch{}
+  document.querySelectorAll('.header-brand').forEach(brand=>{
+    brand.classList.toggle('is-premium',enabled);
+    let label=brand.querySelector('.brand-premium-label');
+    if(!label){label=document.createElement('span');label.className='brand-premium-label';label.textContent='PREMIUM';brand.append(label)}
+    label.hidden=!enabled;
+  });
+}
 
 function warmHeaderMedia(config){
   const wide=matchMedia('(min-width:761px)').matches;
@@ -49,7 +65,9 @@ export function applySiteTheme(theme){
 function themeLogo(theme){
   const brand=document.querySelector('.header-brand');
   if(!brand||!theme?.logoUrl)return;
-  brand.innerHTML=`<span class="brand-images"><img class="brand-image brand-image-main" src="${esc(theme.logoUrl)}" alt="${esc(theme.logoText||'SHOPLAB')}" width="420" height="72" decoding="async" fetchpriority="high">${theme.logoHoverUrl?`<img class="brand-image brand-image-hover" src="${esc(theme.logoHoverUrl)}" alt="" width="420" height="72" decoding="async">`:''}</span>`;
+  const markup=`<span class="brand-images"><img class="brand-image brand-image-main" src="${esc(theme.logoUrl)}" alt="${esc(theme.logoText||'SHOPLAB')}" width="420" height="72" decoding="async" fetchpriority="high">${theme.logoHoverUrl?`<img class="brand-image brand-image-hover" src="${esc(theme.logoHoverUrl)}" alt="" width="420" height="72" decoding="async">`:''}</span>`;
+  const current=brand.querySelector('.brand-images');
+  if(current)current.outerHTML=markup;else brand.insertAdjacentHTML('afterbegin',markup);
 }
 
 function headerSpotlight(config){
@@ -72,7 +90,7 @@ function headerSpotlight(config){
   mediaQuery.addEventListener?.('change',syncMedia);
 }
 
-function paintHeader(config){if(!config)return;warmHeaderMedia(config);applySiteTheme(config.theme);themeLogo(config.theme);headerSpotlight(config)}
+function paintHeader(config){if(!config)return;warmHeaderMedia(config);applySiteTheme(config.theme);themeLogo(config.theme);headerSpotlight(config);setPremiumBrand(cachedPremiumBrand())}
 
 export async function initSiteHeader(){
   paintHeader(cachedSiteConfig());

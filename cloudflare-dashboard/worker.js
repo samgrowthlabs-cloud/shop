@@ -7,6 +7,7 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
+const WORKER_BUILD = "2026-07-21-premium-comparison-insights-v10";
 
 function allowedOrigins(env) {
   return [
@@ -167,8 +168,10 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_POSITION_MIGRATION_REQUIRED",message:"Execute category-image-position-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*comparison_analysis_cache/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"COMPARISON_CACHE_MIGRATION_REQUIRED",message:"Execute comparison-analysis-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
-      if (/no such table:.*(?:premium_subscriptions|premium_ai_usage)/i.test(detail))
+      if (/no such table:.*(?:premium_subscriptions|premium_ai_usage|premium_pass_payments|premium_notification_log)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_SUBSCRIPTIONS_MIGRATION_REQUIRED",message:"Execute premium-subscriptions-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*premium_settings/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_SETTINGS_MIGRATION_REQUIRED",message:"Execute premium-settings-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/UNIQUE constraint failed/i.test(detail))
         return respond(
           request,
@@ -205,7 +208,10 @@ export default {
     }
   },
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(syncMercadoLivrePrices(env, { limit: 40 }));
+    ctx.waitUntil(Promise.allSettled([
+      syncMercadoLivrePrices(env, { limit: 40 }),
+      sendPremiumPassExpiryReminders(env),
+    ]));
   },
 };
 
@@ -215,7 +221,8 @@ async function route(request, env, ctx, requestId) {
   if (request.method === "OPTIONS")
     return cors(request, env, new Response(null, { status: 204 }));
   if (path === "/api/v1/health")
-    return ok(request, env, { status: "ok" }, requestId);
+    return ok(request, env, { status: "ok", build: WORKER_BUILD }, requestId);
+
   if (request.method === "GET" && path === "/api/v1/categories")
     return listCategories(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/site-config")
@@ -255,6 +262,8 @@ async function route(request, env, ctx, requestId) {
     return analyzeProductComparison(request, env, ctx, requestId);
   if (request.method === "POST" && path === "/api/v1/payments/mercadopago/webhook")
     return mercadoPagoWebhook(request, env);
+  if (request.method === "POST" && path === "/api/v1/payments/stripe/webhook")
+    return stripeWebhook(request, env);
   if (request.method === "GET" && path.startsWith("/api/v1/products/"))
     return getProductV2(
       request,
@@ -284,6 +293,10 @@ async function route(request, env, ctx, requestId) {
     return userPremiumSubscription(request, env, requestId);
   if (path === "/api/v1/user/subscription/checkout" && request.method === "POST")
     return createPremiumCheckout(request, env, requestId);
+  if (path === "/api/v1/user/subscription/payment-config" && request.method === "GET")
+    return premiumPaymentConfig(request, env, requestId);
+  if (path === "/api/v1/user/subscription/pass-checkout" && request.method === "POST")
+    return createPremiumPassCheckout(request, env, requestId);
   if (path === "/api/v1/user/subscription/cancel" && request.method === "PUT")
     return cancelPremiumSubscription(request, env, requestId);
   if (path === "/api/v1/user/library" && request.method === "GET")
@@ -312,6 +325,10 @@ async function route(request, env, ctx, requestId) {
     return sessionStatus(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/dashboard")
     return adminDashboard(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/premium-settings")
+    return adminPremiumSettings(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/premium-settings")
+    return updateAdminPremiumSettings(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/users")
     return adminUsers(request, env, url, requestId);
   if (request.method === "GET" && /^\/api\/v1\/admin\/users\/[^/]+\/events$/.test(path))
@@ -924,6 +941,43 @@ const PRODUCT_COMPARISON_SCHEMA = {
         additionalProperties: false,
       },
     },
+    verdict: {
+      type: "object",
+      properties: {
+        bestValueSlug: { type: ["string", "null"] },
+        bestOverallSlug: { type: ["string", "null"] },
+        headline: { type: "string" },
+        reasoning: { type: "string" },
+        tradeoffs: { type: "array", maxItems: 4, items: { type: "string" } },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+        worthPayingMore: { type: "string", enum: ["yes", "no", "depends"] },
+        worthPayingMoreReason: { type: "string" },
+        evidence: { type: "array", maxItems: 6, items: { type: "string" } },
+      },
+      required: ["bestValueSlug", "bestOverallSlug", "headline", "reasoning", "tradeoffs", "confidence", "worthPayingMore", "worthPayingMoreReason", "evidence"],
+      additionalProperties: false,
+    },
+    profileScores: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          productSlug: { type: "string" },
+          performance: { type: "integer", minimum: 0, maximum: 100 },
+          value: { type: "integer", minimum: 0, maximum: 100 },
+          work: { type: "integer", minimum: 0, maximum: 100 },
+          gaming: { type: "integer", minimum: 0, maximum: 100 },
+          study: { type: "integer", minimum: 0, maximum: 100 },
+          portability: { type: "integer", minimum: 0, maximum: 100 },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          missingData: { type: "array", maxItems: 6, items: { type: "string" } },
+        },
+        required: ["productSlug", "performance", "value", "work", "gaming", "study", "portability", "confidence", "missingData"],
+        additionalProperties: false,
+      },
+    },
+
     recommendations: {
       type: "array",
       maxItems: 3,
@@ -939,7 +993,66 @@ const PRODUCT_COMPARISON_SCHEMA = {
       },
     },
   },
-  required: ["summary", "criteria", "recommendations"],
+  required: ["summary", "criteria", "verdict", "recommendations"],
+  additionalProperties: false,
+};
+
+const PREMIUM_COMPARISON_SUMMARY_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    verdict: {
+      type: "object",
+      properties: {
+        bestValueSlug: { type: ["string", "null"] },
+        bestOverallSlug: { type: ["string", "null"] },
+        headline: { type: "string" },
+        reasoning: { type: "string" },
+        tradeoffs: { type: "array", maxItems: 4, items: { type: "string" } },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+        worthPayingMore: { type: "string", enum: ["yes", "no", "depends"] },
+        worthPayingMoreReason: { type: "string" },
+        evidence: { type: "array", maxItems: 6, items: { type: "string" } },
+      },
+      required: ["bestValueSlug", "bestOverallSlug", "headline", "reasoning", "tradeoffs", "confidence", "worthPayingMore", "worthPayingMoreReason", "evidence"],
+      additionalProperties: false,
+    },
+    profileScores: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          productSlug: { type: "string" },
+          performance: { type: "integer", minimum: 0, maximum: 100 },
+          value: { type: "integer", minimum: 0, maximum: 100 },
+          work: { type: "integer", minimum: 0, maximum: 100 },
+          gaming: { type: "integer", minimum: 0, maximum: 100 },
+          study: { type: "integer", minimum: 0, maximum: 100 },
+          portability: { type: "integer", minimum: 0, maximum: 100 },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          missingData: { type: "array", maxItems: 6, items: { type: "string" } },
+        },
+        required: ["productSlug", "performance", "value", "work", "gaming", "study", "portability", "confidence", "missingData"],
+        additionalProperties: false,
+      },
+    },
+    recommendations: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          productSlug: { type: "string" },
+          bestFor: { type: "string" },
+          highlights: { type: "array", maxItems: 4, items: { type: "string" } },
+        },
+        required: ["productSlug", "bestFor", "highlights"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["summary", "verdict", "profileScores", "recommendations"],
   additionalProperties: false,
 };
 
@@ -1063,7 +1176,7 @@ function fallbackProductComparison(products) {
     const ranked = rankComparisonValues(label, values);
     if (ranked) values = ranked.values;
     const presentValues = values.filter((item) => item.rawValue).map((item) => comparisonEqualityKey(item.rawValue));
-    const equal = presentValues.length >= 2 && new Set(presentValues).size === 1;
+    const equal = presentValues.length === products.length && new Set(presentValues).size === 1;
     return {
       label,
       explanation: equal || ranked?.equal ? "" : ranked?.winnerSlugs.length ? "Comparação calculada pelos valores informados na ficha técnica." : "Valores informados pelo cadastro do produto.",
@@ -1077,6 +1190,21 @@ function fallbackProductComparison(products) {
     criteria,
     recommendations: [],
   };
+}
+
+function hasUsefulAiComparison(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    typeof value.summary === "string" &&
+    value.summary.trim().length >= 20 &&
+    value.verdict &&
+    typeof value.verdict.headline === "string" &&
+    value.verdict.headline.trim().length >= 5 &&
+    typeof value.verdict.reasoning === "string" &&
+    value.verdict.reasoning.trim().length >= 20 &&
+    ["high", "medium", "low"].includes(value.verdict.confidence)
+  );
 }
 
 function sanitizeAiComparison(value, products, fallback) {
@@ -1100,7 +1228,7 @@ function sanitizeAiComparison(value, products, fallback) {
     const ranked = rankComparisonValues(label, values);
     if (ranked) values = ranked.values;
     const presentValues = values.filter((item) => item.rawValue).map((item) => comparisonEqualityKey(item.rawValue));
-    const equal = presentValues.length >= 2 && new Set(presentValues).size === 1;
+    const equal = presentValues.length === products.length && new Set(presentValues).size === 1;
     if (equal) values = values.map((item) => ({ ...item, assessment: "neutral", note: "" }));
     return {
       label,
@@ -1118,10 +1246,69 @@ function sanitizeAiComparison(value, products, fallback) {
       bestFor: String(item.bestFor || "").trim().slice(0, 240),
       highlights: (Array.isArray(item.highlights) ? item.highlights : []).map((entry) => String(entry).trim().slice(0, 160)).filter(Boolean).slice(0, 4),
     }));
+  const aiLabels = new Set(criteria.map((criterion) => comparisonText(criterion.label)));
+  const mergedCriteria = [
+    ...criteria,
+    ...fallback.criteria.filter((criterion) => !aiLabels.has(comparisonText(criterion.label))),
+  ].slice(0, 32);
+  const pricedProducts = products
+    .filter((product) => Number(product.price) > 0)
+    .sort((a, b) => Number(a.price) - Number(b.price));
+  const cheaper = pricedProducts[0] || null;
+  const moreExpensive = pricedProducts.at(-1) || null;
+  const differenceCents = cheaper && moreExpensive
+    ? Math.max(0, Number(moreExpensive.price) - Number(cheaper.price))
+    : 0;
+  const priceComparison = cheaper && moreExpensive && cheaper.slug !== moreExpensive.slug
+    ? {
+        cheaperSlug: cheaper.slug,
+        moreExpensiveSlug: moreExpensive.slug,
+        differenceCents,
+        differencePercent: Number(cheaper.price) > 0
+          ? Math.round((differenceCents / Number(cheaper.price)) * 100)
+          : 0,
+      }
+    : null;
+  const score = (number) => Math.max(0, Math.min(100, Math.round(Number(number) || 0)));
+  const profileScores = (Array.isArray(value?.profileScores) ? value.profileScores : [])
+    .filter((item) => bySlug.has(item?.productSlug))
+    .slice(0, 3)
+    .map((item) => ({
+      productSlug: item.productSlug,
+      productName: bySlug.get(item.productSlug).name,
+      performance: score(item.performance),
+      value: score(item.value),
+      work: score(item.work),
+      gaming: score(item.gaming),
+      study: score(item.study),
+      portability: score(item.portability),
+      confidence: ["high", "medium", "low"].includes(item.confidence) ? item.confidence : "low",
+      missingData: (Array.isArray(item.missingData) ? item.missingData : [])
+        .map((item) => String(item).trim().slice(0, 100))
+        .filter(Boolean)
+        .slice(0, 6),
+    }));
   return {
     aiUsed: true,
+    algorithm: "premium-ai-v10",
     summary: String(value?.summary || fallback.summary).trim().slice(0, 600),
-    criteria: criteria.length ? criteria : fallback.criteria,
+    priceComparison,
+    verdict: {
+      bestValueSlug: bySlug.has(value?.verdict?.bestValueSlug) ? value.verdict.bestValueSlug : null,
+      bestOverallSlug: bySlug.has(value?.verdict?.bestOverallSlug) ? value.verdict.bestOverallSlug : null,
+      headline: String(value?.verdict?.headline || "Conclusão da comparação").trim().slice(0, 180),
+      reasoning: String(value?.verdict?.reasoning || value?.summary || fallback.summary).trim().slice(0, 900),
+      tradeoffs: (Array.isArray(value?.verdict?.tradeoffs) ? value.verdict.tradeoffs : []).map((item) => String(item).trim().slice(0, 220)).filter(Boolean).slice(0, 4),
+      confidence: ["high", "medium", "low"].includes(value?.verdict?.confidence) ? value.verdict.confidence : "low",
+      worthPayingMore: ["yes", "no", "depends"].includes(value?.verdict?.worthPayingMore) ? value.verdict.worthPayingMore : "depends",
+      worthPayingMoreReason: String(value?.verdict?.worthPayingMoreReason || "Depende do uso e das características valorizadas.").trim().slice(0, 500),
+      evidence: (Array.isArray(value?.verdict?.evidence) ? value.verdict.evidence : [])
+        .map((item) => String(item).trim().slice(0, 220))
+        .filter(Boolean)
+        .slice(0, 6),
+    },
+    criteria: mergedCriteria.length ? mergedCriteria : fallback.criteria,
+    profileScores,
     recommendations,
   };
 }
@@ -1140,37 +1327,60 @@ function cacheComparisonAtEdge(ctx, cacheKey, analysis) {
   }
 }
 
-async function generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback }) {
+async function generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback, userId, usagePeriod }) {
   try {
-    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
-      messages: [
+    const model = String(env.PREMIUM_COMPARISON_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8");
+    const messages = [
         {
           role: "system",
-          content: "Você é um especialista brasileiro em comparação técnica de produtos. Una critérios equivalentes mesmo quando os nomes forem diferentes, como RAM e Memória RAM. Use somente as especificações fornecidas. Em sourceName copie exatamente o nome do campo de origem daquele produto; use null quando não houver equivalente. Nunca invente, complete ou altere valores. Marque vencedor apenas quando houver vantagem técnica clara. Quando os valores forem iguais, não marque vencedor, não escreva nota de vantagem e deixe a explicação vazia. Critérios dependentes de uso também podem ficar sem vencedor. Explique em português simples por que uma característica diferente é melhor e para qual perfil cada produto é mais indicado. Não trate números maiores como melhores automaticamente quando o contexto não permitir.",
+          content: "Você é o algoritmo Premium de comparação da SHOPLAB. Compare somente os dados fornecidos, reconhecendo nomes equivalentes como RAM/memória, CPU/processador, armazenamento/SSD e tela/display. Nunca invente benchmarks, autonomia, desempenho ou especificações. Campo ausente significa dado não informado, nunca produto pior. Avalie preço, equilíbrio técnico, limitações e adequação ao uso. O melhor custo-benefício deve justificar a diferença de preço. O melhor geral precisa ser sustentado pelos dados. Informe se vale pagar mais usando yes, no ou depends e explique para qual uso. Em evidence, cite fatos exatos presentes na entrada. Gere notas comparativas de 0 a 100 para desempenho, custo-benefício, trabalho, jogos, estudos e portabilidade; elas comparam apenas estes produtos e não são benchmarks absolutos. Quando faltarem dados relevantes, reduza a confiança e liste-os em missingData. Recomende usos concretos e diferentes. Escreva em português brasileiro claro e direto. Retorne somente o JSON solicitado.",
         },
         {
           role: "user",
-          content: JSON.stringify({ category: products[0].category, products: products.map(({ slug, name, productType, brand, specifications }) => ({ slug, name, productType, brand, specifications })) }),
+          content: JSON.stringify({ category: products[0].category, products: products.map(({ slug, name, productType, brand, price, editorialScore, shortDescription, editorialReview, specifications }) => ({ slug, name, productType, brand, priceCents: price, editorialScore, shortDescription, editorialReview, specifications })) }),
         },
-      ],
-      response_format: { type: "json_schema", json_schema: PRODUCT_COMPARISON_SCHEMA },
-      temperature: 0,
-      max_tokens: 2200,
-    });
-    const raw = typeof result?.response === "string" ? JSON.parse(result.response) : result?.response;
+      ];
+    const runComparisonModel = () => env.AI.run(model, {
+        messages,
+        response_format: { type: "json_schema", json_schema: PREMIUM_COMPARISON_SUMMARY_SCHEMA },
+        temperature: 0,
+        max_tokens: 1600,
+      }, {
+        gateway: {
+        id: String(env.AI_GATEWAY_ID || "default"),
+        skipCache: false,
+        cacheTtl: 2592000,
+        cacheKey: `premium-comparison-v10:${version}`,
+        collectLog: true,
+        metadata: { feature: "premium-product-comparison", comparisonVersion: "v10", productSlugs: [...slugs].sort().join(",") },
+        },
+      });
+    const responseValue = (result) => {
+      if (result?.response && typeof result.response === "object") return result.response;
+      const text = String(result?.response || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      return text ? JSON.parse(text) : null;
+    };
+    const raw = responseValue(await runComparisonModel());
+    if (!hasUsefulAiComparison(raw)) throw new Error("AI_COMPARISON_RESPONSE_INCOMPLETE");
+
     const analysis = sanitizeAiComparison(raw, products, fallback);
     await env.DB.prepare(
       `UPDATE comparison_analysis_cache SET product_slugs=?,analysis_json=?,updated_at=CURRENT_TIMESTAMP WHERE cache_key=?`,
     ).bind(JSON.stringify([...slugs].sort()), JSON.stringify(analysis), version).run();
     cacheComparisonAtEdge(ctx, cacheKey, analysis);
+    return analysis;
   } catch (error) {
     console.warn(JSON.stringify({ event: "ai_product_comparison_failed", cacheKey: version, error: String(error?.message || error) }));
-    await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE comparison_analysis_cache SET updated_at=CURRENT_TIMESTAMP WHERE cache_key=? AND analysis_json='null'`).bind(version),
+      env.DB.prepare(`UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`).bind(userId, usagePeriod),
+    ]);
+    return null;
   }
 }
 
 async function reservePremiumAiGeneration(env, userId) {
-  const plan = premiumPlan(env);
+  const plan = await resolvedPremiumPlan(env);
   const period = premiumPeriodKey();
   const row = await env.DB.prepare(
     `INSERT INTO premium_ai_usage(user_id,period_key,generations) VALUES(?,?,1)
@@ -1187,7 +1397,12 @@ async function analyzeProductComparison(req, env, ctx, id) {
   if (slugs.length < 2) return fail(req, env, "VALIDATION_ERROR", "Escolha pelo menos dois produtos para comparar", 422, id);
   const placeholders = slugs.map(() => "?").join(",");
   const { results } = await env.DB.prepare(
-    `SELECT p.slug,p.name,p.product_type productType,p.specifications_json specificationsJson,p.updated_at updatedAt,c.id categoryId,c.name category,b.name brand FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.slug IN (${placeholders}) AND p.status='published'`,
+    `SELECT p.slug,p.name,p.product_type productType,p.short_description shortDescription,p.editorial_review editorialReview,
+      p.editorial_score editorialScore,p.specifications_json specificationsJson,p.updated_at updatedAt,
+      COALESCE(o.current_price_cents,p.base_price_cents) price,c.id categoryId,c.name category,b.name brand
+     FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+     LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
+     WHERE p.slug IN (${placeholders}) AND p.status='published'`,
   ).bind(...slugs).all();
   const bySlug = new Map((results || []).map((product) => [product.slug, product]));
   const products = slugs.map((slug) => bySlug.get(slug)).filter(Boolean).map((product) => ({ ...product, specifications: comparisonSpecifications(product) }));
@@ -1195,7 +1410,7 @@ async function analyzeProductComparison(req, env, ctx, id) {
   if (products.some((product) => product.categoryId !== products[0].categoryId)) return fail(req, env, "COMPARISON_CATEGORY_MISMATCH", "Compare produtos da mesma categoria", 422, id);
   const fallback = fallbackProductComparison(products);
   const user = await activeUser(req, env);
-  const premium = user ? await premiumSubscriptionData(env, user.id) : { premium: false, status: "free", plan: premiumPlan(env), usage: null };
+  const premium = user ? await premiumSubscriptionData(env, user.id) : { premium: false, status: "free", plan: await resolvedPremiumPlan(env), usage: null };
   const technicalResult = {
     ...fallback,
     premium: premium.premium,
@@ -1206,7 +1421,7 @@ async function analyzeProductComparison(req, env, ctx, id) {
   };
   if (!products.some((product) => product.specifications.length)) return ok(req, env, technicalResult, id);
   if (!premium.premium) return ok(req, env, technicalResult, id);
-  const version = await sha256(products.map((product) => `${product.slug}:${product.updatedAt}:${JSON.stringify(product.specifications)}`).join("|"));
+  const version = await sha256(`comparison-v10|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${JSON.stringify(product.specifications)}`).join("|")}`);
   const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
   try {
     const cached = await caches.default.match(cacheKey);
@@ -1247,10 +1462,25 @@ async function analyzeProductComparison(req, env, ctx, id) {
       await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
       return ok(req, env, { ...technicalResult, premium: true, premiumRequired: false, quotaExceeded: true, usage }, id);
     }
-    const generation = generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback });
-    if (ctx?.waitUntil) ctx.waitUntil(generation);
-    else await generation;
+    const analysis = await generateAndPersistProductComparison(env, ctx, {
+      version,
+      cacheKey,
+      slugs,
+      products,
+      fallback,
+      userId: user.id,
+      usagePeriod: usage.period,
+    });
     premium.usage = usage;
+    if (analysis)
+      return ok(req, env, { ...analysis, premium: true, usage }, id);
+    return ok(req, env, {
+      ...technicalResult,
+      premium: true,
+      premiumRequired: false,
+      generationFailed: true,
+      usage: { ...usage, used: Math.max(0, usage.used - 1), remaining: Math.min(usage.limit, usage.remaining + 1) },
+    }, id);
   }
   return ok(req, env, { ...fallback, premium: true, processing: true, usage: premium.usage }, id);
 }
@@ -1291,7 +1521,7 @@ async function rankRelatedProductsWithAi(env, source, candidates) {
       ],
       response_format: {
         type: "json_schema",
-        json_schema: RELATED_PRODUCTS_SCHEMA,
+        schema: RELATED_PRODUCTS_SCHEMA,
       },
       temperature: 0,
       max_tokens: 300,
@@ -4643,21 +4873,332 @@ async function activeUser(req, env) {
 }
 
 function premiumPlan(env) {
+  const regularMonthlyAmountCents = clamp(env.PREMIUM_MONTHLY_PRICE_CENTS, 300, 10000000, 300);
+  const regularPassAmountCents = clamp(env.PREMIUM_PASS_PRICE_CENTS, 300, 10000000, regularMonthlyAmountCents);
+  const promotionEndsAt = optionalDate(env.PREMIUM_PROMO_ENDS_AT);
+  const promotionInPeriod = !promotionEndsAt || Date.parse(promotionEndsAt) > Date.now();
+  const promotionalMonthly = clamp(env.PREMIUM_PROMO_MONTHLY_PRICE_CENTS, 300, regularMonthlyAmountCents, regularMonthlyAmountCents);
+  const promotionalPass = clamp(env.PREMIUM_PROMO_PASS_PRICE_CENTS, 300, regularPassAmountCents, regularPassAmountCents);
+  const promotionActive = promotionInPeriod && (promotionalMonthly < regularMonthlyAmountCents || promotionalPass < regularPassAmountCents);
   return {
     name: String(env.PREMIUM_PLAN_NAME || "SHOPLAB Premium").slice(0, 100),
-    amountCents: clamp(env.PREMIUM_MONTHLY_PRICE_CENTS, 100, 10000000, 990),
+    amountCents: promotionActive ? promotionalMonthly : regularMonthlyAmountCents,
+    regularAmountCents: regularMonthlyAmountCents,
+    passAmountCents: promotionActive ? promotionalPass : regularPassAmountCents,
+    regularPassAmountCents,
+    passDays: clamp(env.PREMIUM_PASS_DAYS, 1, 3650, 30),
     currency: "BRL",
     interval: "month",
     aiMonthlyLimit: clamp(env.PREMIUM_AI_MONTHLY_LIMIT, 1, 100000, 50),
+    promotion: promotionActive ? {
+      label: String(env.PREMIUM_PROMO_LABEL || "Oferta por tempo limitado").slice(0, 100),
+      endsAt: promotionEndsAt,
+    } : null,
   };
+}
+
+async function resolvedPremiumPlan(env) {
+  const fallback = premiumPlan(env);
+  const row = await env.DB.prepare(
+    `SELECT plan_name planName,monthly_price_cents monthlyPriceCents,pass_price_cents passPriceCents,
+      pass_days passDays,ai_monthly_limit aiMonthlyLimit,promotion_enabled promotionEnabled,
+      promotion_label promotionLabel,promotion_monthly_price_cents promotionMonthlyPriceCents,
+      promotion_pass_price_cents promotionPassPriceCents,promotion_starts_at promotionStartsAt,
+      promotion_ends_at promotionEndsAt,updated_at updatedAt FROM premium_settings WHERE id='default'`,
+  ).first();
+  if (!row) return fallback;
+  const regularAmountCents = clamp(row.monthlyPriceCents, 300, 10000000, fallback.regularAmountCents);
+  const regularPassAmountCents = clamp(row.passPriceCents, 300, 10000000, fallback.regularPassAmountCents);
+  const startsAt = optionalDate(row.promotionStartsAt);
+  const endsAt = optionalDate(row.promotionEndsAt);
+  const now = Date.now();
+  const promotionInPeriod = Number(row.promotionEnabled) === 1 &&
+    (!startsAt || Date.parse(startsAt) <= now) && (!endsAt || Date.parse(endsAt) > now);
+  const promotionalMonthly = clamp(row.promotionMonthlyPriceCents, 300, regularAmountCents, regularAmountCents);
+  const promotionalPass = clamp(row.promotionPassPriceCents, 300, regularPassAmountCents, regularPassAmountCents);
+  const promotionActive = promotionInPeriod &&
+    (promotionalMonthly < regularAmountCents || promotionalPass < regularPassAmountCents);
+  return {
+    name: String(row.planName || fallback.name).trim().slice(0, 100),
+    amountCents: promotionActive ? promotionalMonthly : regularAmountCents,
+    regularAmountCents,
+    passAmountCents: promotionActive ? promotionalPass : regularPassAmountCents,
+    regularPassAmountCents,
+    passDays: clamp(row.passDays, 1, 3650, fallback.passDays),
+    currency: "BRL",
+    interval: "month",
+    aiMonthlyLimit: clamp(row.aiMonthlyLimit, 1, 100000, fallback.aiMonthlyLimit),
+    promotion: promotionActive ? {
+      label: String(row.promotionLabel || "Oferta por tempo limitado").trim().slice(0, 100),
+      startsAt,
+      endsAt,
+    } : null,
+    updatedAt: row.updatedAt,
+  };
+}
+
+async function adminPremiumSettings(req, env, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const row = await env.DB.prepare(`SELECT * FROM premium_settings WHERE id='default'`).first();
+  return ok(req, env, { settings: row, effectivePlan: await resolvedPremiumPlan(env) }, id);
+}
+
+async function updateAdminPremiumSettings(req, env, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const body = await readJson(req, 12000);
+  const requiredNumbers = [
+    [body.monthlyPriceCents, "Informe um valor mensal válido"],
+    [body.passPriceCents, "Informe um valor válido para o acesso avulso"],
+    [body.passDays, "Informe a duração válida do acesso avulso"],
+    [body.aiMonthlyLimit, "Informe um limite mensal válido de análises"],
+  ];
+  const invalidRequired = requiredNumbers.find(
+    ([value]) => !Number.isFinite(Number(value)) || Number(value) <= 0,
+  );
+  if (invalidRequired)
+    return fail(req, env, "VALIDATION_ERROR", invalidRequired[1], 422, id);
+  const monthly = clamp(body.monthlyPriceCents, 300, 10000000, 990);
+  const pass = clamp(body.passPriceCents, 300, 10000000, monthly);
+  if (Number(body.monthlyPriceCents) < 300 || Number(body.passPriceCents) < 300)
+    return fail(req, env, "VALIDATION_ERROR", "O preço mínimo é R$ 3,00", 422, id);
+  for (const value of [body.promotionMonthlyPriceCents, body.promotionPassPriceCents])
+    if (value != null && (!Number.isFinite(Number(value)) || Number(value) < 300))
+      return fail(req, env, "VALIDATION_ERROR", "O preço promocional mínimo é R$ 3,00", 422, id);
+  const promoMonthly = body.promotionMonthlyPriceCents == null ? null : clamp(body.promotionMonthlyPriceCents, 300, monthly, monthly);
+  const promoPass = body.promotionPassPriceCents == null ? null : clamp(body.promotionPassPriceCents, 300, pass, pass);
+  const startsAt = optionalDate(body.promotionStartsAt);
+  const endsAt = optionalDate(body.promotionEndsAt);
+  if (body.promotionEnabled && promoMonthly == null && promoPass == null)
+    return fail(req, env, "VALIDATION_ERROR", "Informe pelo menos um preço promocional", 422, id);
+  if (body.promotionEnabled &&
+      (promoMonthly == null || promoMonthly >= monthly) &&
+      (promoPass == null || promoPass >= pass))
+    return fail(req, env, "VALIDATION_ERROR", "A promoção precisa reduzir pelo menos um dos preços", 422, id);
+  if (startsAt && endsAt && Date.parse(endsAt) <= Date.parse(startsAt))
+    return fail(req, env, "VALIDATION_ERROR", "O fim da promoção deve ser posterior ao início", 422, id);
+  await env.DB.prepare(
+    `INSERT INTO premium_settings(id,plan_name,monthly_price_cents,pass_price_cents,pass_days,ai_monthly_limit,
+      promotion_enabled,promotion_label,promotion_monthly_price_cents,promotion_pass_price_cents,
+      promotion_starts_at,promotion_ends_at,updated_at) VALUES('default',?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+     ON CONFLICT(id) DO UPDATE SET plan_name=excluded.plan_name,monthly_price_cents=excluded.monthly_price_cents,
+      pass_price_cents=excluded.pass_price_cents,pass_days=excluded.pass_days,ai_monthly_limit=excluded.ai_monthly_limit,
+      promotion_enabled=excluded.promotion_enabled,promotion_label=excluded.promotion_label,
+      promotion_monthly_price_cents=excluded.promotion_monthly_price_cents,
+      promotion_pass_price_cents=excluded.promotion_pass_price_cents,promotion_starts_at=excluded.promotion_starts_at,
+      promotion_ends_at=excluded.promotion_ends_at,updated_at=CURRENT_TIMESTAMP`,
+  ).bind(
+    String(body.planName || "SHOPLAB Premium").trim().slice(0, 100), monthly, pass,
+    clamp(body.passDays, 1, 3650, 30), clamp(body.aiMonthlyLimit, 1, 100000, 50),
+    body.promotionEnabled ? 1 : 0, String(body.promotionLabel || "Oferta por tempo limitado").trim().slice(0, 100),
+    promoMonthly, promoPass, startsAt, endsAt,
+  ).run();
+  return ok(req, env, { saved: true, effectivePlan: await resolvedPremiumPlan(env) }, id);
 }
 
 function premiumPeriodKey(date = new Date()) {
   return date.toISOString().slice(0, 7);
 }
 
-async function mercadoPagoApi(env, path, options = {}) {
-  const accessToken = String(env.MERCADOPAGO_ACCESS_TOKEN || "");
+function stripeConfigured(env) {
+  return /^sk_(?:test|live)_/i.test(String(env.STRIPE_SECRET_KEY || ""));
+}
+
+async function stripeApi(env, path, { method = "GET", params = null, idempotencyKey = "" } = {}) {
+  const secret = String(env.STRIPE_SECRET_KEY || "");
+  if (!stripeConfigured(env)) throw new Error("STRIPE_SECRET_KEY_NOT_CONFIGURED");
+  const response = await fetch(`https://api.stripe.com${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${secret}`,
+      ...(params ? { "content-type": "application/x-www-form-urlencoded" } : {}),
+      ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
+    },
+    body: params ? new URLSearchParams(params) : undefined,
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(`STRIPE_${response.status}:${String(result?.error?.message || "request_failed").slice(0, 500)}`);
+    error.status = response.status;
+    error.provider = result;
+    error.providerRequestId = response.headers.get("request-id") || null;
+    throw error;
+  }
+  return result;
+}
+
+function stripeDate(value) {
+  const seconds = Number(value || 0);
+  return seconds > 0 ? new Date(seconds * 1000).toISOString() : null;
+}
+
+function normalizedStripeSubscriptionStatus(value) {
+  const status = String(value || "").toLowerCase();
+  if (["active", "trialing"].includes(status)) return "authorized";
+  if (["past_due", "unpaid", "paused"].includes(status)) return "paused";
+  if (["canceled", "cancelled", "incomplete_expired"].includes(status)) return "cancelled";
+  return "pending";
+}
+
+function stripeSubscriptionAmount(subscription) {
+  const item = subscription?.items?.data?.[0];
+  return Math.round(Number(item?.price?.unit_amount || 0));
+}
+
+async function updateStripeSubscriptionRecord(env, subscription, fallbackUserId = "") {
+  const providerId = String(subscription?.id || "").slice(0, 200);
+  const userId = String(subscription?.metadata?.shoplab_user_id || fallbackUserId || "").slice(0, 100);
+  if (!/^sub_/.test(providerId) || !userId) throw new Error("STRIPE_SUBSCRIPTION_REFERENCE_INVALID");
+  const existing = await env.DB.prepare(
+    `SELECT id,status,amount_cents amountCents,payer_email payerEmail FROM premium_subscriptions WHERE user_id=?`,
+  ).bind(userId).first();
+  const profile = existing?.payerEmail ? null : await env.DB.prepare(
+    `SELECT email FROM user_profiles WHERE user_id=?`,
+  ).bind(userId).first();
+  const status = normalizedStripeSubscriptionStatus(subscription.status);
+  const plan = await resolvedPremiumPlan(env);
+  const amountCents = stripeSubscriptionAmount(subscription) || Number(existing?.amountCents || plan.amountCents);
+  const currency = String(subscription?.currency || subscription?.items?.data?.[0]?.price?.currency || "brl").toUpperCase().slice(0, 8);
+  const nextPaymentAt = stripeDate(subscription.current_period_end);
+  await env.DB.prepare(
+    `INSERT INTO premium_subscriptions(id,user_id,provider,provider_subscription_id,status,payer_email,amount_cents,currency,checkout_url,next_payment_at,provider_updated_at)
+     VALUES(?,?,'stripe',?,?,?,?,?,NULL,?,?)
+     ON CONFLICT(user_id) DO UPDATE SET provider='stripe',provider_subscription_id=excluded.provider_subscription_id,
+       status=excluded.status,payer_email=excluded.payer_email,amount_cents=excluded.amount_cents,currency=excluded.currency,
+       checkout_url=NULL,next_payment_at=excluded.next_payment_at,provider_updated_at=excluded.provider_updated_at,
+       updated_at=CURRENT_TIMESTAMP`,
+  ).bind(
+    existing?.id || crypto.randomUUID(), userId, providerId, status,
+    String(existing?.payerEmail || profile?.email || "").slice(0, 320), amountCents, currency,
+    nextPaymentAt, new Date().toISOString(),
+  ).run();
+  if (status === "authorized" && existing?.status !== "authorized")
+    await sendPremiumNotification(env, { eventKey: `stripe-subscription-activated:${providerId}`, userId, kind: "subscription_activated", amountCents });
+  if (status === "cancelled" && existing?.status !== "cancelled")
+    await sendPremiumNotification(env, { eventKey: `stripe-subscription-cancelled:${providerId}`, userId, kind: "subscription_cancelled", amountCents });
+  return { userId, status, amountCents, nextPaymentAt };
+}
+
+async function applyStripePassSession(env, session, forcedStatus = "") {
+  const purchaseId = String(session?.metadata?.purchase_id || "").slice(0, 100);
+  if (!purchaseId) return null;
+  const purchase = await env.DB.prepare(
+    `SELECT id,user_id userId,status,amount_cents amountCents,currency FROM premium_pass_payments WHERE id=?`,
+  ).bind(purchaseId).first();
+  if (!purchase || String(session?.metadata?.shoplab_user_id || session?.client_reference_id || "") !== purchase.userId)
+    throw new Error("STRIPE_PASS_REFERENCE_MISMATCH");
+  const amountCents = Number(session.amount_total || 0);
+  const currency = String(session.currency || "").toUpperCase();
+  if (amountCents !== Number(purchase.amountCents) || currency !== purchase.currency)
+    throw new Error("STRIPE_PASS_AMOUNT_MISMATCH");
+  const approved = forcedStatus === "approved" || session.payment_status === "paid";
+  const rejected = forcedStatus === "rejected";
+  const cancelled = forcedStatus === "cancelled" || session.status === "expired";
+  const status = approved ? "approved" : rejected ? "rejected" : cancelled ? "cancelled" : "pending";
+  const paidAt = approved ? new Date().toISOString() : null;
+  const plan = await resolvedPremiumPlan(env);
+  const accessExpiresAt = paidAt
+    ? new Date(Date.parse(paidAt) + plan.passDays * 86400000).toISOString()
+    : null;
+  await env.DB.prepare(
+    `UPDATE premium_pass_payments SET provider_preference_id=?,provider_payment_id=?,status=?,
+       paid_at=CASE WHEN ?='approved' THEN COALESCE(paid_at,?) ELSE paid_at END,
+       access_expires_at=CASE WHEN ?='approved' THEN COALESCE(access_expires_at,?) ELSE access_expires_at END,
+       provider_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(
+    String(session.id || "").slice(0, 200), String(session.payment_intent || "").slice(0, 200) || null,
+    status, status, paidAt, status, accessExpiresAt, purchase.id,
+  ).run();
+  if (approved && purchase.status !== "approved") await sendPremiumNotification(env, {
+    eventKey: `stripe-pass-approved:${session.id}`,
+    userId: purchase.userId,
+    kind: "pass_approved",
+    amountCents: purchase.amountCents,
+    accessExpiresAt,
+  });
+  if (rejected && !["rejected", "approved"].includes(purchase.status)) await sendPremiumNotification(env, {
+    eventKey: `stripe-pass-rejected:${session.id}`,
+    userId: purchase.userId,
+    kind: "pass_rejected",
+    amountCents: purchase.amountCents,
+  });
+  return { userId: purchase.userId, status, accessExpiresAt };
+}
+
+async function reconcileStripeCheckoutSession(env, sessionId) {
+  const id = String(sessionId || "").replace(/^checkout:/, "").slice(0, 200);
+  if (!/^cs_/.test(id)) return null;
+  const session = await stripeApi(env, `/v1/checkout/sessions/${encodeURIComponent(id)}`);
+  if (session.mode === "payment") return applyStripePassSession(env, session);
+  if (session.mode === "subscription" && session.subscription) {
+    const subscription = await stripeApi(env, `/v1/subscriptions/${encodeURIComponent(session.subscription)}`);
+    return updateStripeSubscriptionRecord(env, subscription, session.client_reference_id);
+  }
+  return null;
+}
+
+async function stripeWebhookSignature(req, rawBody, secret) {
+  const parts = String(req.headers.get("stripe-signature") || "").split(",").map((part) => part.trim());
+  const timestamp = parts.find((part) => part.startsWith("t="))?.slice(2) || "";
+  const signatures = parts.filter((part) => part.startsWith("v1=")).map((part) => part.slice(3).toLowerCase());
+  if (!/^\d+$/.test(timestamp) || !signatures.length || !secret) return false;
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = await crypto.subtle.sign("HMAC", key, enc.encode(`${timestamp}.${rawBody}`));
+  const expected = bytesToHex(new Uint8Array(digest));
+  for (const signature of signatures) if (await safeEqual(expected, signature)) return true;
+  return false;
+}
+
+async function stripeWebhook(req, env) {
+  const rawBody = await req.text();
+  const valid = await stripeWebhookSignature(req, rawBody, String(env.STRIPE_WEBHOOK_SECRET || ""));
+  if (!valid) return new Response(null, { status: 401 });
+  let event;
+  try { event = JSON.parse(rawBody); }
+  catch { return new Response(null, { status: 400 }); }
+  try {
+    const object = event?.data?.object || {};
+    if (["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed", "checkout.session.expired"].includes(event.type)) {
+      if (object.mode === "payment") await applyStripePassSession(
+        env,
+        object,
+        event.type === "checkout.session.async_payment_succeeded"
+          ? "approved"
+          : event.type === "checkout.session.async_payment_failed"
+            ? "rejected"
+            : event.type === "checkout.session.expired"
+              ? "cancelled"
+              : "",
+      );
+      if (object.mode === "subscription" && object.subscription) {
+        const subscription = await stripeApi(env, `/v1/subscriptions/${encodeURIComponent(object.subscription)}`);
+        await updateStripeSubscriptionRecord(env, subscription, object.client_reference_id);
+      }
+    }
+    if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type))
+      await updateStripeSubscriptionRecord(env, object);
+    if (["invoice.payment_succeeded", "invoice.payment_failed"].includes(event.type)) {
+      const providerSubscriptionId = String(object.subscription || object.parent?.subscription_details?.subscription || "");
+      const subscription = providerSubscriptionId ? await env.DB.prepare(
+        `SELECT user_id userId,amount_cents amountCents FROM premium_subscriptions WHERE provider_subscription_id=?`,
+      ).bind(providerSubscriptionId).first() : null;
+      if (subscription) await sendPremiumNotification(env, {
+        eventKey: `stripe-${event.type}:${object.id}`,
+        userId: subscription.userId,
+        kind: event.type === "invoice.payment_succeeded" ? "subscription_payment_approved" : "subscription_payment_rejected",
+        amountCents: Number(object.amount_paid || object.amount_due || subscription.amountCents),
+      });
+    }
+  } catch (error) {
+    console.error(JSON.stringify({ event: "stripe_webhook_processing_failed", stripeEventId: event?.id, stripeEventType: event?.type, error: String(error?.message || error) }));
+    return new Response(null, { status: 500 });
+  }
+  return new Response(null, { status: 200 });
+}
+
+async function mercadoPagoRequest(accessToken, path, options = {}) {
   if (!accessToken) throw new Error("MERCADOPAGO_ACCESS_TOKEN_NOT_CONFIGURED");
   const response = await fetch(`https://api.mercadopago.com${path}`, {
     ...options,
@@ -4671,9 +5212,37 @@ async function mercadoPagoApi(env, path, options = {}) {
   if (!response.ok) {
     const error = new Error(`MERCADOPAGO_${response.status}:${String(result.message || result.error || "request_failed").slice(0, 300)}`);
     error.status = response.status;
+    error.provider = result;
+    error.providerRequestId = response.headers.get("x-request-id") || null;
     throw error;
   }
   return result;
+}
+
+async function mercadoPagoApi(env, path, options = {}) {
+  const accessToken = String(
+    env.MERCADOPAGO_SUBSCRIPTION_ACCESS_TOKEN || env.MERCADOPAGO_ACCESS_TOKEN || "",
+  );
+  return mercadoPagoRequest(accessToken, path, options);
+}
+
+async function mercadoPagoOrdersApi(env, path, options = {}) {
+  const accessToken = String(
+    env.MERCADOPAGO_CHECKOUT_ACCESS_TOKEN || env.MERCADOPAGO_ACCESS_TOKEN || "",
+  );
+  return mercadoPagoRequest(accessToken, path, options);
+}
+
+async function mercadoPagoCheckoutApi(env, path, options = {}) {
+  const accessToken = String(
+    env.MERCADOPAGO_CHECKOUT_ACCESS_TOKEN || env.MERCADOPAGO_ACCESS_TOKEN || "",
+  );
+  return mercadoPagoRequest(accessToken, path, options);
+}
+
+function mercadoPagoCheckoutSandbox(env) {
+  return /^(?:1|true|yes|sim)$/i.test(String(env.MERCADOPAGO_CHECKOUT_SANDBOX || "")) ||
+    String(env.MERCADOPAGO_CHECKOUT_PUBLIC_KEY || env.MERCADOPAGO_PUBLIC_KEY || "").startsWith("TEST-");
 }
 
 function normalizedMercadoPagoSubscriptionStatus(value) {
@@ -4684,11 +5253,103 @@ function normalizedMercadoPagoSubscriptionStatus(value) {
   return "pending";
 }
 
+function premiumEmailContent(kind, context = {}) {
+  const planName = String(context.planName || "SHOPLAB Premium");
+  const amount = Number(context.amountCents || 0)
+    ? (Number(context.amountCents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : "";
+  const expiry = context.accessExpiresAt
+    ? new Date(context.accessExpiresAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+    : "";
+  const values = {
+    subscription_activated: ["Sua assinatura SHOPLAB Premium está ativa", `Sua assinatura ${planName}${amount ? ` de ${amount} por mês` : ""} foi ativada. Você já pode usar as comparações inteligentes.`],
+    subscription_cancelled: ["Sua assinatura SHOPLAB Premium foi cancelada", `A renovação automática da sua assinatura ${planName} foi cancelada. Nenhuma nova mensalidade será criada por esta assinatura.`],
+    subscription_payment_approved: ["Pagamento da assinatura confirmado", `Recebemos o pagamento${amount ? ` de ${amount}` : ""} da sua assinatura ${planName}. Seu acesso Premium continua ativo.`],
+    subscription_payment_rejected: ["Não foi possível renovar sua assinatura", `O pagamento da assinatura ${planName} não foi aprovado. Atualize a forma de pagamento para evitar a interrupção do acesso.`],
+    pass_approved: ["Pagamento confirmado: seu Premium está ativo", `Seu pagamento avulso${amount ? ` de ${amount}` : ""} foi confirmado. O acesso ${planName}${expiry ? ` é válido até ${expiry}` : " está ativo"}.`],
+    pass_rejected: ["O pagamento avulso não foi aprovado", `O pagamento do passe ${planName} não foi aprovado. Você pode tentar novamente com outra forma de pagamento.`],
+    pass_refunded: ["Pagamento do passe Premium estornado", `O pagamento do passe ${planName} foi estornado e o acesso relacionado a ele foi encerrado.`],
+    pass_expiring: ["Seu SHOPLAB Premium expira em breve", `Seu passe ${planName}${expiry ? ` é válido até ${expiry}` : " está perto de vencer"}. Renove pela sua conta caso queira continuar usando as comparações inteligentes.`],
+  };
+  const [subject, message] = values[kind] || ["Atualização do SHOPLAB Premium", "Há uma atualização no seu acesso SHOPLAB Premium."];
+  return { subject, message };
+}
+
+async function sendPremiumNotification(env, { eventKey, userId, kind, amountCents = 0, accessExpiresAt = null }) {
+  const key = String(eventKey || "").replace(/[^a-zA-Z0-9:_-]/g, "").slice(0, 240);
+  if (!key || !userId) return;
+  const profile = await env.DB.prepare(
+    `SELECT email,display_name displayName FROM user_profiles WHERE user_id=?`,
+  ).bind(userId).first();
+  if (!profile?.email) return;
+  const reserved = await env.DB.prepare(
+    `INSERT OR IGNORE INTO premium_notification_log(event_key,user_id,kind,recipient,status) VALUES(?,?,?,?,'skipped')`,
+  ).bind(key, userId, kind, profile.email).run();
+  if (!reserved.meta.changes) return;
+  const apiKey = String(env.RESEND_API_KEY || "");
+  const from = String(env.PREMIUM_EMAIL_FROM || env.REWARD_EMAIL_FROM || "");
+  if (!apiKey || !from) {
+    await env.DB.prepare(`UPDATE premium_notification_log SET error='RESEND_NOT_CONFIGURED' WHERE event_key=?`).bind(key).run();
+    return;
+  }
+  const plan = await resolvedPremiumPlan(env);
+  const content = premiumEmailContent(kind, { planName: plan.name, amountCents, accessExpiresAt });
+  const accountUrl = `${String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "")}/conta.html#premium`;
+  const safeName = htmlAttribute(profile.displayName || "cliente");
+  const safeMessage = htmlAttribute(content.message);
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+        "user-agent": "SHOPLAB-Worker/1.0",
+        "idempotency-key": `premium-${key}`.slice(0, 256),
+      },
+      body: JSON.stringify({
+        from,
+        to: [profile.email],
+        subject: content.subject,
+        html: `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlAttribute(content.subject)}</title></head><body style="margin:0;background:#eff7f5;font-family:Arial,sans-serif;color:#173b34"><div style="max-width:600px;margin:0 auto;padding:32px 18px"><div style="padding:32px;border-radius:18px;background:#fff"><p style="margin:0 0 8px;color:#087c70;font-weight:800">SHOPLAB PREMIUM</p><h1 style="font-size:26px">${htmlAttribute(content.subject)}</h1><p>Olá, ${safeName}.</p><p style="line-height:1.6">${safeMessage}</p><p style="margin-top:26px"><a href="${htmlAttribute(accountUrl)}" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#087c70;color:#fff;text-decoration:none;font-weight:700">Ver meu Premium</a></p><p style="margin-top:28px;color:#667b76;font-size:12px">Mensagem automática de segurança da SHOPLAB.</p></div></div></body></html>`,
+        text: `Olá, ${profile.displayName || "cliente"}. ${content.message} Acesse: ${accountUrl}`,
+        tags: [{ name: "category", value: "premium" }],
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(result.message || result.name || `Resend ${response.status}`).slice(0, 500));
+    await env.DB.prepare(
+      `UPDATE premium_notification_log SET status='sent',provider_message_id=?,error=NULL WHERE event_key=?`,
+    ).bind(String(result.id || "").slice(0, 200) || null, key).run();
+  } catch (error) {
+    await env.DB.prepare(
+      `UPDATE premium_notification_log SET status='failed',error=? WHERE event_key=?`,
+    ).bind(String(error?.message || error).slice(0, 500), key).run();
+    console.error(JSON.stringify({ event: "premium_email_failed", eventKey: key, userId, error: String(error?.message || error) }));
+  }
+}
+
+async function sendPremiumPassExpiryReminders(env) {
+  const { results } = await env.DB.prepare(
+    `SELECT id,user_id userId,amount_cents amountCents,access_expires_at accessExpiresAt
+     FROM premium_pass_payments WHERE status='approved'
+       AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+       AND datetime(access_expires_at)<=datetime('now','+3 days')
+     ORDER BY datetime(access_expires_at) LIMIT 100`,
+  ).all();
+  for (const pass of results || []) await sendPremiumNotification(env, {
+    eventKey: `pass-expiring:${pass.id}`,
+    userId: pass.userId,
+    kind: "pass_expiring",
+    amountCents: pass.amountCents,
+    accessExpiresAt: pass.accessExpiresAt,
+  });
+}
+
 async function reconcileMercadoPagoSubscription(env, providerSubscriptionId, expectedUserId = null) {
   const providerId = String(providerSubscriptionId || "").slice(0, 200);
   if (!providerId) return null;
   const existing = await env.DB.prepare(
-    `SELECT id,user_id userId FROM premium_subscriptions WHERE provider_subscription_id=?`,
+    `SELECT id,user_id userId,status FROM premium_subscriptions WHERE provider_subscription_id=?`,
   ).bind(providerId).first();
   if (!existing || (expectedUserId && existing.userId !== expectedUserId)) return null;
   const remote = await mercadoPagoApi(env, `/preapproval/${encodeURIComponent(providerId)}`);
@@ -4710,32 +5371,78 @@ async function reconcileMercadoPagoSubscription(env, providerSubscriptionId, exp
     remote.last_modified || new Date().toISOString(),
     existing.id,
   ).run();
+  if (status === "authorized" && existing.status !== "authorized")
+    await sendPremiumNotification(env, { eventKey: `subscription-activated:${providerId}`, userId: existing.userId, kind: "subscription_activated", amountCents });
+  if (status === "cancelled" && existing.status !== "cancelled")
+    await sendPremiumNotification(env, { eventKey: `subscription-cancelled:${providerId}`, userId: existing.userId, kind: "subscription_cancelled", amountCents });
   return { ...remote, localStatus: status, userId: existing.userId };
 }
 
 async function premiumSubscriptionData(env, userId, { reconcilePending = false } = {}) {
   let subscription = await env.DB.prepare(
-    `SELECT id,status,provider_subscription_id providerSubscriptionId,payer_email payerEmail,amount_cents amountCents,currency,checkout_url checkoutUrl,next_payment_at nextPaymentAt,created_at createdAt,updated_at updatedAt FROM premium_subscriptions WHERE user_id=?`,
+    `SELECT id,provider,status,provider_subscription_id providerSubscriptionId,payer_email payerEmail,amount_cents amountCents,currency,checkout_url checkoutUrl,next_payment_at nextPaymentAt,created_at createdAt,updated_at updatedAt FROM premium_subscriptions WHERE user_id=?`,
   ).bind(userId).first();
-  if (reconcilePending && subscription?.status === "pending" && subscription.providerSubscriptionId && env.MERCADOPAGO_ACCESS_TOKEN) {
+  if (reconcilePending && subscription?.status === "pending" && subscription.providerSubscriptionId) {
     try {
-      await reconcileMercadoPagoSubscription(env, subscription.providerSubscriptionId, userId);
+      if (subscription.provider === "stripe" && stripeConfigured(env)) {
+        if (subscription.providerSubscriptionId.startsWith("checkout:"))
+          await reconcileStripeCheckoutSession(env, subscription.providerSubscriptionId);
+        else if (subscription.providerSubscriptionId.startsWith("sub_")) {
+          const remote = await stripeApi(env, `/v1/subscriptions/${encodeURIComponent(subscription.providerSubscriptionId)}`);
+          await updateStripeSubscriptionRecord(env, remote, userId);
+        }
+      } else if (subscription.provider === "mercadopago" && env.MERCADOPAGO_ACCESS_TOKEN) {
+        await reconcileMercadoPagoSubscription(env, subscription.providerSubscriptionId, userId);
+      }
       subscription = await env.DB.prepare(
-        `SELECT id,status,provider_subscription_id providerSubscriptionId,payer_email payerEmail,amount_cents amountCents,currency,checkout_url checkoutUrl,next_payment_at nextPaymentAt,created_at createdAt,updated_at updatedAt FROM premium_subscriptions WHERE user_id=?`,
+        `SELECT id,provider,status,provider_subscription_id providerSubscriptionId,payer_email payerEmail,amount_cents amountCents,currency,checkout_url checkoutUrl,next_payment_at nextPaymentAt,created_at createdAt,updated_at updatedAt FROM premium_subscriptions WHERE user_id=?`,
       ).bind(userId).first();
     } catch (error) {
       console.warn(JSON.stringify({ event: "premium_subscription_reconcile_failed", userId, error: String(error?.message || error) }));
     }
   }
-  const plan = premiumPlan(env);
+  const plan = await resolvedPremiumPlan(env);
+  let activePass = await env.DB.prepare(
+    `SELECT id,status,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
+     FROM premium_pass_payments WHERE user_id=? AND status='approved'
+       AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+     ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
+  ).bind(userId).first();
+  let pendingPass = activePass ? null : await env.DB.prepare(
+    `SELECT id,status,provider_preference_id providerPreferenceId,provider_payment_id providerPaymentId,amount_cents amountCents,currency,checkout_url checkoutUrl,created_at createdAt
+     FROM premium_pass_payments WHERE user_id=? AND status='pending'
+     ORDER BY datetime(created_at) DESC LIMIT 1`,
+  ).bind(userId).first();
+  if (
+    reconcilePending &&
+    (pendingPass?.providerPreferenceId || pendingPass?.providerPaymentId)
+  ) {
+    try {
+      if (pendingPass.providerPreferenceId?.startsWith("cs_") && stripeConfigured(env))
+        await reconcileStripeCheckoutSession(env, pendingPass.providerPreferenceId);
+      else if (pendingPass.providerPaymentId && (env.MERCADOPAGO_CHECKOUT_ACCESS_TOKEN || env.MERCADOPAGO_ACCESS_TOKEN))
+        await reconcileMercadoPagoPassPayment(env, pendingPass.providerPaymentId);
+      activePass = await env.DB.prepare(
+        `SELECT id,status,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
+         FROM premium_pass_payments WHERE user_id=? AND status='approved'
+           AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+         ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
+      ).bind(userId).first();
+      if (activePass) pendingPass = null;
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "premium_pass_reconcile_failed", userId, error: String(error?.message || error) }));
+    }
+  }
   const usage = await env.DB.prepare(
     `SELECT generations FROM premium_ai_usage WHERE user_id=? AND period_key=?`,
   ).bind(userId, premiumPeriodKey()).first();
   const used = Number(usage?.generations || 0);
   return {
-    premium: subscription?.status === "authorized",
-    status: subscription?.status || "free",
+    premium: subscription?.status === "authorized" || Boolean(activePass),
+    status: subscription?.status === "authorized" ? "authorized" : activePass ? "pass_active" : subscription?.status || (pendingPass ? "pass_pending" : "free"),
     subscription: subscription || null,
+    pass: activePass || null,
+    pendingPass: pendingPass || null,
     plan,
     usage: { used, limit: plan.aiMonthlyLimit, remaining: Math.max(0, plan.aiMonthlyLimit - used), period: premiumPeriodKey() },
   };
@@ -4750,77 +5457,311 @@ async function userPremiumSubscription(req, env, id) {
   return response;
 }
 
-async function createPremiumCheckout(req, env, id) {
+async function premiumPaymentConfig(req, env, id) {
   const user = await activeUser(req, env);
-  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para assinar", 401, id);
-  if (!env.MERCADOPAGO_ACCESS_TOKEN)
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para comprar o acesso", 401, id);
+  if (!stripeConfigured(env))
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O Stripe ainda não foi configurado", 503, id);
+  const subscription = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
+  const response = ok(req, env, {
+    provider: "stripe",
+    testMode: String(env.STRIPE_SECRET_KEY || "").startsWith("sk_test_"),
+    plan: subscription.plan,
+    premium: subscription.premium,
+  }, id);
+  response.headers.set("cache-control", "private, no-store, max-age=0");
+  return response;
+}
+
+async function createPremiumPassPayment(req, env, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para pagar", 401, id);
+  if (!env.MERCADOPAGO_CHECKOUT_ACCESS_TOKEN && !env.MERCADOPAGO_ACCESS_TOKEN)
     return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento Premium ainda não foi configurado", 503, id);
   const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
   if (current.premium) return ok(req, env, current, id);
-  if (current.status === "pending" && current.subscription?.checkoutUrl)
+  const body = await readJson(req, 30000);
+  const paymentMethodId = String(body.payment_method_id || "").toLowerCase().slice(0, 60);
+  if (!/^[a-z0-9_-]{2,60}$/.test(paymentMethodId))
+    return fail(req, env, "VALIDATION_ERROR", "Selecione uma forma de pagamento válida", 422, id);
+  const mercadoPagoTestMode = mercadoPagoCheckoutSandbox(env);
+  if (mercadoPagoTestMode && paymentMethodId === "pix")
+    return fail(
+      req,
+      env,
+      "TEST_PAYMENT_METHOD_UNAVAILABLE",
+      "O Pix não está disponível com estas credenciais de teste. Use um cartão de teste; o Pix será habilitado em produção.",
+      422,
+      id,
+    );
+  const token = String(body.token || "").slice(0, 500);
+  if (paymentMethodId !== "pix" && !token)
+    return fail(req, env, "VALIDATION_ERROR", "Os dados do cartão não foram tokenizados. Preencha novamente o cartão.", 422, id);
+  const installments = clamp(body.installments, 1, 24, 1);
+  const issuerId = Number(String(body.issuer_id || "").replace(/\D/g, ""));
+  const payerEmail = String(body.payer?.email || user.email || "").trim().toLowerCase().slice(0, 320);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail))
+    return fail(req, env, "VALIDATION_ERROR", "Informe um e-mail válido para o pagamento", 422, id);
+  const plan = await resolvedPremiumPlan(env);
+  const purchaseId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO premium_pass_payments(id,user_id,status,payer_email,amount_cents,currency)
+     VALUES(?,?,'pending',?,?,?)`,
+  ).bind(purchaseId, user.id, user.email, plan.passAmountCents, plan.currency).run();
+  const identificationType = String(body.payer?.identification?.type || "")
+    .toUpperCase().replace(/[^A-Z]/g, "").slice(0, 10);
+  const identificationNumber = String(body.payer?.identification?.number || "")
+    .replace(/\D/g, "").slice(0, 30);
+  const paymentBody = {
+    transaction_amount: plan.passAmountCents / 100,
+    ...(token ? { token } : {}),
+    description: `${plan.name} por ${plan.passDays} dias`.slice(0, 120),
+    installments,
+    payment_method_id: paymentMethodId,
+    ...(Number.isSafeInteger(issuerId) && issuerId > 0
+      ? { issuer_id: issuerId }
+      : {}),
+    external_reference: `shoplab-pass-${purchaseId}`,
+    payer: {
+      email: payerEmail,
+      ...(identificationType && identificationNumber
+        ? { identification: { type: identificationType, number: identificationNumber } }
+        : {}),
+    },
+  };
+  let payment;
+  try {
+    payment = await mercadoPagoCheckoutApi(env, "/v1/payments", {
+      method: "POST",
+      headers: { "x-idempotency-key": crypto.randomUUID() },
+      body: JSON.stringify(paymentBody),
+    });
+  } catch (error) {
+    await env.DB.prepare(
+      `UPDATE premium_pass_payments SET status='rejected',provider_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    ).bind(purchaseId).run();
+    console.error(JSON.stringify({
+      event: "premium_pass_payment_failed",
+      userId: user.id,
+      purchaseId,
+      paymentMethodId,
+      error: String(error?.message || error),
+      provider: error?.provider || null,
+      providerRequestId: error?.providerRequestId || null,
+    }));
+    const providerDetail = String(
+      error?.provider?.cause?.[0]?.description ||
+      error?.provider?.errors?.[0]?.details?.[0] ||
+      error?.provider?.errors?.[0]?.message ||
+      error?.provider?.errors?.[0]?.code ||
+      error?.provider?.message ||
+      error?.provider?.error ||
+      error?.message ||
+      "",
+    ).replace(/^MERCADOPAGO_\d+:/, "").slice(0, 300);
+    return fail(
+      req,
+      env,
+      "PAYMENT_FAILED",
+      providerDetail
+        ? `Mercado Pago: ${providerDetail}`
+        : "O Mercado Pago não conseguiu processar este pagamento",
+      422,
+      id,
+    );
+  }
+  const status = normalizedMercadoPagoPaymentStatus(payment.status);
+  const providerPaymentId = String(payment.id || "").slice(0, 200);
+  if (!providerPaymentId)
+    return fail(req, env, "PAYMENT_FAILED", "O Mercado Pago não retornou o identificador do pagamento", 502, id);
+  const approvedAt = status === "approved"
+    ? String(payment.date_approved || new Date().toISOString())
+    : null;
+  const accessExpiresAt = approvedAt
+    ? new Date(Date.parse(approvedAt) + plan.passDays * 86400000).toISOString()
+    : null;
+  await env.DB.prepare(
+    `UPDATE premium_pass_payments SET provider_payment_id=?,status=?,
+       paid_at=CASE WHEN ?='approved' THEN ? ELSE paid_at END,
+       access_expires_at=CASE WHEN ?='approved' THEN ? ELSE access_expires_at END,
+       provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(
+    providerPaymentId, status, status, approvedAt, status, accessExpiresAt,
+    payment.date_last_updated || new Date().toISOString(), purchaseId,
+  ).run();
+  const notificationKind = status === "approved"
+    ? "pass_approved"
+    : status === "rejected"
+      ? "pass_rejected"
+      : null;
+  if (notificationKind) await sendPremiumNotification(env, {
+    eventKey: `${notificationKind}:${providerPaymentId}`,
+    userId: user.id,
+    kind: notificationKind,
+    amountCents: plan.passAmountCents,
+    accessExpiresAt,
+  });
+  const transactionData = payment.point_of_interaction?.transaction_data || {};
+  return ok(req, env, {
+    paymentId: providerPaymentId,
+    status,
+    statusDetail: String(payment.status_detail || "").slice(0, 100),
+    accessExpiresAt,
+    pix: transactionData.qr_code ? {
+      qrCode: String(transactionData.qr_code),
+      qrCodeBase64: String(transactionData.qr_code_base64 || ""),
+    } : null,
+    ticketUrl: String(
+      transactionData.ticket_url ||
+      payment.transaction_details?.external_resource_url ||
+      "",
+    ),
+  }, id);
+}
+
+async function createPremiumCheckout(req, env, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para assinar", 401, id);
+  if (!stripeConfigured(env))
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento Premium ainda não foi configurado", 503, id);
+  const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
+  if (current.premium) return ok(req, env, current, id);
+  if (current.status === "pending" && current.subscription?.provider === "stripe" && current.subscription?.checkoutUrl)
     return ok(req, env, { ...current, checkoutUrl: current.subscription.checkoutUrl }, id);
-  const plan = premiumPlan(env);
+  const plan = await resolvedPremiumPlan(env);
   const siteOrigin = String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "");
-  const workerOrigin = new URL(req.url).origin;
   if (!/^https:\/\//i.test(siteOrigin))
     return fail(req, env, "PUBLIC_SITE_URL_REQUIRED", "Configure PUBLIC_SITE_URL com o endereço HTTPS do site", 503, id);
   let checkout;
   try {
-    checkout = await mercadoPagoApi(env, "/preapproval", {
+    checkout = await stripeApi(env, "/v1/checkout/sessions", {
       method: "POST",
-      headers: { "x-idempotency-key": crypto.randomUUID() },
-      body: JSON.stringify({
-        reason: `${plan.name} - ${plan.aiMonthlyLimit} análises inteligentes por mês`,
-        external_reference: `shoplab:${user.id}`,
-        payer_email: user.email,
-        auto_recurring: {
-          frequency: 1,
-          frequency_type: "months",
-          transaction_amount: plan.amountCents / 100,
-          currency_id: plan.currency,
-        },
-        back_url: `${siteOrigin}/conta.html#premium`,
-        notification_url: `${workerOrigin}/api/v1/payments/mercadopago/webhook`,
-        status: "pending",
-      }),
+      idempotencyKey: `subscription-${user.id}-${plan.amountCents}-${premiumPeriodKey()}`,
+      params: {
+        mode: "subscription",
+        client_reference_id: user.id,
+        customer_email: user.email,
+        success_url: `${siteOrigin}/conta.html?premium_payment=success&session_id={CHECKOUT_SESSION_ID}#premium`,
+        cancel_url: `${siteOrigin}/conta.html?premium_payment=failure#premium`,
+        allow_promotion_codes: "true",
+        "metadata[shoplab_kind]": "subscription",
+        "metadata[shoplab_user_id]": user.id,
+        "subscription_data[metadata][shoplab_user_id]": user.id,
+        "line_items[0][quantity]": "1",
+        "line_items[0][price_data][currency]": plan.currency.toLowerCase(),
+        "line_items[0][price_data][unit_amount]": String(plan.amountCents),
+        "line_items[0][price_data][recurring][interval]": "month",
+        "line_items[0][price_data][product_data][name]": plan.name,
+        "line_items[0][price_data][product_data][description]": `${plan.aiMonthlyLimit} comparações inteligentes por mês`,
+      },
     });
   } catch (error) {
-    console.error(JSON.stringify({ event: "premium_checkout_creation_failed", userId: user.id, error: String(error?.message || error) }));
-    return fail(req, env, "CHECKOUT_CREATION_FAILED", "Não foi possível abrir o pagamento no Mercado Pago agora", 502, id);
+    console.error(JSON.stringify({ event: "stripe_subscription_checkout_creation_failed", userId: user.id, error: String(error?.message || error), provider: error?.provider || null }));
+    return fail(req, env, "CHECKOUT_CREATION_FAILED", "Não foi possível abrir o pagamento seguro agora", 502, id);
   }
-  if (!checkout.id || !/^https:\/\//i.test(String(checkout.init_point || "")))
-    return fail(req, env, "CHECKOUT_CREATION_FAILED", "O Mercado Pago não retornou um checkout válido", 502, id);
+  if (!/^cs_/.test(String(checkout.id || "")) || !/^https:\/\//i.test(String(checkout.url || "")))
+    return fail(req, env, "CHECKOUT_CREATION_FAILED", "O Stripe não retornou um checkout válido", 502, id);
   await env.DB.prepare(
-    `INSERT INTO premium_subscriptions(id,user_id,provider,provider_subscription_id,status,payer_email,amount_cents,currency,checkout_url,next_payment_at,provider_updated_at) VALUES(?,?,'mercadopago',?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET provider_subscription_id=excluded.provider_subscription_id,status=excluded.status,payer_email=excluded.payer_email,amount_cents=excluded.amount_cents,currency=excluded.currency,checkout_url=excluded.checkout_url,next_payment_at=excluded.next_payment_at,provider_updated_at=excluded.provider_updated_at,updated_at=CURRENT_TIMESTAMP`,
+    `INSERT INTO premium_subscriptions(id,user_id,provider,provider_subscription_id,status,payer_email,amount_cents,currency,checkout_url,provider_updated_at)
+     VALUES(?,?,'stripe',?,'pending',?,?,?,?,?)
+     ON CONFLICT(user_id) DO UPDATE SET provider='stripe',provider_subscription_id=excluded.provider_subscription_id,
+       status='pending',payer_email=excluded.payer_email,amount_cents=excluded.amount_cents,currency=excluded.currency,
+       checkout_url=excluded.checkout_url,provider_updated_at=excluded.provider_updated_at,updated_at=CURRENT_TIMESTAMP`,
   ).bind(
-    crypto.randomUUID(), user.id, String(checkout.id), normalizedMercadoPagoSubscriptionStatus(checkout.status),
-    user.email, plan.amountCents, plan.currency, String(checkout.init_point), checkout.next_payment_date || null,
-    checkout.last_modified || new Date().toISOString(),
+    crypto.randomUUID(), user.id, `checkout:${checkout.id}`, user.email,
+    plan.amountCents, plan.currency, String(checkout.url), new Date().toISOString(),
   ).run();
-  return ok(req, env, { checkoutUrl: String(checkout.init_point), status: normalizedMercadoPagoSubscriptionStatus(checkout.status), plan }, id);
+  return ok(req, env, { checkoutUrl: String(checkout.url), status: "pending", provider: "stripe", plan }, id);
+}
+
+async function createPremiumPassCheckout(req, env, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para comprar o acesso", 401, id);
+  if (!stripeConfigured(env))
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento Premium ainda não foi configurado", 503, id);
+  const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
+  if (current.premium) return ok(req, env, current, id);
+  if (current.pendingPass?.providerPreferenceId?.startsWith("cs_") && current.pendingPass?.checkoutUrl)
+    return ok(req, env, { ...current, checkoutUrl: current.pendingPass.checkoutUrl }, id);
+  const plan = await resolvedPremiumPlan(env);
+  const siteOrigin = String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(siteOrigin))
+    return fail(req, env, "PUBLIC_SITE_URL_REQUIRED", "Configure PUBLIC_SITE_URL com o endereço HTTPS do site", 503, id);
+  const purchaseId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO premium_pass_payments(id,user_id,status,payer_email,amount_cents,currency)
+     VALUES(?,?,'pending',?,?,?)`,
+  ).bind(purchaseId, user.id, user.email, plan.passAmountCents, plan.currency).run();
+  let checkout;
+  try {
+    checkout = await stripeApi(env, "/v1/checkout/sessions", {
+      method: "POST",
+      idempotencyKey: `pass-${purchaseId}`,
+      params: {
+        mode: "payment",
+        client_reference_id: user.id,
+        customer_email: user.email,
+        success_url: `${siteOrigin}/conta.html?premium_payment=success&session_id={CHECKOUT_SESSION_ID}#premium`,
+        cancel_url: `${siteOrigin}/conta.html?premium_payment=failure#premium`,
+        allow_promotion_codes: "true",
+        "metadata[shoplab_kind]": "pass",
+        "metadata[shoplab_user_id]": user.id,
+        "metadata[purchase_id]": purchaseId,
+        "payment_intent_data[metadata][shoplab_user_id]": user.id,
+        "payment_intent_data[metadata][purchase_id]": purchaseId,
+        "line_items[0][quantity]": "1",
+        "line_items[0][price_data][currency]": plan.currency.toLowerCase(),
+        "line_items[0][price_data][unit_amount]": String(plan.passAmountCents),
+        "line_items[0][price_data][product_data][name]": `${plan.name} por ${plan.passDays} dias`,
+        "line_items[0][price_data][product_data][description]": `${plan.aiMonthlyLimit} comparações inteligentes durante o período`,
+      },
+    });
+  } catch (error) {
+    await env.DB.prepare(`UPDATE premium_pass_payments SET status='rejected',updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(purchaseId).run();
+    console.error(JSON.stringify({ event: "stripe_pass_checkout_creation_failed", userId: user.id, purchaseId, error: String(error?.message || error), provider: error?.provider || null }));
+    return fail(req, env, "CHECKOUT_CREATION_FAILED", "Não foi possível abrir o pagamento avulso agora", 502, id);
+  }
+  const checkoutUrl = String(checkout.url || "");
+  if (!/^cs_/.test(String(checkout.id || "")) || !/^https:\/\//i.test(checkoutUrl))
+    return fail(req, env, "CHECKOUT_CREATION_FAILED", "O Stripe não retornou um checkout válido", 502, id);
+  await env.DB.prepare(
+    `UPDATE premium_pass_payments SET provider_preference_id=?,checkout_url=?,provider_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(String(checkout.id), checkoutUrl, purchaseId).run();
+  return ok(req, env, { checkoutUrl, status: "pass_pending", provider: "stripe", plan }, id);
 }
 
 async function cancelPremiumSubscription(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
   const current = await env.DB.prepare(
-    `SELECT provider_subscription_id providerSubscriptionId,status FROM premium_subscriptions WHERE user_id=?`,
+    `SELECT provider,provider_subscription_id providerSubscriptionId,status,amount_cents amountCents FROM premium_subscriptions WHERE user_id=?`,
   ).bind(user.id).first();
   if (!current?.providerSubscriptionId)
     return fail(req, env, "SUBSCRIPTION_NOT_FOUND", "Assinatura não encontrada", 404, id);
   if (current.status === "cancelled") return ok(req, env, { status: "cancelled", premium: false }, id);
   try {
-    await mercadoPagoApi(env, `/preapproval/${encodeURIComponent(current.providerSubscriptionId)}`, {
-      method: "PUT",
-      body: JSON.stringify({ status: "canceled" }),
-    });
+    if (current.provider === "stripe") {
+      if (!/^sub_/.test(current.providerSubscriptionId)) throw new Error("STRIPE_SUBSCRIPTION_NOT_ACTIVE");
+      await stripeApi(env, `/v1/subscriptions/${encodeURIComponent(current.providerSubscriptionId)}`, { method: "DELETE" });
+    } else {
+      await mercadoPagoApi(env, `/preapproval/${encodeURIComponent(current.providerSubscriptionId)}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "canceled" }),
+      });
+    }
   } catch (error) {
     console.error(JSON.stringify({ event: "premium_subscription_cancel_failed", userId: user.id, error: String(error?.message || error) }));
-    return fail(req, env, "SUBSCRIPTION_CANCEL_FAILED", "Não foi possível cancelar a assinatura no Mercado Pago agora", 502, id);
+    return fail(req, env, "SUBSCRIPTION_CANCEL_FAILED", "Não foi possível cancelar a assinatura agora", 502, id);
   }
   await env.DB.prepare(
     `UPDATE premium_subscriptions SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE user_id=?`,
   ).bind(user.id).run();
+  await sendPremiumNotification(env, {
+    eventKey: `subscription-cancelled:${current.providerSubscriptionId}`,
+    userId: user.id,
+    kind: "subscription_cancelled",
+    amountCents: current.amountCents,
+  });
   return ok(req, env, { status: "cancelled", premium: false }, id);
 }
 
@@ -4836,6 +5777,152 @@ async function mercadoPagoWebhookSignature(req, dataId, secret) {
   return safeEqual(bytesToHex(new Uint8Array(digest)), received);
 }
 
+function normalizedMercadoPagoPaymentStatus(value) {
+  const status = String(value || "").toLowerCase();
+  if (status === "approved") return "approved";
+  if (status === "refunded" || status === "charged_back") return "refunded";
+  if (status === "cancelled") return "cancelled";
+  if (status === "rejected") return "rejected";
+  return "pending";
+}
+
+function mercadoPagoOrderPayment(order) {
+  return Array.isArray(order?.transactions?.payments)
+    ? order.transactions.payments[0] || {}
+    : {};
+}
+
+function normalizedMercadoPagoOrderStatus(value) {
+  const status = String(value || "").toLowerCase();
+  if (["processed", "approved"].includes(status)) return "approved";
+  if (["refunded", "charged_back", "charged-back"].includes(status)) return "refunded";
+  if (["cancelled", "canceled", "expired"].includes(status)) return "cancelled";
+  if (["rejected", "failed"].includes(status)) return "rejected";
+  return "pending";
+}
+
+async function reconcileMercadoPagoPassOrder(env, providerOrderId) {
+  const orderId = String(providerOrderId || "").replace(/^order:/, "").slice(0, 200);
+  if (!orderId) return null;
+  const remote = await mercadoPagoOrdersApi(env, `/v1/orders/${encodeURIComponent(orderId)}`);
+  const reference = String(remote.external_reference || "");
+  const match = reference.match(/^shoplab-pass-([a-f0-9-]{36})$/i);
+  if (!match) return null;
+  const purchase = await env.DB.prepare(
+    `SELECT id,user_id userId,status,amount_cents amountCents,currency,access_expires_at accessExpiresAt
+     FROM premium_pass_payments WHERE id=?`,
+  ).bind(match[1]).first();
+  if (!purchase || reference !== `shoplab-pass-${purchase.id}`)
+    throw new Error("MERCADOPAGO_PASS_REFERENCE_MISMATCH");
+  const orderPayment = mercadoPagoOrderPayment(remote);
+  const paidAmountCents = Math.round(Number(
+    orderPayment.paid_amount ?? orderPayment.amount ?? remote.total_amount ?? 0,
+  ) * 100);
+  const currency = String(
+    orderPayment.currency_id || remote.currency_id || purchase.currency,
+  ).toUpperCase();
+  if (paidAmountCents !== Number(purchase.amountCents) || currency !== purchase.currency)
+    throw new Error("MERCADOPAGO_PASS_AMOUNT_MISMATCH");
+  const status = normalizedMercadoPagoOrderStatus(orderPayment.status || remote.status);
+  const approvedAt = status === "approved"
+    ? String(orderPayment.date_approved || remote.last_updated_date || new Date().toISOString())
+    : null;
+  const plan = await resolvedPremiumPlan(env);
+  const accessExpiresAt = approvedAt
+    ? new Date(Date.parse(approvedAt) + plan.passDays * 86400000).toISOString()
+    : null;
+  const providerId = `order:${orderId}`;
+  await env.DB.prepare(
+    `UPDATE premium_pass_payments SET provider_payment_id=?,status=?,paid_at=CASE WHEN ?='approved' THEN COALESCE(paid_at,?) ELSE paid_at END,
+       access_expires_at=CASE WHEN ?='approved' THEN COALESCE(access_expires_at,?) WHEN ?='refunded' THEN NULL ELSE access_expires_at END,
+       provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(
+    providerId, status, status, approvedAt, status, accessExpiresAt, status,
+    remote.last_updated_date || new Date().toISOString(), purchase.id,
+  ).run();
+  if (status !== purchase.status) {
+    const kind = status === "approved" ? "pass_approved" : status === "refunded" ? "pass_refunded" : status === "rejected" ? "pass_rejected" : null;
+    if (kind) await sendPremiumNotification(env, {
+      eventKey: `${kind}:${providerId}`,
+      userId: purchase.userId,
+      kind,
+      amountCents: purchase.amountCents,
+      accessExpiresAt: status === "approved" ? accessExpiresAt : null,
+    });
+  }
+  return { userId: purchase.userId, status, accessExpiresAt };
+}
+
+async function reconcileMercadoPagoPassPayment(env, providerPaymentId) {
+  const paymentId = String(providerPaymentId || "").slice(0, 200);
+  if (!paymentId) return null;
+  if (paymentId.startsWith("order:"))
+    return reconcileMercadoPagoPassOrder(env, paymentId);
+  const purchase = await env.DB.prepare(
+    `SELECT id,user_id userId,status,amount_cents amountCents,currency,access_expires_at accessExpiresAt
+     FROM premium_pass_payments WHERE provider_payment_id=?`,
+  ).bind(paymentId).first();
+  if (!purchase) return null;
+  const remote = await mercadoPagoCheckoutApi(env, `/v1/payments/${encodeURIComponent(paymentId)}`);
+  const reference = String(remote.external_reference || "");
+  const validReferences = new Set([
+    `shoplab-pass-${purchase.id}`,
+    `shoplab-pass:${purchase.id}:${purchase.userId}`,
+  ]);
+  if (!validReferences.has(reference))
+    throw new Error("MERCADOPAGO_PASS_REFERENCE_MISMATCH");
+  const paidAmountCents = Math.round(Number(remote.transaction_amount || 0) * 100);
+  const currency = String(remote.currency_id || "").toUpperCase();
+  if (paidAmountCents !== Number(purchase.amountCents) || currency !== purchase.currency)
+    throw new Error("MERCADOPAGO_PASS_AMOUNT_MISMATCH");
+  const status = normalizedMercadoPagoPaymentStatus(remote.status);
+  const approvedAt = status === "approved" ? String(remote.date_approved || new Date().toISOString()) : null;
+  const plan = await resolvedPremiumPlan(env);
+  const accessExpiresAt = approvedAt
+    ? new Date(Date.parse(approvedAt) + plan.passDays * 86400000).toISOString()
+    : null;
+  await env.DB.prepare(
+    `UPDATE premium_pass_payments SET provider_payment_id=?,status=?,paid_at=CASE WHEN ?='approved' THEN COALESCE(paid_at,?) ELSE paid_at END,
+       access_expires_at=CASE WHEN ?='approved' THEN COALESCE(access_expires_at,?) WHEN ?='refunded' THEN NULL ELSE access_expires_at END,
+       provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(
+    paymentId, status, status, approvedAt, status, accessExpiresAt, status,
+    remote.date_last_updated || new Date().toISOString(), purchase.id,
+  ).run();
+  if (status !== purchase.status) {
+    const kind = status === "approved" ? "pass_approved" : status === "refunded" ? "pass_refunded" : status === "rejected" ? "pass_rejected" : null;
+    if (kind) await sendPremiumNotification(env, {
+      eventKey: `${kind}:${paymentId}`,
+      userId: purchase.userId,
+      kind,
+      amountCents: purchase.amountCents,
+      accessExpiresAt: status === "approved" ? accessExpiresAt : null,
+    });
+  }
+  return { userId: purchase.userId, status, accessExpiresAt };
+}
+
+async function notifyMercadoPagoSubscriptionPayment(env, providerPaymentId) {
+  const paymentId = String(providerPaymentId || "").slice(0, 200);
+  if (!paymentId) return;
+  const remote = await mercadoPagoApi(env, `/v1/payments/${encodeURIComponent(paymentId)}`);
+  const reference = String(remote.external_reference || "");
+  if (!reference.startsWith("shoplab:") || reference.startsWith("shoplab-pass:")) return;
+  const userId = reference.slice("shoplab:".length);
+  const subscription = await env.DB.prepare(
+    `SELECT user_id userId,amount_cents amountCents FROM premium_subscriptions WHERE user_id=?`,
+  ).bind(userId).first();
+  if (!subscription) return;
+  const status = normalizedMercadoPagoPaymentStatus(remote.status);
+  const kind = status === "approved" ? "subscription_payment_approved" : status === "rejected" ? "subscription_payment_rejected" : null;
+  if (kind) await sendPremiumNotification(env, {
+    eventKey: `${kind}:${paymentId}`,
+    userId,
+    kind,
+    amountCents: Math.round(Number(remote.transaction_amount || subscription.amountCents / 100) * 100),
+  });
+}
+
 async function mercadoPagoWebhook(req, env) {
   const body = await req.json().catch(() => ({}));
   const url = new URL(req.url);
@@ -4848,6 +5935,23 @@ async function mercadoPagoWebhook(req, env) {
       await reconcileMercadoPagoSubscription(env, dataId);
     } catch (error) {
       console.error(JSON.stringify({ event: "mercadopago_webhook_reconcile_failed", providerSubscriptionId: dataId, error: String(error?.message || error) }));
+      return new Response(null, { status: 500 });
+    }
+  }
+  if (["payment", "payments"].includes(topic) && dataId) {
+    try {
+      const passPayment = await reconcileMercadoPagoPassPayment(env, dataId);
+      if (!passPayment) await notifyMercadoPagoSubscriptionPayment(env, dataId);
+    } catch (error) {
+      console.error(JSON.stringify({ event: "mercadopago_payment_reconcile_failed", providerPaymentId: dataId, error: String(error?.message || error) }));
+      return new Response(null, { status: 500 });
+    }
+  }
+  if (topic.toLowerCase().includes("order") && dataId) {
+    try {
+      await reconcileMercadoPagoPassPayment(env, `order:${dataId}`);
+    } catch (error) {
+      console.error(JSON.stringify({ event: "mercadopago_order_reconcile_failed", providerOrderId: dataId, error: String(error?.message || error) }));
       return new Response(null, { status: 500 });
     }
   }

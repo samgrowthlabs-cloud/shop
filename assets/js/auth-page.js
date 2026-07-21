@@ -1,6 +1,6 @@
 import{signUp,signIn,signOut,recover,updatePassword,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
 import{syncAccountLibrary,setCart}from'./user-library.js';
-import{initSiteHeader}from'./site-header.js';
+import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260720-premium-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js';
 const $=selector=>document.querySelector(selector),page=document.body.dataset.authPage;
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -17,16 +17,26 @@ function rows(items,kind){
 
 function renderPremiumSubscription(data){
   const target=$('#premium-subscription');if(!target||!data)return;
+  setPremiumBrand(Boolean(data.premium));
   const nav=$('.account-sidebar nav');if(nav&&!nav.querySelector('a[href="#premium"]'))nav.querySelector('a[href="#invites"]')?.insertAdjacentHTML('beforebegin','<a href="#premium">Premium</a>');
-  const plan=data.plan||{},usage=data.usage||{},price=money((data.premium&&data.subscription?.amountCents)||plan.amountCents||0),status=data.status||'free';
-  if(data.premium){target.innerHTML=`<div class="premium-plan-state active"><span class="premium-status">PLANO ATIVO</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3><strong>${price}<small>/mês</small></strong><p>Você tem ${Number(usage.remaining||0)} de ${Number(usage.limit||0)} novas análises inteligentes disponíveis neste mês. Resultados já armazenados no cache não consomem sua cota.</p><div class="premium-usage"><span style="width:${Math.min(100,Math.round(Number(usage.used||0)/Math.max(1,Number(usage.limit||1))*100))}%"></span></div><button class="btn ghost" id="cancel-premium" type="button">Cancelar assinatura</button></div>`;bindPremiumActions();return}
-  const pending=status==='pending';
-  target.innerHTML=`<div class="premium-plan-state"><span class="premium-status">${pending?'PAGAMENTO PENDENTE':'PLANO MENSAL'}</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3><strong>${price}<small>/mês</small></strong><ul><li>${Number(plan.aiMonthlyLimit||50)} novas comparações inteligentes por mês</li><li>Explicações claras sobre as diferenças</li><li>Recomendações para cada tipo de uso</li><li>Comparações em cache sem consumir novamente</li></ul><button class="btn primary" id="subscribe-premium" type="button">${pending?'Continuar pagamento':'Assinar com Mercado Pago'}</button><small>Pagamento recorrente processado com segurança pelo Mercado Pago. Você pode cancelar quando quiser.</small></div>`;bindPremiumActions();
+  const plan=data.plan||{},usage=data.usage||{},status=data.status||'free';
+  if(data.premium){const passActive=status==='pass_active';const price=money(passActive?data.pass?.amountCents:data.subscription?.amountCents||plan.amountCents||0);target.innerHTML=`<div class="premium-plan-state active"><span class="premium-status">PREMIUM ATIVO</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3><strong>${price}${passActive?`<small> por ${Number(plan.passDays||30)} dias</small>`:'<small>/mês</small>'}</strong>${passActive?`<p>Seu passe avulso é válido até <strong>${esc(expiryDate(data.pass?.accessExpiresAt))}</strong>.</p>`:'<p>Sua assinatura tem renovação automática mensal.</p>'}<p>Você tem ${Number(usage.remaining||0)} de ${Number(usage.limit||0)} novas análises inteligentes disponíveis neste mês. Resultados já armazenados no cache não consomem sua cota.</p><div class="premium-usage"><span style="width:${Math.min(100,Math.round(Number(usage.used||0)/Math.max(1,Number(usage.limit||1))*100))}%"></span></div>${passActive?'':'<button class="btn ghost" id="cancel-premium" type="button">Cancelar assinatura</button>'}</div>`;bindPremiumActions();return}
+  const subscriptionPending=status==='pending',passPending=status==='pass_pending';
+  target.innerHTML=`<div class="premium-plan-state"><span class="premium-status">${plan.promotion?esc(plan.promotion.label):'ESCOLHA COMO PAGAR'}</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3><ul><li>${Number(plan.aiMonthlyLimit||50)} novas comparações inteligentes por mês</li><li>Explicações claras sobre as diferenças</li><li>Recomendações para cada tipo de uso</li><li>Comparações em cache sem consumir novamente</li></ul><div class="premium-payment-options"><article><span>PASSE AVULSO</span><strong>${money(plan.passAmountCents||plan.amountCents||0)}</strong>${plan.promotion&&plan.regularPassAmountCents>plan.passAmountCents?`<del>${money(plan.regularPassAmountCents)}</del>`:''}<p>Acesso por ${Number(plan.passDays||30)} dias, sem renovação automática. Os meios de pagamento disponíveis aparecem no checkout seguro.</p><button class="btn ghost" id="buy-premium-pass" type="button">${passPending?'Continuar pagamento':'Comprar acesso avulso'}</button></article><article><span>ASSINATURA</span><strong>${money(plan.amountCents||0)}<small>/mês</small></strong>${plan.promotion&&plan.regularAmountCents>plan.amountCents?`<del>${money(plan.regularAmountCents)}/mês</del>`:''}<p>Renovação automática mensal. Você pode cancelar quando quiser.</p><button class="btn primary" id="subscribe-premium" type="button">${subscriptionPending?'Continuar assinatura':'Assinar mensalmente'}</button></article></div><small>Os pagamentos são processados pelo checkout seguro da Stripe.</small></div>`;bindPremiumActions();
 }
 
 function bindPremiumActions(){
   const subscribe=$('#subscribe-premium');if(subscribe)subscribe.onclick=async()=>{subscribe.disabled=true;subscribe.textContent='Abrindo pagamento…';try{const result=await userApi('subscription/checkout',{method:'POST'});if(result.checkoutUrl)location.href=result.checkoutUrl;else renderPremiumSubscription(result)}catch(error){message(error.message);subscribe.disabled=false;subscribe.textContent='Tentar novamente'}};
-  const cancel=$('#cancel-premium');if(cancel)cancel.onclick=async()=>{if(!confirm('Deseja cancelar a renovação da assinatura Premium?'))return;cancel.disabled=true;try{await userApi('subscription/cancel',{method:'PUT'});renderPremiumSubscription(await userApi('subscription'))}catch(error){message(error.message);cancel.disabled=false}};
+  const pass=$('#buy-premium-pass');if(pass)pass.onclick=()=>{location.href='premium-checkout.html'};
+  const cancel=$('#cancel-premium');if(cancel)cancel.onclick=async()=>{if(!confirm('Deseja cancelar a assinatura Premium agora?'))return;cancel.disabled=true;try{await userApi('subscription/cancel',{method:'PUT'});message('Assinatura cancelada. Enviamos a confirmação por e-mail.','success');renderPremiumSubscription(await userApi('subscription'))}catch(error){message(error.message);cancel.disabled=false}};
+}
+
+async function refreshPremiumPaymentReturn(){
+  const result=new URLSearchParams(location.search).get('premium_payment');if(!result)return;
+  const target=$('#premium-subscription');if(result==='failure'){target?.insertAdjacentHTML('afterbegin','<p class="auth-message error">O pagamento não foi concluído. Você pode tentar novamente.</p>');return}
+  target?.insertAdjacentHTML('afterbegin','<p class="auth-message success">Confirmando o pagamento com a Stripe…</p>');
+  for(let attempt=0;attempt<6;attempt+=1){if(attempt)await new Promise(resolve=>setTimeout(resolve,2000));try{const data=await userApi('subscription');renderPremiumSubscription(data);if(data.premium){history.replaceState(null,'','conta.html#premium');return}}catch{}}
+  target?.insertAdjacentHTML('afterbegin','<p class="auth-message">O pagamento ainda está sendo processado. Atualize esta página em alguns instantes.</p>');
 }
 
 async function account(){
@@ -34,6 +44,7 @@ async function account(){
   if(!user){location.replace('entrar.html?next=conta.html');return}
   const [profile,library,subscription]=await Promise.all([apiProfile(),syncAccountLibrary(),userApi('subscription').catch(()=>null)]);
   renderPremiumSubscription(subscription);
+  refreshPremiumPaymentReturn();
   if(!subscription&&$('#premium-subscription'))$('#premium-subscription').innerHTML='<p>Não foi possível carregar o plano Premium agora. Tente atualizar a página.</p>';
   startPresence();
   const displayName=profile.displayName||user.user_metadata?.display_name||user.email?.split('@')[0]||'Minha conta',initials=displayName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase(),avatar=user.user_metadata?.avatar_url||user.user_metadata?.picture||'';

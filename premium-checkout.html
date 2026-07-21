@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pagamento Premium — SHOPLAB</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body class="premium-checkout-page">
+  <header class="premium-checkout-header">
+    <a href="index.html" aria-label="SHOPLAB início"><img src="assets/img/shoplab-wordmark.png" alt="SHOPLAB"></a>
+    <a href="conta.html#premium">Voltar para minha conta</a>
+  </header>
+  <main class="premium-checkout-shell">
+    <section class="premium-checkout-copy">
+      <span class="eyebrow">SHOPLAB PREMIUM</span>
+      <h1>Acesso avulso, sem renovação</h1>
+      <p>Você será encaminhado ao checkout seguro da Stripe. Seu acesso é liberado somente após a confirmação do pagamento.</p>
+      <div class="premium-checkout-summary">
+        <span class="premium-checkout-promo" id="premium-checkout-promo" hidden></span>
+        <span>Premium por <b id="pass-days">30 dias</b></span>
+        <strong id="pass-price">Carregando…</strong>
+        <del id="pass-regular-price" hidden></del>
+        <small>Pagamento único. Não cria assinatura.</small>
+      </div>
+      <div class="premium-test-badge" id="premium-test-badge" hidden>AMBIENTE DE TESTE — na Stripe, use o cartão 4242 4242 4242 4242, uma data futura e qualquer CVC. Nenhum valor real será cobrado.</div>
+    </section>
+    <section class="premium-checkout-payment">
+      <div id="premium-checkout-loading">Preparando seu checkout seguro…</div>
+      <div id="premium-checkout-message" class="premium-checkout-message" aria-live="polite"></div>
+      <div class="premium-payment-pending" id="stripe-checkout-action" hidden>
+        <h2>Finalizar pagamento</h2>
+        <p>Na próxima tela, escolha uma das formas de pagamento habilitadas para sua conta Stripe.</p>
+        <button class="btn primary" id="open-stripe-checkout" type="button">Ir para o pagamento seguro</button>
+        <small>Você poderá voltar sem pagar. Nenhum acesso é liberado antes da confirmação.</small>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="assets/js/premium-checkout.js?v=20260720-stripe-pass-1"></script>
+</body>
+</html>

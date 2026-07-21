@@ -238,6 +238,7 @@ shell=(active,title,action='')=>{
     <div class="nav-group"><span>Visão geral</span><a class="${active==='dashboard'?'active':''}" href="index.html">Painel</a><a class="${active==='users'?'active':''}" href="usuarios.html">Usuários</a></div>
     <div class="nav-group"><span>Catálogo</span><a class="${active==='products'?'active':''}" href="produtos.html">Produtos</a><a class="${active==='categories'?'active':''}" href="categorias.html">Categorias</a><a class="${active==='brands'?'active':''}" href="marcas.html">Marcas</a><a class="${active==='partners'?'active':''}" href="parceiros.html">Lojas parceiras</a></div>
     <div class="nav-group"><span>Marketing</span><a class="${active==='promotions'?'active':''}" href="promocoes.html">Promoções</a><a class="${active==='banners'?'active':''}" href="banners.html">Banners</a><a class="${active==='header-spotlight'?'active':''}" href="destaque-cabecalho.html">Destaques do cabeçalho</a></div>
+    <div class="nav-group"><span>Premium</span><a href="premium.html">Plano, preço e promoção</a></div>
     <div class="nav-group"><span>Aparência</span><a class="${active==='themes'?'active':''}" href="temas.html">Temas sazonais</a></div>`;
   $('.sidebar').insertAdjacentHTML('beforeend','<a class="admin-site-link" href="../index.html">Ver site público ↗</a>');
 };
