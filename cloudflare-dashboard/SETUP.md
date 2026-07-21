@@ -104,6 +104,8 @@ O login exige um token Turnstile válido e cria uma sessão opaca em D1 com cook
 6. Abra o endpoint criado, revele o **Signing secret** (`whsec_...`) e salve-o no Worker como secret `STRIPE_WEBHOOK_SECRET`.
 7. Configure `PUBLIC_SITE_URL` com a origem HTTPS do site, sem barra final.
 8. Em **Settings → Payment methods** no Stripe, habilite os meios desejados. O Checkout mostra automaticamente apenas os meios compatíveis com o país, moeda e tipo de cobrança. Pagamentos recorrentes podem ter opções diferentes do passe avulso.
+9. Em **Settings → Branding**, envie o ícone e o logo da SHOPLAB e confira as cores. O checkout já envia o nome e as cores da SHOPLAB por sessão; o Branding da conta também deixa recibos, e-mails e o Portal do Cliente consistentes.
+10. Em **Settings → Billing → Customer portal**, ative a atualização do meio de pagamento, o histórico de faturas e o cancelamento da assinatura. Faça essa configuração separadamente no modo de teste e no modo de produção.
 
 Variáveis opcionais do plano:
 
@@ -117,6 +119,7 @@ Variáveis opcionais do plano:
 - `PREMIUM_PROMO_PASS_PRICE_CENTS`: preço promocional do passe em centavos.
 - `PREMIUM_PROMO_ENDS_AT`: término opcional da promoção em data ISO.
 - `PREMIUM_EMAIL_FROM`: remetente dos e-mails Premium; se ausente, usa `REWARD_EMAIL_FROM`.
+- `STRIPE_BRAND_LOGO_URL`: URL HTTPS pública opcional do logo da SHOPLAB usado no topo do Checkout hospedado. Use PNG/JPG quadrado ou horizontal com boa margem interna.
 
 Nunca coloque `STRIPE_SECRET_KEY` nem `STRIPE_WEBHOOK_SECRET` no frontend. O status Premium somente é atualizado depois que o Worker valida a assinatura do webhook e confere valor, moeda, usuário e identificadores da sessão Stripe.
 

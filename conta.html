@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Minha conta — SHOPLAB</title>
-  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="assets/css/main.css?v=20260721-mobile-fixed-header-2">
 </head>
 <body data-auth-page="account">
   <header class="header account-site-header">
@@ -18,7 +18,7 @@
   <main class="account-dashboard">
     <aside class="account-sidebar" aria-label="Navegação da conta">
       <div class="account-sidebar-title"><span class="account-avatar large" id="sidebar-account-avatar"></span><div><strong id="sidebar-account-name">Minha conta</strong><small id="sidebar-account-email"></small></div></div>
-      <nav><a class="active" href="#profile"><img src="assets/icons/user.svg" alt="">Perfil</a><a href="#invites">Convites e recompensas</a><a href="#cart"><img src="assets/icons/cart.svg" alt="">Carrinho <b id="sidebar-cart-count">0</b></a><a href="#favorites"><img src="assets/icons/heart.svg" alt="">Produtos curtidos</a><a href="#ratings"><img src="assets/icons/star.svg" alt="">Minhas avaliações</a></nav>
+      <nav><a class="active" href="#profile"><img src="assets/icons/user.svg" alt="">Perfil</a><a href="#manage-account"><img src="assets/icons/user.svg" alt="">Gerenciar conta</a><a href="#invites">Convites e recompensas</a><a href="#cart"><img src="assets/icons/cart.svg" alt="">Carrinho <b id="sidebar-cart-count">0</b></a><a href="#favorites"><img src="assets/icons/heart.svg" alt="">Produtos curtidos</a><a href="#ratings"><img src="assets/icons/star.svg" alt="">Minhas avaliações</a></nav>
       <button id="sign-out" type="button"><img src="assets/icons/logout.svg" alt="">Sair da conta</button>
     </aside>
 
@@ -27,13 +27,14 @@
       <div class="account-summary-grid"><a href="#cart"><img src="assets/icons/cart.svg" alt=""><strong id="summary-cart-count">0</strong><span>Itens no carrinho</span></a><a href="#favorites"><img src="assets/icons/heart.svg" alt=""><strong id="summary-favorites-count">0</strong><span>Produtos curtidos</span></a><a href="#ratings"><img src="assets/icons/star.svg" alt=""><strong id="summary-ratings-count">0</strong><span>Avaliações feitas</span></a></div>
 
       <section class="account-panel" id="profile"><div class="account-panel-heading"><img src="assets/icons/user.svg" alt=""><div><h2>Informações do seu perfil</h2><p>Atualize como seu nome aparece na SHOPLAB.</p></div></div><form id="account-form" class="account-profile-form"><label>Nome de exibição<input id="display-name" maxlength="80" autocomplete="name"></label><div id="auth-message" class="auth-message" aria-live="polite"></div><button class="btn primary">Salvar perfil</button></form></section>
+      <section class="account-panel" id="manage-account"><div class="account-panel-heading"><img src="assets/icons/user.svg" alt=""><div><h2>Gerenciar conta</h2><p>Cuide dos seus dados de acesso e da segurança da conta.</p></div></div><div class="account-management-grid"><form id="account-email-form" class="account-settings-card"><span class="eyebrow">E-MAIL DE ACESSO</span><h3>Alterar e-mail</h3><p>Enviaremos uma confirmação para validar o novo endereço.</p><label>Novo e-mail<input id="account-new-email" type="email" required autocomplete="email"></label><button class="btn ghost" type="submit">Alterar e-mail</button></form><form id="account-password-form" class="account-settings-card"><span class="eyebrow">SEGURANÇA</span><h3>Trocar senha</h3><p>Use pelo menos 8 caracteres e escolha uma senha diferente da atual.</p><label>Nova senha<input id="account-new-password" type="password" required minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="account-confirm-password" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn primary" type="submit">Salvar nova senha</button></form><div class="account-settings-card account-session-card"><span class="eyebrow">SESSÃO</span><h3>Acesso à conta</h3><p>Se não lembrar a senha, receba um link seguro por e-mail. Você também pode sair deste dispositivo.</p><div><a class="btn ghost" href="recuperar-senha.html">Enviar link de recuperação</a><button class="btn danger" id="manage-sign-out" type="button">Sair deste dispositivo</button></div></div></div><div id="account-security-message" class="auth-message" aria-live="polite"></div></section>
       <section class="account-panel" id="invites"><div class="account-panel-heading"><img src="assets/icons/share.svg" alt=""><div><h2>Convites e recompensas</h2><p>Compartilhe produtos usando sua conta. Cliques e novos membros qualificados aparecem aqui.</p></div></div><div id="referral-summary" class="referral-summary">Carregando seus convites…</div></section>
       <section class="account-panel" id="cart"><div class="account-panel-heading"><img src="assets/icons/cart.svg" alt=""><div><h2>Carrinho</h2><p>Produtos que você pretende comprar.</p></div></div><div id="cart-list"></div></section>
       <section class="account-panel" id="favorites"><div class="account-panel-heading"><img src="assets/icons/heart.svg" alt=""><div><h2>Produtos curtidos</h2><p>Itens marcados pelo coração. Curtir não altera a avaliação em estrelas.</p></div></div><div id="favorites-list"></div></section>
       <section class="account-panel" id="ratings"><div class="account-panel-heading"><img src="assets/icons/star.svg" alt=""><div><h2>Suas avaliações</h2><p>Notas de 1 a 5 estrelas que entram na média pública.</p></div></div><div id="ratings-list"></div></section>
-      <section class="account-panel premium-account-panel" id="premium"><div class="account-panel-heading"><div><span class="eyebrow">SHOPLAB PREMIUM</span><h2>Comparações mais inteligentes com IA</h2><p>A IA interpreta fichas técnicas com nomes diferentes e explica qual produto combina melhor com cada uso.</p></div></div><div id="premium-subscription" class="premium-subscription" aria-live="polite"><p>Carregando seu plano…</p></div></section>
+      <section class="account-panel premium-account-panel" id="premium"><div class="account-panel-heading"><div><span class="eyebrow">SHOPLAB PREMIUM</span><h2>Uma experiência de compra mais inteligente</h2><p>Busca, comparação e recomendações avançadas para você encontrar produtos melhores e fazer escolhas com mais confiança.</p></div></div><div id="premium-subscription" class="premium-subscription" aria-live="polite"><p>Carregando seu plano…</p></div></section>
     </section>
   </main>
-  <script type="module" src="assets/js/auth-page.js?v=20260720-premium-logo-1"></script>
+  <script type="module" src="assets/js/auth-page.js?v=20260721-account-management-1"></script>
 </body>
 </html>

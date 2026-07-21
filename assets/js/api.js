@@ -30,7 +30,7 @@ export const searchProductsWithMeta=async({q='',categorySlug='',sort=''}={})=>{
   if(C.USE_MOCK_DATA)return{data:await searchProducts({q,categorySlug,sort}),meta:{intent:{understood:false}}};
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),C.REQUEST_TIMEOUT);
   try{
-    const response=await fetch(`${C.API_BASE_URL}/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort})}`,{credentials:'include',signal:ctrl.signal});
+    const response=await fetch(`${C.API_BASE_URL}/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort})}`,{credentials:'include',headers:userAuthorization(),signal:ctrl.signal});
     if(!response.ok)throw new Error(`Falha na busca (${response.status})`);
     const json=await response.json();
     return{data:json.data||[],meta:json.meta||{}};

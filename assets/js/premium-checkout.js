@@ -19,7 +19,6 @@ async function initialize(){
   $('#pass-price').textContent=money(plan.passAmountCents||plan.amountCents||0);
   if(plan.promotion){$('#premium-checkout-promo').hidden=false;$('#premium-checkout-promo').textContent=plan.promotion.label||'Oferta por tempo limitado'}
   if(plan.promotion&&plan.regularPassAmountCents>plan.passAmountCents){$('#pass-regular-price').hidden=false;$('#pass-regular-price').textContent=money(plan.regularPassAmountCents)}
-  $('#premium-test-badge').hidden=!config.testMode;
   $('#premium-checkout-loading').hidden=true;
   $('#stripe-checkout-action').hidden=false;
   const button=$('#open-stripe-checkout');

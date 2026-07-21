@@ -7,7 +7,7 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-21-premium-comparison-insights-v10";
+const WORKER_BUILD = "2026-07-21-premium-search-v1";
 
 function allowedOrigins(env) {
   return [
@@ -293,6 +293,8 @@ async function route(request, env, ctx, requestId) {
     return userPremiumSubscription(request, env, requestId);
   if (path === "/api/v1/user/subscription/checkout" && request.method === "POST")
     return createPremiumCheckout(request, env, requestId);
+  if (path === "/api/v1/user/subscription/portal" && request.method === "POST")
+    return createStripeCustomerPortal(request, env, requestId);
   if (path === "/api/v1/user/subscription/payment-config" && request.method === "GET")
     return premiumPaymentConfig(request, env, requestId);
   if (path === "/api/v1/user/subscription/pass-checkout" && request.method === "POST")
@@ -1207,6 +1209,79 @@ function hasUsefulAiComparison(value) {
   );
 }
 
+function recoverAiComparison(value, products, fallback) {
+  if (!value || typeof value !== "object") return null;
+  const summary = String(
+    value.summary || value.verdict?.reasoning || value.verdict?.headline || "",
+  ).trim();
+  if (summary.length < 12) return null;
+  const slugs = new Set(products.map((product) => product.slug));
+  const proposedBestValue = value.verdict?.bestValueSlug;
+  const proposedBestOverall = value.verdict?.bestOverallSlug;
+  const priced = products
+    .filter((product) => Number(product.price) > 0)
+    .sort((a, b) => Number(a.price) - Number(b.price));
+  const bestValueSlug = slugs.has(proposedBestValue)
+    ? proposedBestValue
+    : priced[0]?.slug || null;
+  const bestOverallSlug = slugs.has(proposedBestOverall)
+    ? proposedBestOverall
+    : null;
+  return {
+    summary,
+    verdict: {
+      bestValueSlug,
+      bestOverallSlug,
+      headline: String(value.verdict?.headline || "Conclusao da comparacao").trim(),
+      reasoning: String(value.verdict?.reasoning || summary).trim(),
+      tradeoffs: Array.isArray(value.verdict?.tradeoffs)
+        ? value.verdict.tradeoffs
+        : [],
+      confidence: ["high", "medium", "low"].includes(value.verdict?.confidence)
+        ? value.verdict.confidence
+        : "low",
+      worthPayingMore: ["yes", "no", "depends"].includes(
+        value.verdict?.worthPayingMore,
+      )
+        ? value.verdict.worthPayingMore
+        : "depends",
+      worthPayingMoreReason: String(
+        value.verdict?.worthPayingMoreReason ||
+          "Depende do uso e dos dados tecnicos disponiveis.",
+      ).trim(),
+      evidence: Array.isArray(value.verdict?.evidence)
+        ? value.verdict.evidence
+        : [],
+    },
+    profileScores: Array.isArray(value.profileScores)
+      ? value.profileScores
+      : [],
+    recommendations: Array.isArray(value.recommendations)
+      ? value.recommendations
+      : [],
+    criteria: Array.isArray(value.criteria) ? value.criteria : fallback.criteria,
+  };
+}
+
+function comparisonPromptProducts(products) {
+  return products.map((product) => ({
+    slug: product.slug,
+    name: String(product.name || "").slice(0, 220),
+    productType: product.productType,
+    category: product.category,
+    brand: product.brand,
+    priceCents: Number(product.price || 0),
+    editorialScore: Number(product.editorialScore || 0),
+    shortDescription: String(product.shortDescription || "").slice(0, 500),
+    fullDescription: String(product.fullDescription || "").slice(0, 1600),
+    editorialReview: String(product.editorialReview || "").slice(0, 700),
+    specifications: product.specifications.slice(0, 32).map((item) => ({
+      name: String(item.name || "").slice(0, 100),
+      value: String(item.value || "").slice(0, 180),
+    })),
+  }));
+}
+
 function sanitizeAiComparison(value, products, fallback) {
   const bySlug = new Map(products.map((product) => [product.slug, product]));
   const criteria = (Array.isArray(value?.criteria) ? value.criteria : []).slice(0, 24).map((criterion) => {
@@ -1290,7 +1365,7 @@ function sanitizeAiComparison(value, products, fallback) {
     }));
   return {
     aiUsed: true,
-    algorithm: "premium-ai-v10",
+    algorithm: "premium-ai-v12",
     summary: String(value?.summary || fallback.summary).trim().slice(0, 600),
     priceComparison,
     verdict: {
@@ -1329,18 +1404,23 @@ function cacheComparisonAtEdge(ctx, cacheKey, analysis) {
 
 async function generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback, userId, usagePeriod }) {
   try {
-    const model = String(env.PREMIUM_COMPARISON_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8");
+    const primaryModel = String(env.PREMIUM_COMPARISON_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8");
+    const fallbackModel = String(env.PREMIUM_COMPARISON_FALLBACK_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast");
+    const models = [...new Set([primaryModel, fallbackModel].filter(Boolean))];
     const messages = [
         {
           role: "system",
-          content: "Você é o algoritmo Premium de comparação da SHOPLAB. Compare somente os dados fornecidos, reconhecendo nomes equivalentes como RAM/memória, CPU/processador, armazenamento/SSD e tela/display. Nunca invente benchmarks, autonomia, desempenho ou especificações. Campo ausente significa dado não informado, nunca produto pior. Avalie preço, equilíbrio técnico, limitações e adequação ao uso. O melhor custo-benefício deve justificar a diferença de preço. O melhor geral precisa ser sustentado pelos dados. Informe se vale pagar mais usando yes, no ou depends e explique para qual uso. Em evidence, cite fatos exatos presentes na entrada. Gere notas comparativas de 0 a 100 para desempenho, custo-benefício, trabalho, jogos, estudos e portabilidade; elas comparam apenas estes produtos e não são benchmarks absolutos. Quando faltarem dados relevantes, reduza a confiança e liste-os em missingData. Recomende usos concretos e diferentes. Escreva em português brasileiro claro e direto. Retorne somente o JSON solicitado.",
+          content: "Você é o algoritmo Premium de comparação da SHOPLAB. Compare somente os dados fornecidos no título, descrição curta, descrição completa, análise editorial e especificações. Use as descrições para compreender finalidade, conteúdo, público, recursos, vantagens e limitações, especialmente em livros e produtos com ficha técnica curta. Reconheça nomes equivalentes como RAM/memória, CPU/processador, armazenamento/SSD e tela/display. Nunca transforme linguagem promocional em fato comprovado e nunca invente benchmarks, autonomia, desempenho ou especificações. Campo ausente significa dado não informado, nunca produto pior. Avalie preço, equilíbrio técnico, limitações e adequação ao uso. O melhor custo-benefício deve justificar a diferença de preço. O melhor geral precisa ser sustentado pelos dados. Informe se vale pagar mais usando yes, no ou depends e explique para qual uso. Em evidence, cite fatos exatos presentes na entrada. Gere notas comparativas de 0 a 100 para desempenho, custo-benefício, trabalho, jogos, estudos e portabilidade; elas comparam apenas estes produtos e não são benchmarks absolutos. Quando faltarem dados relevantes, reduza a confiança e liste-os em missingData. Recomende usos concretos e diferentes. Escreva em português brasileiro claro e direto. Retorne somente o JSON solicitado.",
         },
         {
           role: "user",
-          content: JSON.stringify({ category: products[0].category, products: products.map(({ slug, name, productType, brand, price, editorialScore, shortDescription, editorialReview, specifications }) => ({ slug, name, productType, brand, priceCents: price, editorialScore, shortDescription, editorialReview, specifications })) }),
+          content: JSON.stringify({
+            category: products[0].category,
+            products: comparisonPromptProducts(products),
+          }),
         },
       ];
-    const runComparisonModel = () => env.AI.run(model, {
+    const runComparisonModel = (model, attempt) => env.AI.run(model, {
         messages,
         response_format: { type: "json_schema", json_schema: PREMIUM_COMPARISON_SUMMARY_SCHEMA },
         temperature: 0,
@@ -1350,18 +1430,37 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
         id: String(env.AI_GATEWAY_ID || "default"),
         skipCache: false,
         cacheTtl: 2592000,
-        cacheKey: `premium-comparison-v10:${version}`,
+        cacheKey: `premium-comparison-v12:${attempt}:${version}`,
         collectLog: true,
-        metadata: { feature: "premium-product-comparison", comparisonVersion: "v10", productSlugs: [...slugs].sort().join(",") },
+        metadata: { feature: "premium-product-comparison", comparisonVersion: "v12", productSlugs: [...slugs].sort().join(",") },
         },
       });
     const responseValue = (result) => {
       if (result?.response && typeof result.response === "object") return result.response;
       const text = String(result?.response || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-      return text ? JSON.parse(text) : null;
+      if (!text) return null;
+      try { return JSON.parse(text); }
+      catch {
+        const start = text.indexOf("{");
+        const end = text.lastIndexOf("}");
+        return start >= 0 && end > start ? JSON.parse(text.slice(start, end + 1)) : null;
+      }
     };
-    const raw = responseValue(await runComparisonModel());
-    if (!hasUsefulAiComparison(raw)) throw new Error("AI_COMPARISON_RESPONSE_INCOMPLETE");
+    let raw = null;
+    const failures = [];
+    for (let attempt = 0; attempt < models.length; attempt += 1) {
+      try {
+        const candidate = responseValue(await runComparisonModel(models[attempt], attempt));
+        raw = hasUsefulAiComparison(candidate)
+          ? candidate
+          : recoverAiComparison(candidate, products, fallback);
+        if (!raw) throw new Error("AI_COMPARISON_RESPONSE_INCOMPLETE");
+        break;
+      } catch (error) {
+        failures.push(`${models[attempt]}:${String(error?.message || error)}`);
+      }
+    }
+    if (!raw) throw new Error(`AI_COMPARISON_ALL_MODELS_FAILED:${failures.join("|").slice(0, 800)}`);
 
     const analysis = sanitizeAiComparison(raw, products, fallback);
     await env.DB.prepare(
@@ -1372,7 +1471,7 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
   } catch (error) {
     console.warn(JSON.stringify({ event: "ai_product_comparison_failed", cacheKey: version, error: String(error?.message || error) }));
     await env.DB.batch([
-      env.DB.prepare(`UPDATE comparison_analysis_cache SET updated_at=CURRENT_TIMESTAMP WHERE cache_key=? AND analysis_json='null'`).bind(version),
+      env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version),
       env.DB.prepare(`UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`).bind(userId, usagePeriod),
     ]);
     return null;
@@ -1397,7 +1496,7 @@ async function analyzeProductComparison(req, env, ctx, id) {
   if (slugs.length < 2) return fail(req, env, "VALIDATION_ERROR", "Escolha pelo menos dois produtos para comparar", 422, id);
   const placeholders = slugs.map(() => "?").join(",");
   const { results } = await env.DB.prepare(
-    `SELECT p.slug,p.name,p.product_type productType,p.short_description shortDescription,p.editorial_review editorialReview,
+    `SELECT p.slug,p.name,p.product_type productType,p.short_description shortDescription,p.full_description fullDescription,p.editorial_review editorialReview,
       p.editorial_score editorialScore,p.specifications_json specificationsJson,p.updated_at updatedAt,
       COALESCE(o.current_price_cents,p.base_price_cents) price,c.id categoryId,c.name category,b.name brand
      FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
@@ -1419,9 +1518,15 @@ async function analyzeProductComparison(req, env, ctx, id) {
     plan: premium.plan,
     usage: premium.usage,
   };
-  if (!products.some((product) => product.specifications.length)) return ok(req, env, technicalResult, id);
   if (!premium.premium) return ok(req, env, technicalResult, id);
-  const version = await sha256(`comparison-v10|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${JSON.stringify(product.specifications)}`).join("|")}`);
+  const hasComparisonContext = products.some((product) =>
+    product.specifications.length ||
+    String(product.shortDescription || "").trim() ||
+    String(product.fullDescription || "").trim() ||
+    String(product.editorialReview || "").trim(),
+  );
+  if (!hasComparisonContext) return ok(req, env, technicalResult, id);
+  const version = await sha256(`comparison-v12|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
   const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
   try {
     const cached = await caches.default.match(cacheKey);
@@ -2301,12 +2406,119 @@ function buildIntentFtsQuery(query) {
     .join(" OR ");
 }
 
+const PREMIUM_SEARCH_RANK_SCHEMA = {
+  type: "object",
+  properties: {
+    ranked: {
+      type: "array",
+      maxItems: 30,
+      items: {
+        type: "object",
+        properties: {
+          slug: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["slug", "reason"],
+        additionalProperties: false,
+      },
+    },
+    explanation: { type: "string" },
+  },
+  required: ["ranked", "explanation"],
+  additionalProperties: false,
+};
+
+function premiumSearchBaseline(products) {
+  const priced = products.map((product) => Number(product.price || 0)).filter((price) => price > 0);
+  const lowest = priced.length ? Math.min(...priced) : 0;
+  const highest = priced.length ? Math.max(...priced) : lowest;
+  const priceRange = Math.max(1, highest - lowest);
+  return products.map((product) => {
+    const price = Number(product.price || 0);
+    const editorial = Math.max(0, Math.min(100, Number(product.editorialScore || 0)));
+    const ratingTotal = Math.max(0, Number(product.ratingTotal || 0));
+    const rating = Math.max(0, Math.min(5, Number(product.ratingAverage || 0)));
+    const ratingConfidence = Math.min(1, ratingTotal / 10);
+    const ratingScore = ratingTotal ? (rating / 5) * 100 * ratingConfidence + 60 * (1 - ratingConfidence) : 55;
+    const priceScore = price > 0 ? 100 - ((price - lowest) / priceRange) * 100 : 0;
+    const discount = Math.max(0, Math.min(70, Number(product.oldPrice || 0) > price && price > 0
+      ? Math.round((1 - price / Number(product.oldPrice)) * 100)
+      : 0));
+    const relevanceScore = Math.max(0, 100 - Math.max(0, Number(product.rank || 0)) * 8);
+    const score = editorial * 0.30 + ratingScore * 0.20 + priceScore * 0.25 +
+      discount * 0.15 + relevanceScore * 0.10 + (Number(product.isFeatured) ? 5 : 0);
+    return { ...product, premiumValueScore: Math.round(Math.max(0, Math.min(100, score))) };
+  }).sort((a, b) => b.premiumValueScore - a.premiumValueScore || Number(a.rank || 0) - Number(b.rank || 0));
+}
+
+function premiumSearchSelection(ranked, baseline) {
+  const minimum = Math.min(12, baseline.length);
+  const maximum = Math.min(24, baseline.length);
+  const selected = ranked.slice(0, maximum);
+  const used = new Set(selected.map((item) => item.slug));
+  const target = Math.min(maximum, Math.max(minimum, selected.length));
+  for (const item of baseline) {
+    if (selected.length >= target) break;
+    if (used.has(item.slug)) continue;
+    selected.push(item);
+    used.add(item.slug);
+  }
+  return selected;
+}
+
+async function premiumSearchRank(env, ctx, query, intent, products) {
+  const baseline = premiumSearchBaseline(products);
+  if (!env.AI || baseline.length < 2) return { products: baseline.slice(0, 24), aiUsed: false, explanation: "Ordenado por relevância, qualidade e custo-benefício." };
+  const signature = await sha256(`premium-search-v1|${normalizeSearch(query)}|${JSON.stringify(intent || {})}|${baseline.map((item) => `${item.slug}:${item.updatedAt}:${item.price}:${item.editorialScore}:${item.ratingAverage}:${item.ratingTotal}`).join("|")}`);
+  const cacheKey = new Request(`https://premium-search.shoplab.internal/v1/${signature}`);
+  try {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) {
+      const value = await cached.json();
+      const bySlug = new Map(baseline.map((item) => [item.slug, item]));
+      const ranked = (value.ranked || []).map((entry) => bySlug.has(entry.slug) ? { ...bySlug.get(entry.slug), premiumSearchReason: entry.reason } : null).filter(Boolean);
+      return { products: premiumSearchSelection(ranked, baseline), aiUsed: true, cacheHit: true, explanation: value.explanation };
+    }
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "premium_search_cache_read_failed", error: String(error?.message || error) }));
+  }
+  try {
+    const model = String(env.PREMIUM_SEARCH_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast");
+    const result = await env.AI.run(model, {
+      messages: [
+        { role: "system", content: "Você reranqueia resultados da SHOPLAB para assinantes Premium. Considere primeiro a intenção e a finalidade declaradas na busca. Depois avalie aderência técnica, qualidade editorial, avaliações com sua quantidade, preço, desconto e custo-benefício. Produto mais barato não é automaticamente melhor; produto caro precisa justificar a diferença com dados fornecidos. Campo ausente não significa desempenho ruim. Não invente especificações, benchmarks ou benefícios. Use somente os slugs fornecidos, sem repetir, e escreva motivos curtos em português brasileiro. Retorne primeiro os produtos realmente mais adequados." },
+        { role: "user", content: JSON.stringify({ query, intent, products: baseline.slice(0, 30).map((product) => ({ slug: product.slug, name: product.name, category: product.category, brand: product.brand, priceCents: product.price, oldPriceCents: product.oldPrice, editorialScore: product.editorialScore, ratingAverage: product.ratingAverage, ratingTotal: product.ratingTotal, baselineValueScore: product.premiumValueScore, shortDescription: String(product.shortDescription || "").slice(0, 500), specifications: parse(product.specificationsJson, []).slice(0, 16) })) }) },
+      ],
+      response_format: { type: "json_schema", json_schema: PREMIUM_SEARCH_RANK_SCHEMA },
+      temperature: 0,
+      max_tokens: 900,
+    }, {
+      gateway: { id: String(env.AI_GATEWAY_ID || "default"), skipCache: false, cacheTtl: 2592000, cacheKey: `premium-search-v1:${signature}`, collectLog: true, metadata: { feature: "premium-search", query: normalizeSearch(query) } },
+    });
+    const raw = typeof result?.response === "string" ? JSON.parse(result.response) : result?.response;
+    const bySlug = new Map(baseline.map((item) => [item.slug, item]));
+    const entries = Array.isArray(raw?.ranked) ? raw.ranked.filter((entry) => bySlug.has(entry.slug)) : [];
+    if (!entries.length) throw new Error("PREMIUM_SEARCH_EMPTY_RANKING");
+    const ranked = entries.map((entry) => ({ ...bySlug.get(entry.slug), premiumSearchReason: String(entry.reason || "Boa correspondência para sua busca.").slice(0, 180) }));
+    const stored = { ranked: entries.map((entry) => ({ slug: entry.slug, reason: String(entry.reason || "").slice(0, 180) })), explanation: String(raw.explanation || "Resultados priorizados por adequação, qualidade e custo-benefício.").slice(0, 240) };
+    const write = caches.default.put(cacheKey, new Response(JSON.stringify(stored), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=2592000" } }));
+    if (ctx?.waitUntil) ctx.waitUntil(write.catch(() => {}));
+    return { products: premiumSearchSelection(ranked, baseline), aiUsed: true, cacheHit: false, explanation: stored.explanation };
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "premium_search_ai_fallback", error: String(error?.message || error) }));
+    return { products: baseline.slice(0, 24), aiUsed: false, explanation: "Ordenado por relevância, qualidade e custo-benefício." };
+  }
+}
+
 async function searchV2(req, env, url, ctx, id) {
   const originalQuery = (url.searchParams.get("q") || "").trim().slice(0, 100);
   const normalizedQuery = normalizeSearch(originalQuery);
   if (normalizedQuery.length < 2)
     return ok(req, env, [], id, { query: originalQuery, total: 0 });
-  const intent = await cachedSearchIntent(env, originalQuery, ctx);
+  const searchUser = req.headers.has("authorization") ? await activeUser(req, env) : null;
+  const premium = searchUser ? await premiumSubscriptionData(env, searchUser.id) : null;
+  const premiumEnabled = Boolean(premium?.premium);
+  const intent = premiumEnabled ? await cachedSearchIntent(env, originalQuery, ctx) : null;
   const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
   const ftsQuery = intent
     ? buildIntentFtsQuery(correctedQuery)
@@ -2344,8 +2556,10 @@ async function searchV2(req, env, url, ctx, id) {
   }
   let { results } = await env.DB.prepare(
     `
-    SELECT p.id,p.name,p.slug,p.short_description shortDescription,
+    SELECT p.id,p.name,p.slug,p.short_description shortDescription,p.specifications_json specificationsJson,p.updated_at updatedAt,
       p.editorial_score editorialScore,p.is_featured isFeatured,p.view_count viewCount,
+      (SELECT ROUND(AVG(ur.rating),1) FROM user_ratings ur WHERE ur.product_slug=p.slug) ratingAverage,
+      (SELECT COUNT(*) FROM user_ratings ur WHERE ur.product_slug=p.slug) ratingTotal,
       c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,
       COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,
       pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt,
@@ -2401,7 +2615,10 @@ async function searchV2(req, env, url, ctx, id) {
       )
       .slice(0, 20);
   }
-  const searchUser=req.headers.has("authorization")?await authenticatedUser(req):null;
+  let premiumRanking = null;
+  if (premiumEnabled && results.length)
+    premiumRanking = await premiumSearchRank(env, ctx, originalQuery, intent, results);
+  if (premiumRanking) results = premiumRanking.products;
   ctx.waitUntil(
     env.DB.prepare(
       `INSERT INTO events(id,event_type,query_text,metadata_json,user_id) VALUES(?,?,?,?,?)`,
@@ -2410,7 +2627,7 @@ async function searchV2(req, env, url, ctx, id) {
         crypto.randomUUID(),
         results.length ? "search" : "search_no_results",
         normalizedQuery,
-        JSON.stringify({ originalQuery, resultCount: results.length }).slice(
+        JSON.stringify({ originalQuery, resultCount: results.length, premiumSearch: premiumEnabled }).slice(
           0,
           2000,
         ),
@@ -2423,6 +2640,12 @@ async function searchV2(req, env, url, ctx, id) {
     normalizedQuery,
     correctedQuery,
     corrected: correctedQuery !== normalizedQuery,
+    premiumSearch: {
+      enabled: premiumEnabled,
+      aiUsed: Boolean(premiumRanking?.aiUsed),
+      cacheHit: Boolean(premiumRanking?.cacheHit),
+      explanation: premiumRanking?.explanation || null,
+    },
     intent: intent
       ? {
           understood: true,
@@ -3094,7 +3317,9 @@ async function suggestionsV2(req, env, url, ctx, id) {
     ftsQuery = buildFtsQuery(correctedQuery);
   const regular = await suggestionProducts(env, ftsQuery);
   const aiRequested = url.searchParams.get("ai") === "1";
-  if (!aiRequested || !shouldEnhanceSuggestions(query))
+  const user = aiRequested && req.headers.has("authorization") ? await activeUser(req, env) : null;
+  const premium = user ? await premiumSubscriptionData(env, user.id) : null;
+  if (!aiRequested || !premium?.premium || !shouldEnhanceSuggestions(query))
     return ok(req, env, regular, id, { aiUsed: false });
   const intent = await cachedSearchIntent(env, query, ctx);
   if (!intent?.searchTerms)
@@ -5005,6 +5230,26 @@ function stripeConfigured(env) {
   return /^sk_(?:test|live)_/i.test(String(env.STRIPE_SECRET_KEY || ""));
 }
 
+function stripeCheckoutBrandingParams(env) {
+  const params = {
+    "branding_settings[display_name]": "SHOPLAB",
+    "branding_settings[background_color]": "#ffffff",
+    "branding_settings[button_color]": "#00897b",
+    "custom_text[submit][message]":
+      "Pagamento seguro da SHOPLAB. O acesso Premium será liberado após a confirmação.",
+  };
+  const publicSite = String(env.PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "");
+  const logoUrl = String(
+    env.STRIPE_BRAND_LOGO_URL ||
+      (/^https:\/\//i.test(publicSite) ? `${publicSite}/assets/img/shoplab-wordmark.png` : ""),
+  ).trim();
+  if (/^https:\/\/[^\s]+$/i.test(logoUrl)) {
+    params["branding_settings[logo][type]"] = "url";
+    params["branding_settings[logo][url]"] = logoUrl.slice(0, 2000);
+  }
+  return params;
+}
+
 async function stripeApi(env, path, { method = "GET", params = null, idempotencyKey = "" } = {}) {
   const secret = String(env.STRIPE_SECRET_KEY || "");
   if (!stripeConfigured(env)) throw new Error("STRIPE_SECRET_KEY_NOT_CONFIGURED");
@@ -5638,7 +5883,9 @@ async function createPremiumCheckout(req, env, id) {
       method: "POST",
       idempotencyKey: `subscription-${user.id}-${plan.amountCents}-${premiumPeriodKey()}`,
       params: {
+        ...stripeCheckoutBrandingParams(env),
         mode: "subscription",
+        locale: "pt-BR",
         client_reference_id: user.id,
         customer_email: user.email,
         success_url: `${siteOrigin}/conta.html?premium_payment=success&session_id={CHECKOUT_SESSION_ID}#premium`,
@@ -5698,7 +5945,9 @@ async function createPremiumPassCheckout(req, env, id) {
       method: "POST",
       idempotencyKey: `pass-${purchaseId}`,
       params: {
+        ...stripeCheckoutBrandingParams(env),
         mode: "payment",
+        locale: "pt-BR",
         client_reference_id: user.id,
         customer_email: user.email,
         success_url: `${siteOrigin}/conta.html?premium_payment=success&session_id={CHECKOUT_SESSION_ID}#premium`,
@@ -5728,6 +5977,63 @@ async function createPremiumPassCheckout(req, env, id) {
     `UPDATE premium_pass_payments SET provider_preference_id=?,checkout_url=?,provider_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
   ).bind(String(checkout.id), checkoutUrl, purchaseId).run();
   return ok(req, env, { checkoutUrl, status: "pass_pending", provider: "stripe", plan }, id);
+}
+
+async function createStripeCustomerPortal(req, env, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
+  if (!stripeConfigured(env))
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O Stripe ainda não foi configurado", 503, id);
+  const current = await env.DB.prepare(
+    `SELECT provider,provider_subscription_id providerSubscriptionId,status
+     FROM premium_subscriptions WHERE user_id=?`,
+  ).bind(user.id).first();
+  if (current?.provider !== "stripe" || !/^sub_/.test(String(current.providerSubscriptionId || "")))
+    return fail(req, env, "SUBSCRIPTION_NOT_FOUND", "Assinatura Stripe não encontrada", 404, id);
+  const siteOrigin = String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(siteOrigin))
+    return fail(req, env, "PUBLIC_SITE_URL_REQUIRED", "Configure PUBLIC_SITE_URL com o endereço HTTPS do site", 503, id);
+  try {
+    const subscription = await stripeApi(
+      env,
+      `/v1/subscriptions/${encodeURIComponent(current.providerSubscriptionId)}`,
+    );
+    if (String(subscription?.metadata?.shoplab_user_id || "") !== user.id)
+      throw new Error("STRIPE_SUBSCRIPTION_OWNER_MISMATCH");
+    const customerId = String(
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer?.id || "",
+    );
+    if (!/^cus_/.test(customerId)) throw new Error("STRIPE_CUSTOMER_REFERENCE_INVALID");
+    const portal = await stripeApi(env, "/v1/billing_portal/sessions", {
+      method: "POST",
+      params: {
+        customer: customerId,
+        locale: "pt-BR",
+        return_url: `${siteOrigin}/conta.html#premium`,
+      },
+    });
+    if (!/^https:\/\//i.test(String(portal.url || "")))
+      throw new Error("STRIPE_PORTAL_URL_INVALID");
+    return ok(req, env, { portalUrl: String(portal.url) }, id);
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "stripe_customer_portal_creation_failed",
+      userId: user.id,
+      subscriptionId: current.providerSubscriptionId,
+      error: String(error?.message || error),
+      provider: error?.provider || null,
+    }));
+    return fail(
+      req,
+      env,
+      "CUSTOMER_PORTAL_FAILED",
+      "Não foi possível abrir o gerenciamento da assinatura agora",
+      502,
+      id,
+    );
+  }
 }
 
 async function cancelPremiumSubscription(req, env, id) {
@@ -6054,7 +6360,7 @@ async function updateUserLibraryItem(req, env, path, id) {
     const summary = await env.DB.prepare(`SELECT ROUND(AVG(rating),1) average,COUNT(*) total FROM user_ratings WHERE product_slug=?`).bind(slug).first();
     return ok(req,env,{slug,rating,average:Number(summary?.average||0),total:Number(summary?.total||0)},id);
   }
-  const quantity = clamp(body.quantity,0,99,1);
+  const quantity = Number(body.quantity) > 0 ? 1 : 0;
   if (!quantity) await env.DB.prepare("DELETE FROM user_cart WHERE user_id=? AND product_slug=?").bind(user.id,slug).run();
   else await env.DB.prepare(`INSERT INTO user_cart(user_id,product_slug,quantity) VALUES(?,?,?) ON CONFLICT(user_id,product_slug) DO UPDATE SET quantity=excluded.quantity,updated_at=CURRENT_TIMESTAMP`).bind(user.id,slug,quantity).run();
   return ok(req,env,{slug,quantity},id);

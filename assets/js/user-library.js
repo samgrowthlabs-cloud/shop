@@ -54,11 +54,15 @@ function migrateLegacyGuestLibrary() {
 
 migrateLegacyGuestLibrary();
 
-export const localLibrary = () => ({
-  favorites: read(storageKey("favorites"), []),
-  ratings: read(storageKey("ratings"), {}),
-  cart: read(storageKey("cart"), {}),
-});
+export const localLibrary = () => {
+  const cart = read(storageKey("cart"), {});
+  return {
+    favorites: read(storageKey("favorites"), []),
+    ratings: read(storageKey("ratings"), {}),
+    // Carrinho é uma lista de produtos únicos; cliques repetidos não criam unidades.
+    cart: Object.fromEntries(Object.keys(cart).map((slug) => [slug, 1])),
+  };
+};
 
 function storeChange(type, slug, value) {
   const data = localLibrary();
@@ -157,7 +161,7 @@ export async function syncAccountLibrary() {
   write(
     storageKey("cart"),
     Object.fromEntries(
-      (library.cart || []).map((item) => [item.slug, item.quantity]),
+      (library.cart || []).map((item) => [item.slug, 1]),
     ),
   );
   window.dispatchEvent(
@@ -229,12 +233,15 @@ export async function bindLibraryUI() {
     };
   });
   const cartButton = document.querySelector(".product-cart");
+  if (localLibrary().cart[slug]) {
+    cartButton.textContent = "Já está no carrinho ✓";
+    cartButton.classList.add("is-added");
+  }
   cartButton.onclick = async () => {
-    const previous = localLibrary().cart[slug] || 0;
     cartButton.textContent = "Adicionado ao carrinho ✓";
     cartButton.classList.add("is-added");
     try {
-      await setCart(slug, previous + 1);
+      await setCart(slug, 1);
     } catch {
       cartButton.textContent = "Adicionar ao carrinho";
       cartButton.classList.remove("is-added");
