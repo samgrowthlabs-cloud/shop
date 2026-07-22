@@ -1,4 +1,4 @@
-import{currentUser,userApi}from'./auth.js';
+import'./favicon.js';import{currentUser,userApi}from'./auth.js';
 
 const $=selector=>document.querySelector(selector);
 const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});

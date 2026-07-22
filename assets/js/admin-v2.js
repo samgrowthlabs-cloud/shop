@@ -1,4 +1,4 @@
-import{SHOPLAB_CONFIG as C}from'./config.js';
+import'./favicon.js';import{SHOPLAB_CONFIG as C}from'./config.js';
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],page=document.body.dataset.adminPage;
 const parse=(value,fallback={})=>{try{return JSON.parse(value)}catch{return fallback}};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=v=>v==null?'—':(v/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),cents=v=>v?Math.round(Number(String(v).replace(/\./g,'').replace(',','.'))*100):null;

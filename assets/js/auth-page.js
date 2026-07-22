@@ -1,4 +1,4 @@
-import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
+import'./favicon.js';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
 import{syncAccountLibrary,setCart}from'./user-library.js';
 import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260721-shoplab-plus-logo-2';
 import{SHOPLAB_CONFIG}from'./config.js';

@@ -1,4 +1,4 @@
-import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js';
+import'./favicon.js';import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js';
 import'./search-ui.js?v=20260721-trash-clear-1';
 import'./public-media.js';
 import{bindComparisonUI,comparisonPage}from'./compare.js?v=20260721-bfcache-1';
