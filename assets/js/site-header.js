@@ -2,6 +2,7 @@ import{getSiteConfig,cachedSiteConfig}from'./api.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const PREMIUM_BRAND_KEY='shoplab:premium-brand';
+const DEFAULT_WORDMARK='assets/img/shoplab-wordmark.png';
 
 export function cachedPremiumBrand(){
   try{return sessionStorage.getItem(PREMIUM_BRAND_KEY)==='1'}catch{return false}
@@ -12,8 +13,12 @@ export function setPremiumBrand(active){
   try{sessionStorage.setItem(PREMIUM_BRAND_KEY,enabled?'1':'0')}catch{}
   document.querySelectorAll('.header-brand').forEach(brand=>{
     brand.classList.toggle('is-premium',enabled);
+    brand.querySelectorAll('.default-site-logo .brand-image-main').forEach(image=>{
+      image.src=DEFAULT_WORDMARK;
+      image.alt='SHOPLAB';
+    });
     let label=brand.querySelector('.brand-premium-label');
-    if(!label){label=document.createElement('span');label.className='brand-premium-label';label.textContent='PREMIUM';brand.append(label)}
+    if(!label){label=document.createElement('span');label.className='brand-premium-label';label.textContent='+';brand.append(label)}
     label.hidden=!enabled;
   });
 }

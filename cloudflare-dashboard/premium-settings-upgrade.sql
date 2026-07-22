@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS premium_settings (
   id TEXT PRIMARY KEY CHECK (id = 'default'),
-  plan_name TEXT NOT NULL DEFAULT 'SHOPLAB Premium',
+  plan_name TEXT NOT NULL DEFAULT 'SHOPLAB+',
   monthly_price_cents INTEGER NOT NULL DEFAULT 990,
   pass_price_cents INTEGER NOT NULL DEFAULT 990,
   pass_days INTEGER NOT NULL DEFAULT 30,

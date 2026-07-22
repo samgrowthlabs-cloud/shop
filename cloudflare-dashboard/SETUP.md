@@ -94,7 +94,7 @@ O login exige um token Turnstile válido e cria uma sessão opaca em D1 com cook
 - Cadastre a sitekey pública do Turnstile apenas no HTML. A chave secreta fica exclusivamente no Worker.
 - Restrinja `ALLOWED_ORIGINS` ao domínio real. Não use `*` com cookies.
 
-## 6. SHOPLAB Premium com Stripe
+## 6. SHOPLAB+ com Stripe
 
 1. Em um banco D1 existente, execute uma vez `premium-subscriptions-upgrade.sql` e depois `premium-settings-upgrade.sql`.
 2. No Stripe Dashboard, ative primeiro o **modo de teste**.
@@ -109,7 +109,7 @@ O login exige um token Turnstile válido e cria uma sessão opaca em D1 com cook
 
 Variáveis opcionais do plano:
 
-- `PREMIUM_PLAN_NAME`: padrão `SHOPLAB Premium`.
+- `PREMIUM_PLAN_NAME`: padrão `SHOPLAB+`.
 - `PREMIUM_MONTHLY_PRICE_CENTS`: padrão `990` (R$ 9,90).
 - `PREMIUM_PASS_PRICE_CENTS`: preço do passe avulso; por padrão usa o preço mensal.
 - `PREMIUM_PASS_DAYS`: duração do passe avulso; padrão `30` dias.

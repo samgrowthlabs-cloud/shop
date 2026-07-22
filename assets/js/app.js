@@ -4,7 +4,7 @@ import'./public-media.js';
 import{bindComparisonUI,comparisonPage}from'./compare.js?v=20260721-bfcache-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js';
-import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260720-premium-logo-1';
+import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260721-shoplab-plus-logo-2';
 import{SHOPLAB_CONFIG}from'./config.js';
 const $=(s,r=document)=>r.querySelector(s)||(s==='#theme'?{}:null), money=v=>(v/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function bindPremiumBrand(){
@@ -56,7 +56,7 @@ async function listing(){
 
 function bindListingFilters(){
   const state=window.__shoplabListing;if(!state)return;
-  if(state.premiumSearch?.enabled){const summary=$('#listing-summary');if(summary&&!document.querySelector('.premium-search-insight'))summary.insertAdjacentHTML('afterend',`<div class="premium-search-insight"><span>SHOPLAB PREMIUM · BUSCA INTELIGENTE</span><strong>Melhores opções primeiro</strong><p>${esc(state.premiumSearch.explanation||'Resultados organizados por adequação à busca, qualidade e custo-benefício.')}</p></div>`)}
+  if(state.premiumSearch?.enabled){const summary=$('#listing-summary');if(summary&&!document.querySelector('.premium-search-insight'))summary.insertAdjacentHTML('afterend',`<div class="premium-search-insight"><span>SHOPLAB+ · BUSCA INTELIGENTE</span><strong>Melhores opções primeiro</strong><p>${esc(state.premiumSearch.explanation||'Resultados organizados por adequação à busca, qualidade e custo-benefício.')}</p></div>`)}
   const category=$('#category'),min=$('#min-price'),max=$('#max-price'),promotion=$('#promotions-only'),sort=$('#sort'),grid=$('#listing-products'),empty=$('#empty-results');
   const render=()=>{
     if(Number(min.value)>Number(max.value)){if(document.activeElement===min)max.value=min.value;else min.value=max.value}

@@ -1,6 +1,6 @@
 import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
 import{syncAccountLibrary,setCart}from'./user-library.js';
-import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260720-premium-logo-1';
+import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260721-shoplab-plus-logo-2';
 import{SHOPLAB_CONFIG}from'./config.js';
 const $=selector=>document.querySelector(selector),page=document.body.dataset.authPage;
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -8,6 +8,9 @@ const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currenc
 const expiryDate=value=>{const text=String(value||''),date=new Date(text);if(!Number.isFinite(date.getTime()))return'—';return date.toLocaleDateString('pt-BR',{timeZone:/T00:00:00(?:\.000)?Z$/i.test(text)?'UTC':'America/Sao_Paulo'})};
 const message=(text,type='error')=>{const box=$('#auth-message');box.textContent=text;box.className=`auth-message ${type}`};
 const securityMessage=(text,type='error')=>{const box=$('#account-security-message');if(!box)return;box.textContent=text;box.className=`auth-message ${type}`};
+const subscriptionCacheKey=userId=>`shoplab:plus-subscription:${userId}`;
+const readSubscriptionCache=userId=>{try{const cached=JSON.parse(sessionStorage.getItem(subscriptionCacheKey(userId))||'null');return cached&&Date.now()-Number(cached.savedAt||0)<5*60e3?cached.data:null}catch{return null}};
+const saveSubscriptionCache=(userId,data)=>{try{sessionStorage.setItem(subscriptionCacheKey(userId),JSON.stringify({savedAt:Date.now(),data}))}catch{}};
 let redirectError=null;try{acceptRedirectSession()}catch(error){redirectError=error}
 
 function rows(items,kind){
@@ -18,30 +21,29 @@ function rows(items,kind){
 
 function premiumBenefits(limit){
   return `<div class="premium-benefits">
-    <article><span aria-hidden="true">⌕</span><div><strong>Busca inteligente Premium</strong><p>Entende o que você procura e prioriza adequação, qualidade, avaliações, preço e custo-benefício.</p></div></article>
+    <article><span aria-hidden="true">⌕</span><div><strong>Busca inteligente Plus</strong><p>Entende o que você procura e prioriza adequação, qualidade, avaliações, preço e custo-benefício.</p></div></article>
     <article><span aria-hidden="true">✦</span><div><strong>Análises completas com IA</strong><p>${Number(limit||50)} novas análises por mês com ficha técnica normalizada, descrições e contexto de uso.</p></div></article>
     <article><span aria-hidden="true">⇄</span><div><strong>Comparação que explica de verdade</strong><p>Mostra diferenças, limitações, melhor escolha geral, melhor custo-benefício e quando vale pagar mais.</p></div></article>
     <article><span aria-hidden="true">◎</span><div><strong>Recomendações para o seu uso</strong><p>Identifica qual produto combina melhor com trabalho, estudos, jogos, leitura e outras necessidades.</p></div></article>
     <article><span aria-hidden="true">⚡</span><div><strong>Resultados salvos e rápidos</strong><p>Análises já geradas são recuperadas do cache sem consumir novamente a sua cota.</p></div></article>
-    <article><span aria-hidden="true">P</span><div><strong>Identidade Premium</strong><p>Seu acesso aparece na conta e na marca SHOPLAB enquanto o plano estiver ativo.</p></div></article>
+    <article><span aria-hidden="true">+</span><div><strong>Identidade Plus</strong><p>Seu acesso aparece na conta e na marca SHOPLAB enquanto o plano estiver ativo.</p></div></article>
   </div>`;
 }
 
 function renderPremiumSubscription(data){
   const target=$('#premium-subscription');if(!target||!data)return;
   setPremiumBrand(Boolean(data.premium));
-  const nav=$('.account-sidebar nav');if(nav&&!nav.querySelector('a[href="#premium"]'))nav.querySelector('a[href="#invites"]')?.insertAdjacentHTML('beforebegin','<a href="#premium">Premium</a>');
   const plan=data.plan||{},usage=data.usage||{},status=data.status||'free';
-  if(data.premium){const passActive=status==='pass_active';const price=money(passActive?data.pass?.amountCents:data.subscription?.amountCents||plan.amountCents||0);target.innerHTML=`<div class="premium-plan-state active"><span class="premium-status">PREMIUM ATIVO</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3><strong>${price}${passActive?`<small> por ${Number(plan.passDays||30)} dias</small>`:'<small>/mês</small>'}</strong>${passActive?`<p>Seu passe avulso é válido até <strong>${esc(expiryDate(data.pass?.accessExpiresAt))}</strong>.</p>`:'<p>Sua assinatura tem renovação automática mensal. No portal seguro você pode atualizar o cartão, consultar cobranças e cancelar o plano.</p>'}<p>Você tem ${Number(usage.remaining||0)} de ${Number(usage.limit||0)} novas análises inteligentes disponíveis neste mês. Resultados já armazenados no cache não consomem sua cota.</p><div class="premium-usage"><span style="width:${Math.min(100,Math.round(Number(usage.used||0)/Math.max(1,Number(usage.limit||1))*100))}%"></span></div>${passActive?'':'<div class="premium-subscription-actions"><button class="btn primary" id="manage-premium" type="button">Gerenciar assinatura</button><button class="btn ghost" id="cancel-premium" type="button">Cancelar agora</button></div>'}</div>`;bindPremiumActions();return}
+  if(data.premium){const passActive=status==='pass_active';const price=money(passActive?data.pass?.amountCents:data.subscription?.amountCents||plan.amountCents||0);target.innerHTML=`<div class="premium-plan-state active"><span class="premium-status">SHOPLAB+ ATIVO</span><h3>${esc(plan.name||'SHOPLAB+')}</h3><strong>${price}${passActive?`<small> por ${Number(plan.passDays||30)} dias</small>`:'<small>/mês</small>'}</strong>${passActive?`<p>Seu passe avulso é válido até <strong>${esc(expiryDate(data.pass?.accessExpiresAt))}</strong>.</p>`:'<p>Sua assinatura tem renovação automática mensal. No portal seguro você pode atualizar o cartão, consultar cobranças e cancelar o plano.</p>'}<p>Você tem ${Number(usage.remaining||0)} de ${Number(usage.limit||0)} novas análises inteligentes disponíveis neste mês. Resultados já armazenados no cache não consomem sua cota.</p><div class="premium-usage"><span style="width:${Math.min(100,Math.round(Number(usage.used||0)/Math.max(1,Number(usage.limit||1))*100))}%"></span></div>${passActive?'':'<div class="premium-subscription-actions"><button class="btn primary" id="manage-premium" type="button">Gerenciar assinatura</button><button class="btn ghost" id="cancel-premium" type="button">Cancelar agora</button></div>'}</div>`;bindPremiumActions();return}
   const subscriptionPending=status==='pending',passPending=status==='pass_pending';
-  target.innerHTML=`<div class="premium-plan-state"><span class="premium-status">${plan.promotion?esc(plan.promotion.label):'ESCOLHA COMO PAGAR'}</span><h3>${esc(plan.name||'SHOPLAB Premium')}</h3>${premiumBenefits(plan.aiMonthlyLimit)}<div class="premium-payment-options"><article><span>PASSE AVULSO</span><strong>${money(plan.passAmountCents||plan.amountCents||0)}</strong>${plan.promotion&&plan.regularPassAmountCents>plan.passAmountCents?`<del>${money(plan.regularPassAmountCents)}</del>`:''}<p>Acesso por ${Number(plan.passDays||30)} dias, sem renovação automática. Os meios de pagamento disponíveis aparecem no checkout seguro.</p><button class="btn ghost" id="buy-premium-pass" type="button">${passPending?'Continuar pagamento':'Comprar acesso avulso'}</button></article><article><span>ASSINATURA</span><strong>${money(plan.amountCents||0)}<small>/mês</small></strong>${plan.promotion&&plan.regularAmountCents>plan.amountCents?`<del>${money(plan.regularAmountCents)}/mês</del>`:''}<p>Renovação automática mensal. Você pode cancelar quando quiser.</p><button class="btn primary" id="subscribe-premium" type="button">${subscriptionPending?'Continuar assinatura':'Assinar mensalmente'}</button></article></div><small>Os pagamentos são processados pelo checkout seguro da Stripe.</small></div>`;bindPremiumActions();
+  target.innerHTML=`<div class="premium-plan-state"><span class="premium-status">${plan.promotion?esc(plan.promotion.label):'ESCOLHA COMO PAGAR'}</span><h3>${esc(plan.name||'SHOPLAB+')}</h3>${premiumBenefits(plan.aiMonthlyLimit)}<div class="premium-payment-options"><article><span>PASSE AVULSO</span><strong>${money(plan.passAmountCents||plan.amountCents||0)}</strong>${plan.promotion&&plan.regularPassAmountCents>plan.passAmountCents?`<del>${money(plan.regularPassAmountCents)}</del>`:''}<p>Acesso por ${Number(plan.passDays||30)} dias, sem renovação automática. Os meios de pagamento disponíveis aparecem no checkout seguro.</p><button class="btn ghost" id="buy-premium-pass" type="button">${passPending?'Continuar pagamento':'Comprar acesso avulso'}</button></article><article><span>ASSINATURA</span><strong>${money(plan.amountCents||0)}<small>/mês</small></strong>${plan.promotion&&plan.regularAmountCents>plan.amountCents?`<del>${money(plan.regularAmountCents)}/mês</del>`:''}<p>Renovação automática mensal. Você pode cancelar quando quiser.</p><button class="btn primary" id="subscribe-premium" type="button">${subscriptionPending?'Continuar assinatura':'Assinar mensalmente'}</button></article></div><small>Os pagamentos são processados pelo checkout seguro da Stripe.</small></div>`;bindPremiumActions();
 }
 
 function bindPremiumActions(){
   const subscribe=$('#subscribe-premium');if(subscribe)subscribe.onclick=async()=>{subscribe.disabled=true;subscribe.textContent='Abrindo pagamento…';try{const result=await userApi('subscription/checkout',{method:'POST'});if(result.checkoutUrl)location.href=result.checkoutUrl;else renderPremiumSubscription(result)}catch(error){message(error.message);subscribe.disabled=false;subscribe.textContent='Tentar novamente'}};
   const pass=$('#buy-premium-pass');if(pass)pass.onclick=()=>{location.href='premium-checkout.html'};
   const manage=$('#manage-premium');if(manage)manage.onclick=async()=>{manage.disabled=true;manage.textContent='Abrindo portal…';try{const result=await userApi('subscription/portal',{method:'POST'});if(!result.portalUrl)throw new Error('O portal da assinatura não ficou disponível');location.href=result.portalUrl}catch(error){message(error.message);manage.disabled=false;manage.textContent='Gerenciar assinatura'}};
-  const cancel=$('#cancel-premium');if(cancel)cancel.onclick=async()=>{if(!confirm('Deseja cancelar a assinatura Premium agora?'))return;cancel.disabled=true;try{await userApi('subscription/cancel',{method:'PUT'});message('Assinatura cancelada. Enviamos a confirmação por e-mail.','success');renderPremiumSubscription(await userApi('subscription'))}catch(error){message(error.message);cancel.disabled=false}};
+  const cancel=$('#cancel-premium');if(cancel)cancel.onclick=async()=>{if(!confirm('Deseja cancelar a assinatura Plus agora?'))return;cancel.disabled=true;try{await userApi('subscription/cancel',{method:'PUT'});message('Assinatura cancelada. Enviamos a confirmação por e-mail.','success');renderPremiumSubscription(await userApi('subscription'))}catch(error){message(error.message);cancel.disabled=false}};
 }
 
 async function refreshPremiumPaymentReturn(){
@@ -55,10 +57,12 @@ async function refreshPremiumPaymentReturn(){
 async function account(){
   const user=await currentUser();
   if(!user){location.replace('entrar.html?next=conta.html');return}
-  const [profile,library,subscription]=await Promise.all([apiProfile(),syncAccountLibrary(),userApi('subscription').catch(()=>null)]);
-  renderPremiumSubscription(subscription);
+  const cachedSubscription=readSubscriptionCache(user.id);
+  if(cachedSubscription)renderPremiumSubscription(cachedSubscription);
+  const subscriptionRequest=userApi('subscription').then(data=>{saveSubscriptionCache(user.id,data);renderPremiumSubscription(data);return data}).catch(()=>null);
+  const [profile,library]=await Promise.all([apiProfile(),syncAccountLibrary()]);
   refreshPremiumPaymentReturn();
-  if(!subscription&&$('#premium-subscription'))$('#premium-subscription').innerHTML='<p>Não foi possível carregar o plano Premium agora. Tente atualizar a página.</p>';
+  subscriptionRequest.then(subscription=>{if(!subscription&&!cachedSubscription&&$('#premium-subscription'))$('#premium-subscription').innerHTML='<p>Não foi possível carregar o plano SHOPLAB+ agora. Tente atualizar a página.</p>'});
   startPresence();
   const accountNav=$('.account-sidebar nav');const highlightAccountSection=()=>{const section=location.hash||'#profile';accountNav?.querySelectorAll('a[href^="#"]').forEach(link=>link.classList.toggle('active',link.getAttribute('href')===section))};highlightAccountSection();window.addEventListener('hashchange',highlightAccountSection);
   const displayName=profile.displayName||user.user_metadata?.display_name||user.email?.split('@')[0]||'Minha conta',initials=displayName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase(),avatar=user.user_metadata?.avatar_url||user.user_metadata?.picture||'';
@@ -93,9 +97,13 @@ async function enhanceReferralGiftCards(){
 }
 
 async function init(){
+  if(page==='account'){
+    initSiteHeader().catch(()=>{});
+    await account();
+    return enhanceReferralGiftCards()
+  }
   await initSiteHeader();
   if(page==='callback'){location.replace('conta.html');return}
-  if(page==='account'){await account();return enhanceReferralGiftCards()}
   const form=$('#auth-form');if(!form)return;
   if(page==='reset'&&redirectError)message(redirectError.message);
   form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button[type=submit]');button.disabled=true;try{if(page==='signup'){await signUp({name:$('#name').value,email:$('#email').value,password:$('#password').value});message('Cadastro criado. Confira seu e-mail para confirmar a conta.','success');form.reset()}else if(page==='login'){await signIn($('#email').value,$('#password').value);location.replace(new URLSearchParams(location.search).get('next')||'conta.html')}else if(page==='recover'){await recover($('#email').value);message('Enviamos o link de recuperação, caso o e-mail esteja cadastrado.','success')}else if(page==='reset'){if(redirectError)throw redirectError;acceptRedirectSession();await updatePassword($('#password').value);form.reset();message('Senha alterada com sucesso. Agora você já pode entrar com a nova senha.','success')}}catch(error){message(error.message)}finally{button.disabled=false}};

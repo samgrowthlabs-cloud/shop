@@ -1410,7 +1410,7 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
     const messages = [
         {
           role: "system",
-          content: "Você é o algoritmo Premium de comparação da SHOPLAB. Compare somente os dados fornecidos no título, descrição curta, descrição completa, análise editorial e especificações. Use as descrições para compreender finalidade, conteúdo, público, recursos, vantagens e limitações, especialmente em livros e produtos com ficha técnica curta. Reconheça nomes equivalentes como RAM/memória, CPU/processador, armazenamento/SSD e tela/display. Nunca transforme linguagem promocional em fato comprovado e nunca invente benchmarks, autonomia, desempenho ou especificações. Campo ausente significa dado não informado, nunca produto pior. Avalie preço, equilíbrio técnico, limitações e adequação ao uso. O melhor custo-benefício deve justificar a diferença de preço. O melhor geral precisa ser sustentado pelos dados. Informe se vale pagar mais usando yes, no ou depends e explique para qual uso. Em evidence, cite fatos exatos presentes na entrada. Gere notas comparativas de 0 a 100 para desempenho, custo-benefício, trabalho, jogos, estudos e portabilidade; elas comparam apenas estes produtos e não são benchmarks absolutos. Quando faltarem dados relevantes, reduza a confiança e liste-os em missingData. Recomende usos concretos e diferentes. Escreva em português brasileiro claro e direto. Retorne somente o JSON solicitado.",
+          content: "Você é o algoritmo SHOPLAB+ de comparação da SHOPLAB. Compare somente os dados fornecidos no título, descrição curta, descrição completa, análise editorial e especificações. Use as descrições para compreender finalidade, conteúdo, público, recursos, vantagens e limitações, especialmente em livros e produtos com ficha técnica curta. Reconheça nomes equivalentes como RAM/memória, CPU/processador, armazenamento/SSD e tela/display. Nunca transforme linguagem promocional em fato comprovado e nunca invente benchmarks, autonomia, desempenho ou especificações. Campo ausente significa dado não informado, nunca produto pior. Avalie preço, equilíbrio técnico, limitações e adequação ao uso. O melhor custo-benefício deve justificar a diferença de preço. O melhor geral precisa ser sustentado pelos dados. Informe se vale pagar mais usando yes, no ou depends e explique para qual uso. Em evidence, cite fatos exatos presentes na entrada. Gere notas comparativas de 0 a 100 para desempenho, custo-benefício, trabalho, jogos, estudos e portabilidade; elas comparam apenas estes produtos e não são benchmarks absolutos. Quando faltarem dados relevantes, reduza a confiança e liste-os em missingData. Recomende usos concretos e diferentes. Escreva em português brasileiro claro e direto. Retorne somente o JSON solicitado.",
         },
         {
           role: "user",
@@ -2486,7 +2486,7 @@ async function premiumSearchRank(env, ctx, query, intent, products) {
     const model = String(env.PREMIUM_SEARCH_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast");
     const result = await env.AI.run(model, {
       messages: [
-        { role: "system", content: "Você reranqueia resultados da SHOPLAB para assinantes Premium. Considere primeiro a intenção e a finalidade declaradas na busca. Depois avalie aderência técnica, qualidade editorial, avaliações com sua quantidade, preço, desconto e custo-benefício. Produto mais barato não é automaticamente melhor; produto caro precisa justificar a diferença com dados fornecidos. Campo ausente não significa desempenho ruim. Não invente especificações, benchmarks ou benefícios. Use somente os slugs fornecidos, sem repetir, e escreva motivos curtos em português brasileiro. Retorne primeiro os produtos realmente mais adequados." },
+        { role: "system", content: "Você reranqueia resultados da SHOPLAB para assinantes SHOPLAB+. Considere primeiro a intenção e a finalidade declaradas na busca. Depois avalie aderência técnica, qualidade editorial, avaliações com sua quantidade, preço, desconto e custo-benefício. Produto mais barato não é automaticamente melhor; produto caro precisa justificar a diferença com dados fornecidos. Campo ausente não significa desempenho ruim. Não invente especificações, benchmarks ou benefícios. Use somente os slugs fornecidos, sem repetir, e escreva motivos curtos em português brasileiro. Retorne primeiro os produtos realmente mais adequados." },
         { role: "user", content: JSON.stringify({ query, intent, products: baseline.slice(0, 30).map((product) => ({ slug: product.slug, name: product.name, category: product.category, brand: product.brand, priceCents: product.price, oldPriceCents: product.oldPrice, editorialScore: product.editorialScore, ratingAverage: product.ratingAverage, ratingTotal: product.ratingTotal, baselineValueScore: product.premiumValueScore, shortDescription: String(product.shortDescription || "").slice(0, 500), specifications: parse(product.specificationsJson, []).slice(0, 16) })) }) },
       ],
       response_format: { type: "json_schema", json_schema: PREMIUM_SEARCH_RANK_SCHEMA },
@@ -5097,6 +5097,11 @@ async function activeUser(req, env) {
   return user;
 }
 
+function visiblePremiumPlanName(value) {
+  const name = String(value || "").trim();
+  return !name || /^shoplab premium$/i.test(name) ? "SHOPLAB+" : name.slice(0, 100);
+}
+
 function premiumPlan(env) {
   const regularMonthlyAmountCents = clamp(env.PREMIUM_MONTHLY_PRICE_CENTS, 300, 10000000, 300);
   const regularPassAmountCents = clamp(env.PREMIUM_PASS_PRICE_CENTS, 300, 10000000, regularMonthlyAmountCents);
@@ -5106,7 +5111,7 @@ function premiumPlan(env) {
   const promotionalPass = clamp(env.PREMIUM_PROMO_PASS_PRICE_CENTS, 300, regularPassAmountCents, regularPassAmountCents);
   const promotionActive = promotionInPeriod && (promotionalMonthly < regularMonthlyAmountCents || promotionalPass < regularPassAmountCents);
   return {
-    name: String(env.PREMIUM_PLAN_NAME || "SHOPLAB Premium").slice(0, 100),
+    name: visiblePremiumPlanName(env.PREMIUM_PLAN_NAME),
     amountCents: promotionActive ? promotionalMonthly : regularMonthlyAmountCents,
     regularAmountCents: regularMonthlyAmountCents,
     passAmountCents: promotionActive ? promotionalPass : regularPassAmountCents,
@@ -5144,7 +5149,7 @@ async function resolvedPremiumPlan(env) {
   const promotionActive = promotionInPeriod &&
     (promotionalMonthly < regularAmountCents || promotionalPass < regularPassAmountCents);
   return {
-    name: String(row.planName || fallback.name).trim().slice(0, 100),
+    name: visiblePremiumPlanName(row.planName || fallback.name),
     amountCents: promotionActive ? promotionalMonthly : regularAmountCents,
     regularAmountCents,
     passAmountCents: promotionActive ? promotionalPass : regularPassAmountCents,
@@ -5214,7 +5219,7 @@ async function updateAdminPremiumSettings(req, env, id) {
       promotion_pass_price_cents=excluded.promotion_pass_price_cents,promotion_starts_at=excluded.promotion_starts_at,
       promotion_ends_at=excluded.promotion_ends_at,updated_at=CURRENT_TIMESTAMP`,
   ).bind(
-    String(body.planName || "SHOPLAB Premium").trim().slice(0, 100), monthly, pass,
+    visiblePremiumPlanName(body.planName), monthly, pass,
     clamp(body.passDays, 1, 3650, 30), clamp(body.aiMonthlyLimit, 1, 100000, 50),
     body.promotionEnabled ? 1 : 0, String(body.promotionLabel || "Oferta por tempo limitado").trim().slice(0, 100),
     promoMonthly, promoPass, startsAt, endsAt,
@@ -5236,7 +5241,7 @@ function stripeCheckoutBrandingParams(env) {
     "branding_settings[background_color]": "#ffffff",
     "branding_settings[button_color]": "#00897b",
     "custom_text[submit][message]":
-      "Pagamento seguro da SHOPLAB. O acesso Premium será liberado após a confirmação.",
+      "Pagamento seguro da SHOPLAB. O acesso SHOPLAB+ será liberado após a confirmação.",
   };
   const publicSite = String(env.PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "");
   const logoUrl = String(
@@ -5499,7 +5504,7 @@ function normalizedMercadoPagoSubscriptionStatus(value) {
 }
 
 function premiumEmailContent(kind, context = {}) {
-  const planName = String(context.planName || "SHOPLAB Premium");
+  const planName = visiblePremiumPlanName(context.planName);
   const amount = Number(context.amountCents || 0)
     ? (Number(context.amountCents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
     : "";
@@ -5507,16 +5512,16 @@ function premiumEmailContent(kind, context = {}) {
     ? new Date(context.accessExpiresAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
     : "";
   const values = {
-    subscription_activated: ["Sua assinatura SHOPLAB Premium está ativa", `Sua assinatura ${planName}${amount ? ` de ${amount} por mês` : ""} foi ativada. Você já pode usar as comparações inteligentes.`],
-    subscription_cancelled: ["Sua assinatura SHOPLAB Premium foi cancelada", `A renovação automática da sua assinatura ${planName} foi cancelada. Nenhuma nova mensalidade será criada por esta assinatura.`],
-    subscription_payment_approved: ["Pagamento da assinatura confirmado", `Recebemos o pagamento${amount ? ` de ${amount}` : ""} da sua assinatura ${planName}. Seu acesso Premium continua ativo.`],
+    subscription_activated: ["Sua assinatura SHOPLAB+ está ativa", `Sua assinatura ${planName}${amount ? ` de ${amount} por mês` : ""} foi ativada. Você já pode usar as comparações inteligentes.`],
+    subscription_cancelled: ["Sua assinatura SHOPLAB+ foi cancelada", `A renovação automática da sua assinatura ${planName} foi cancelada. Nenhuma nova mensalidade será criada por esta assinatura.`],
+    subscription_payment_approved: ["Pagamento da assinatura confirmado", `Recebemos o pagamento${amount ? ` de ${amount}` : ""} da sua assinatura ${planName}. Seu acesso SHOPLAB+ continua ativo.`],
     subscription_payment_rejected: ["Não foi possível renovar sua assinatura", `O pagamento da assinatura ${planName} não foi aprovado. Atualize a forma de pagamento para evitar a interrupção do acesso.`],
-    pass_approved: ["Pagamento confirmado: seu Premium está ativo", `Seu pagamento avulso${amount ? ` de ${amount}` : ""} foi confirmado. O acesso ${planName}${expiry ? ` é válido até ${expiry}` : " está ativo"}.`],
+    pass_approved: ["Pagamento confirmado: seu SHOPLAB+ está ativo", `Seu pagamento avulso${amount ? ` de ${amount}` : ""} foi confirmado. O acesso ${planName}${expiry ? ` é válido até ${expiry}` : " está ativo"}.`],
     pass_rejected: ["O pagamento avulso não foi aprovado", `O pagamento do passe ${planName} não foi aprovado. Você pode tentar novamente com outra forma de pagamento.`],
-    pass_refunded: ["Pagamento do passe Premium estornado", `O pagamento do passe ${planName} foi estornado e o acesso relacionado a ele foi encerrado.`],
-    pass_expiring: ["Seu SHOPLAB Premium expira em breve", `Seu passe ${planName}${expiry ? ` é válido até ${expiry}` : " está perto de vencer"}. Renove pela sua conta caso queira continuar usando as comparações inteligentes.`],
+    pass_refunded: ["Pagamento do passe SHOPLAB+ estornado", `O pagamento do passe ${planName} foi estornado e o acesso relacionado a ele foi encerrado.`],
+    pass_expiring: ["Seu SHOPLAB+ expira em breve", `Seu passe ${planName}${expiry ? ` é válido até ${expiry}` : " está perto de vencer"}. Renove pela sua conta caso queira continuar usando as comparações inteligentes.`],
   };
-  const [subject, message] = values[kind] || ["Atualização do SHOPLAB Premium", "Há uma atualização no seu acesso SHOPLAB Premium."];
+  const [subject, message] = values[kind] || ["Atualização do SHOPLAB+", "Há uma atualização no seu acesso SHOPLAB+."];
   return { subject, message };
 }
 
@@ -5555,7 +5560,7 @@ async function sendPremiumNotification(env, { eventKey, userId, kind, amountCent
         from,
         to: [profile.email],
         subject: content.subject,
-        html: `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlAttribute(content.subject)}</title></head><body style="margin:0;background:#eff7f5;font-family:Arial,sans-serif;color:#173b34"><div style="max-width:600px;margin:0 auto;padding:32px 18px"><div style="padding:32px;border-radius:18px;background:#fff"><p style="margin:0 0 8px;color:#087c70;font-weight:800">SHOPLAB PREMIUM</p><h1 style="font-size:26px">${htmlAttribute(content.subject)}</h1><p>Olá, ${safeName}.</p><p style="line-height:1.6">${safeMessage}</p><p style="margin-top:26px"><a href="${htmlAttribute(accountUrl)}" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#087c70;color:#fff;text-decoration:none;font-weight:700">Ver meu Premium</a></p><p style="margin-top:28px;color:#667b76;font-size:12px">Mensagem automática de segurança da SHOPLAB.</p></div></div></body></html>`,
+        html: `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlAttribute(content.subject)}</title></head><body style="margin:0;background:#eff7f5;font-family:Arial,sans-serif;color:#173b34"><div style="max-width:600px;margin:0 auto;padding:32px 18px"><div style="padding:32px;border-radius:18px;background:#fff"><p style="margin:0 0 8px;color:#087c70;font-weight:800">SHOPLAB+</p><h1 style="font-size:26px">${htmlAttribute(content.subject)}</h1><p>Olá, ${safeName}.</p><p style="line-height:1.6">${safeMessage}</p><p style="margin-top:26px"><a href="${htmlAttribute(accountUrl)}" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#087c70;color:#fff;text-decoration:none;font-weight:700">Ver meu SHOPLAB+</a></p><p style="margin-top:28px;color:#667b76;font-size:12px">Mensagem automática de segurança da SHOPLAB.</p></div></div></body></html>`,
         text: `Olá, ${profile.displayName || "cliente"}. ${content.message} Acesse: ${accountUrl}`,
         tags: [{ name: "category", value: "premium" }],
       }),
@@ -5722,7 +5727,7 @@ async function createPremiumPassPayment(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para pagar", 401, id);
   if (!env.MERCADOPAGO_CHECKOUT_ACCESS_TOKEN && !env.MERCADOPAGO_ACCESS_TOKEN)
-    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento Premium ainda não foi configurado", 503, id);
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento SHOPLAB+ ainda não foi configurado", 503, id);
   const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
   if (current.premium) return ok(req, env, current, id);
   const body = await readJson(req, 30000);
@@ -5868,7 +5873,7 @@ async function createPremiumCheckout(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para assinar", 401, id);
   if (!stripeConfigured(env))
-    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento Premium ainda não foi configurado", 503, id);
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento SHOPLAB+ ainda não foi configurado", 503, id);
   const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
   if (current.premium) return ok(req, env, current, id);
   if (current.status === "pending" && current.subscription?.provider === "stripe" && current.subscription?.checkoutUrl)
@@ -5925,7 +5930,7 @@ async function createPremiumPassCheckout(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para comprar o acesso", 401, id);
   if (!stripeConfigured(env))
-    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento Premium ainda não foi configurado", 503, id);
+    return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento SHOPLAB+ ainda não foi configurado", 503, id);
   const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
   if (current.premium) return ok(req, env, current, id);
   if (current.pendingPass?.providerPreferenceId?.startsWith("cs_") && current.pendingPass?.checkoutUrl)
