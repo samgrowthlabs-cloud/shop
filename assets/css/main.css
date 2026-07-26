@@ -3091,3 +3091,49 @@ body[data-page="home"] .product-rail>.products>.product-card{
   .product-rail-arrow.previous{left:-8px}
   .product-rail-arrow.next{right:-8px}
 }
+
+/* Movimento cinematográfico leve do banner, preservando o enquadramento definido no admin. */
+body[data-page="home"] .home-banner-slide{
+  opacity:0;
+  visibility:hidden;
+  clip-path:inset(0 0 0 3%);
+  filter:brightness(.94) saturate(.94);
+  transform:none;
+  transition:
+    opacity .75s cubic-bezier(.22,1,.36,1),
+    clip-path .9s cubic-bezier(.22,1,.36,1),
+    filter .8s ease,
+    visibility .75s;
+}
+body[data-page="home"] .home-banner-slide.is-active{
+  opacity:1;
+  visibility:visible;
+  clip-path:inset(0);
+  filter:brightness(1) saturate(1);
+}
+body[data-page="home"] .home-banner-slide picture{
+  transform:scale(1.035);
+  transform-origin:center;
+  transition:transform 7s cubic-bezier(.2,.68,.2,1);
+}
+body[data-page="home"] .home-banner-slide.is-active picture{transform:scale(1)}
+body[data-page="home"] .home-banner-slide.is-active .home-banner-bleed{
+  animation:home-banner-breathe 7s cubic-bezier(.2,.68,.2,1) both;
+}
+@keyframes home-banner-breathe{
+  from{opacity:.68;transform:scale(1.13)}
+  to{opacity:.82;transform:scale(1.08)}
+}
+@media(max-width:760px){
+  body[data-page="home"] .home-banner-slide{clip-path:inset(2% 0 0)}
+  body[data-page="home"] .home-banner-slide.is-active{clip-path:inset(0)}
+}
+@media(prefers-reduced-motion:reduce){
+  body[data-page="home"] .home-banner-slide,
+  body[data-page="home"] .home-banner-slide picture,
+  body[data-page="home"] .home-banner-slide.is-active .home-banner-bleed{
+    animation:none!important;
+    transition:none!important;
+    transform:none!important;
+  }
+}
