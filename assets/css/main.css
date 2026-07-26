@@ -1577,7 +1577,7 @@ body[data-page="home"] .home-banner-arrow{
   border:1px solid rgba(255,255,255,.54);
   border-radius:50%;
   background:rgba(3,25,22,.58);
-  color:#fff;
+  color:#fff!important;
   font-size:28px;
   line-height:1;
   opacity:0;
@@ -2394,7 +2394,23 @@ body[data-page="home"] .home-banner-arrow:focus-visible{opacity:1}
   font:900 30px/1 Arial,sans-serif;
   transform:translateY(-50%);
 }
-.mobile-home-logo.is-premium .default-site-logo::after{color:#111}
+.mobile-home-logo.is-premium .default-site-logo::after{content:none}
+.mobile-home-logo.is-premium>.brand-premium-label{
+  position:absolute;
+  top:50%;
+  right:-27px;
+  z-index:3;
+  display:block!important;
+  width:auto;
+  height:auto;
+  border:0;
+  border-radius:0;
+  background:none;
+  color:#111!important;
+  font:900 30px/1 Arial,sans-serif;
+  box-shadow:none;
+  transform:translateY(-53%);
+}
 .mobile-home-logo .default-site-logo img{width:100%!important;height:100%!important;object-fit:contain!important}
 @media(max-width:760px){
   .header{position:sticky!important;top:0!important;z-index:50!important;background:#fff!important;border:0!important;box-shadow:0 1px 0 #e7ecea!important}
