@@ -7,7 +7,7 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-21-premium-search-v1";
+const WORKER_BUILD = "2026-07-26-product-media-hover-v1";
 
 function allowedOrigins(env) {
   return [
@@ -339,6 +339,10 @@ async function route(request, env, ctx, requestId) {
     return adminUserDetail(request, env, path.split("/").pop(), requestId);
   if (request.method === "PUT" && /^\/api\/v1\/admin\/users\/[^/]+\/access$/.test(path))
     return updateAdminUserAccess(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "POST" && /^\/api\/v1\/admin\/users\/[^/]+\/premium-access$/.test(path))
+    return grantAdminUserPremium(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/users\/[^/]+\/premium-access$/.test(path))
+    return revokeAdminUserPremium(request, env, path.split("/").at(-2), requestId);
   if (request.method === "POST" && /^\/api\/v1\/admin\/users\/[^/]+\/rewards$/.test(path))
     return createManualUserReward(request, env, path.split("/").at(-2), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/users\/[^/]+\/rewards\/[^/]+$/.test(path))
@@ -1679,7 +1683,7 @@ async function getProductV2(req, env, slug, id) {
         `SELECT o.id,o.current_price_cents price,o.previous_price_cents oldPrice,o.currency,o.coupon_code coupon,o.installment_text installments,o.shipping_text shipping,o.availability,o.button_text buttonText,o.last_checked_at lastCheckedAt,pa.name store,pa.logo_url storeLogoUrl FROM offers o JOIN partners pa ON pa.id=o.partner_id WHERE o.product_id=? AND o.availability='available' AND (o.starts_at IS NULL OR datetime(o.starts_at)<=CURRENT_TIMESTAMP) AND (o.ends_at IS NULL OR datetime(o.ends_at)>=CURRENT_TIMESTAMP) ORDER BY o.is_primary DESC,o.priority DESC,o.current_price_cents`,
       ).bind(row.id),
       env.DB.prepare(
-        `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
+        `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary,is_hover isHover FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
       ).bind(row.id),
       env.DB.prepare(
         `SELECT a.id,a.name,a.slug,pa.role FROM product_authors pa JOIN authors a ON a.id=pa.author_id WHERE pa.product_id=?`,
@@ -1763,7 +1767,7 @@ async function getProduct(req, env, slug, id) {
       .bind(row.id)
       .all(),
     env.DB.prepare(
-      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
+      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary,is_hover isHover FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
     )
       .bind(row.id)
       .all(),
@@ -3381,7 +3385,7 @@ async function adminProductDetail(req, env, productId, id) {
       `SELECT id,partner_id partnerId,affiliate_url affiliateUrl,current_price_cents currentPriceCents,previous_price_cents previousPriceCents,coupon_code couponCode,availability,button_text buttonText,is_primary isPrimary FROM offers WHERE product_id=? ORDER BY is_primary DESC,priority DESC`,
     ).bind(productId),
     env.DB.prepare(
-      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,is_primary isPrimary,sort_order sortOrder FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
+      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,is_primary isPrimary,is_hover isHover,sort_order sortOrder FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
     ).bind(productId),
     env.DB.prepare(
       `SELECT id,name,logo_url logoUrl FROM partners WHERE is_active=1 ORDER BY name`,
@@ -3527,14 +3531,19 @@ async function updateProductMedia(req, env, mediaId, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const media = await env.DB.prepare(
-    "SELECT id,product_id productId FROM product_media WHERE id=?",
+    "SELECT id,product_id productId,is_primary isPrimary,is_hover isHover FROM product_media WHERE id=?",
   )
     .bind(mediaId)
     .first();
   if (!media)
     return fail(req, env, "MEDIA_NOT_FOUND", "Mídia não encontrada", 404, id);
   const body = await readJson(req, 8192);
-  const isPrimary = Boolean(body.isPrimary);
+  const isPrimary = Object.prototype.hasOwnProperty.call(body, "isPrimary")
+    ? Boolean(body.isPrimary)
+    : Boolean(media.isPrimary);
+  const isHover = Object.prototype.hasOwnProperty.call(body, "isHover")
+    ? Boolean(body.isHover)
+    : Boolean(media.isHover);
   const statements = [];
   if (isPrimary)
     statements.push(
@@ -3542,19 +3551,26 @@ async function updateProductMedia(req, env, mediaId, id) {
         "UPDATE product_media SET is_primary=0 WHERE product_id=?",
       ).bind(media.productId),
     );
+  if (isHover)
+    statements.push(
+      env.DB.prepare(
+        "UPDATE product_media SET is_hover=0 WHERE product_id=?",
+      ).bind(media.productId),
+    );
   statements.push(
     env.DB.prepare(
-      "UPDATE product_media SET alt_text=?,caption=?,is_primary=?,sort_order=? WHERE id=?",
+      "UPDATE product_media SET alt_text=?,caption=?,is_primary=?,is_hover=?,sort_order=? WHERE id=?",
     ).bind(
       String(body.altText || "").slice(0, 250),
       String(body.caption || "").slice(0, 500),
       isPrimary ? 1 : 0,
+      isHover ? 1 : 0,
       Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,
       mediaId,
     ),
   );
   await env.DB.batch(statements);
-  return ok(req, env, { id: mediaId, isPrimary }, id);
+  return ok(req, env, { id: mediaId, isPrimary, isHover }, id);
 }
 
 async function serveMedia(req, env, key) {
@@ -3824,7 +3840,8 @@ async function adminUserDetail(req,env,userId,id){
     env.DB.prepare(`SELECT mr.id,mr.title,mr.reason,mr.status,mr.value_cents valueCents,mr.email_status emailStatus,mr.email_error emailError,mr.delivered_at deliveredAt,mr.redeemed_at redeemedAt,gct.name giftCardType FROM manual_user_rewards mr JOIN gift_card_types gct ON gct.id=mr.gift_card_type_id WHERE mr.user_id=? ORDER BY mr.created_at DESC LIMIT 20`).bind(userId),
   ]);
   const row=profile.results?.[0];if(!row)return fail(req,env,"USER_NOT_FOUND","Usuário não encontrado",404,id);
-  return ok(req,env,{profile:row,shares:shares.results||[],referrals:referrals.results||[],rewards:rewards.results||[],manualRewards:manualRewards.results||[],sessions:sessions.results||[],events:events.results||[],usage:usage.results?.[0]||{},topProducts:topProducts.results||[],analytics:{activityByDay:activityByDay.results||[],eventBreakdown:eventBreakdown.results||[],topSearches:topSearches.results||[],topCategories:topCategories.results||[]}},id);
+  const premium=await premiumSubscriptionData(env,userId);
+  return ok(req,env,{profile:row,premium,shares:shares.results||[],referrals:referrals.results||[],rewards:rewards.results||[],manualRewards:manualRewards.results||[],sessions:sessions.results||[],events:events.results||[],usage:usage.results?.[0]||{},topProducts:topProducts.results||[],analytics:{activityByDay:activityByDay.results||[],eventBreakdown:eventBreakdown.results||[],topSearches:topSearches.results||[],topCategories:topCategories.results||[]}},id);
 }
 
 async function adminUserEvents(req,env,userId,url,id){
@@ -3841,6 +3858,51 @@ async function updateAdminUserAccess(req,env,userId,id){
   const result=await env.DB.prepare(`UPDATE user_profiles SET status=?,blocked_until=?,moderation_note=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).bind(status,until,note,userId).run();
   if(!result.meta.changes)return fail(req,env,"USER_NOT_FOUND","Usuário não encontrado",404,id);
   return ok(req,env,{userId,status,blockedUntil:until},id);
+}
+
+async function grantAdminUserPremium(req,env,userId,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","NÃ£o autorizado",401,id);
+  const body=await readJson(req,4096),days=clamp(body.days,1,3650,30);
+  const profile=await env.DB.prepare(`SELECT email FROM user_profiles WHERE user_id=?`).bind(userId).first();
+  if(!profile)return fail(req,env,"USER_NOT_FOUND","UsuÃ¡rio nÃ£o encontrado",404,id);
+  const current=await env.DB.prepare(
+    `SELECT access_expires_at accessExpiresAt FROM premium_pass_payments
+     WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+     ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
+  ).bind(userId).first();
+  const now=Date.now(),currentExpiry=Date.parse(current?.accessExpiresAt||"");
+  const startsAt=Number.isFinite(currentExpiry)&&currentExpiry>now?currentExpiry:now;
+  const accessExpiresAt=new Date(startsAt+days*86400000).toISOString();
+  const passId=`admin-pass-${crypto.randomUUID()}`,grantedAt=new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO premium_pass_payments(
+      id,user_id,provider_payment_id,status,payer_email,amount_cents,currency,paid_at,access_expires_at,provider_updated_at
+    ) VALUES(?,?,?,'approved',?,1,'BRL',?,?,?)`,
+  ).bind(passId,userId,passId,String(profile.email||"").slice(0,320),grantedAt,accessExpiresAt,grantedAt).run();
+  return ok(req,env,{userId,days,accessExpiresAt,premium:true},id);
+}
+
+async function revokeAdminUserPremium(req,env,userId,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","NÃ£o autorizado",401,id);
+  const paidSubscription=await env.DB.prepare(
+    `SELECT id FROM premium_subscriptions WHERE user_id=? AND status='authorized' LIMIT 1`,
+  ).bind(userId).first();
+  const paidPass=await env.DB.prepare(
+    `SELECT id FROM premium_pass_payments
+     WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+       AND (provider_payment_id IS NULL OR provider_payment_id NOT LIKE 'admin-pass-%')
+     LIMIT 1`,
+  ).bind(userId).first();
+  if(paidSubscription||paidPass)
+    return fail(req,env,"PAID_PREMIUM_ACCESS","O Plus pago nÃ£o pode ser retirado como prÃªmio",409,id);
+  const result=await env.DB.prepare(
+    `UPDATE premium_pass_payments SET status='cancelled',updated_at=CURRENT_TIMESTAMP
+     WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+       AND provider_payment_id LIKE 'admin-pass-%'`,
+  ).bind(userId).run();
+  if(!result.meta.changes)
+    return fail(req,env,"ADMIN_PREMIUM_NOT_FOUND","Este usuÃ¡rio nÃ£o possui Plus concedido pelo Admin",404,id);
+  return ok(req,env,{userId,premium:false,revoked:true},id);
 }
 
 async function adminReferralRewards(req,env,url,id){
@@ -5653,7 +5715,7 @@ async function premiumSubscriptionData(env, userId, { reconcilePending = false }
   }
   const plan = await resolvedPremiumPlan(env);
   let activePass = await env.DB.prepare(
-    `SELECT id,status,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
+    `SELECT id,status,provider_payment_id providerPaymentId,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
      FROM premium_pass_payments WHERE user_id=? AND status='approved'
        AND datetime(access_expires_at)>CURRENT_TIMESTAMP
      ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
@@ -5673,7 +5735,7 @@ async function premiumSubscriptionData(env, userId, { reconcilePending = false }
       else if (pendingPass.providerPaymentId && (env.MERCADOPAGO_CHECKOUT_ACCESS_TOKEN || env.MERCADOPAGO_ACCESS_TOKEN))
         await reconcileMercadoPagoPassPayment(env, pendingPass.providerPaymentId);
       activePass = await env.DB.prepare(
-        `SELECT id,status,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
+        `SELECT id,status,provider_payment_id providerPaymentId,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
          FROM premium_pass_payments WHERE user_id=? AND status='approved'
            AND datetime(access_expires_at)>CURRENT_TIMESTAMP
          ORDER BY datetime(access_expires_at) DESC LIMIT 1`,

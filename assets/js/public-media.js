@@ -6,7 +6,39 @@ async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const 
 const url=m=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}`:m?.externalUrl||'';
 const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
-async function cardMedia(card){if(card.dataset.mediaReady)return;card.dataset.mediaReady='1';const link=card.querySelector('.product-media'),slug=new URL(link.href,location.href).searchParams.get('slug'),data=slug?await getProduct(slug):null,media=data?.media?.find(x=>x.isPrimary)||data?.media?.[0];if(!media||!url(media))return;link.innerHTML=`${card.querySelector('.badge')?.outerHTML||''}<img src="${url(media)}" alt="${safe(media.altText||data.name||'Produto')}" loading="lazy" decoding="async">`}
+async function cardMedia(card){
+  if(card.dataset.mediaSwapReady||card.dataset.mediaSwapLoading)return;
+  card.dataset.mediaSwapLoading='1';
+  const link=card.querySelector('.product-media');
+  if(!link){delete card.dataset.mediaSwapLoading;return}
+  const slug=new URL(link.href,location.href).searchParams.get('slug'),data=slug?await getProduct(slug):null,items=(data?.media||[]).filter(item=>url(item));
+  const primary=items.find(item=>item.isPrimary)||items[0],currentImage=link.querySelector('img'),currentUrl=currentImage?.src||'';
+  if(!currentImage&&primary){
+    link.querySelector('.product-symbol')?.remove();
+    link.insertAdjacentHTML('beforeend',`<img class="product-image-primary" src="${safe(url(primary))}" alt="${safe(primary.altText||data.name||'Produto')}" loading="lazy" decoding="async">`);
+  }else if(currentImage){
+    currentImage.classList.add('product-image-primary');
+  }
+  const mainUrl=primary?new URL(url(primary),location.href).href:currentUrl;
+  const alternate=items.find(item=>item.isHover&&new URL(url(item),location.href).href!==mainUrl)||items.find(item=>new URL(url(item),location.href).href!==mainUrl);
+  if(alternate){
+    link.insertAdjacentHTML('beforeend',`<img class="product-image-alternate" src="${safe(url(alternate))}" alt="${safe(alternate.altText||`${data.name||'Produto'} em outro ângulo`)}" loading="lazy" decoding="async">`);
+    card.classList.add('has-alternate-image');
+  }
+  card.dataset.mediaSwapReady='1';
+  delete card.dataset.mediaSwapLoading;
+}
+
+document.addEventListener('click',event=>{
+  const media=event.target.closest('.product-card.has-alternate-image .product-media');
+  if(!media||!matchMedia('(hover: none), (pointer: coarse)').matches)return;
+  const card=media.closest('.product-card');
+  if(card.classList.contains('show-alternate-image'))return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  document.querySelectorAll('.product-card.show-alternate-image').forEach(item=>item.classList.remove('show-alternate-image'));
+  card.classList.add('show-alternate-image');
+},true);
 
 function renderPromotion(data){const promotion=data?.promotion,host=document.querySelector('.detail > div:last-child');if(!promotion||!host||host.querySelector('.product-promotion'))return;const percent=Number(data.campaignDiscountPercent||data.discount||0),coupon=promotion.couponCode?`<span class="promotion-coupon">Cupom: <b>${safe(promotion.couponCode)}</b></span>`:'';host.querySelector('.offer')?.insertAdjacentHTML('beforebegin',`<aside class="product-promotion"><span class="promotion-kicker">PROMOÇÃO ATIVA · ${percent}% OFF</span><strong>${safe(promotion.name)}</strong>${coupon}<span>Termina em <b class="promotion-countdown" data-ends="${safe(promotion.endsAt)}">calculando...</b></span></aside>`);const counter=host.querySelector('.promotion-countdown');let timer;const update=()=>{const remaining=Math.max(0,new Date(counter.dataset.ends).getTime()-Date.now()),seconds=Math.floor(remaining/1000)%60,minutes=Math.floor(remaining/60000)%60,hours=Math.floor(remaining/3600000)%24,days=Math.floor(remaining/86400000);counter.textContent=remaining?`${days}d ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`:'Promoção encerrada';if(!remaining&&timer)clearInterval(timer)};update();timer=setInterval(update,1000)}
 

@@ -4,10 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Minha conta — SHOPLAB</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=20260721-account-nav-scrollbar-1">
+  <link rel="stylesheet" href="assets/css/main.css?v=20260726-mobile-account-1">
 </head>
 <body data-auth-page="account">
   <header class="header account-site-header">
+    <div class="mobile-home-header">
+      <div class="mobile-home-header-top">
+        <a class="mobile-home-logo" href="index.html" aria-label="SHOPLAB início"><span class="default-site-logo"><img src="assets/img/shoplab-wordmark.png" alt="SHOPLAB" width="1174" height="180"></span></a>
+        <div class="mobile-home-header-actions">
+          <a class="nav-cart" href="#cart" aria-label="Carrinho"><img src="assets/icons/cart.svg" alt=""><span>Carrinho</span><b id="mobile-account-cart-count" hidden>0</b></a>
+          <a class="nav-login" href="#profile" aria-label="Minha conta"><span class="account-avatar" id="mobile-header-account-avatar"><img src="assets/icons/user.svg" alt=""></span><span>Minha conta</span></a>
+        </div>
+      </div>
+      <form class="search mobile-home-search" action="busca.html"><label class="sr-only" for="mobile-account-search">Pesquisar</label><input id="mobile-account-search" name="q" placeholder="O que você está procurando?" autocomplete="off"><button type="submit" aria-label="Pesquisar"><img src="assets/icons/search.svg" alt=""></button></form>
+    </div>
     <div class="container header-row">
       <a class="logo header-brand" href="index.html" aria-label="SHOPLAB início"><span class="brand-images default-site-logo"><img class="brand-image brand-image-main" src="assets/img/shoplab-wordmark.png" alt="SHOPLAB"></span></a>
       <form class="search" action="busca.html"><label class="sr-only" for="account-search">Pesquisar</label><input id="account-search" name="q" placeholder="O que você está procurando?" autocomplete="off"><button type="submit" aria-label="Pesquisar"><img src="assets/icons/search.svg" alt=""></button></form>
@@ -16,6 +26,42 @@
   </header>
 
   <main class="account-dashboard">
+    <section class="mobile-account-overview" aria-labelledby="mobile-account-title">
+      <header class="mobile-account-title">
+        <h1 id="mobile-account-title">Minha conta</h1>
+        <p>Gerencie suas informações, produtos e preferências.</p>
+      </header>
+      <article class="mobile-profile-card">
+        <span class="account-avatar" id="mobile-overview-avatar"></span>
+        <div><strong id="mobile-overview-name">Minha conta</strong><small id="mobile-overview-email"></small><span>● Conta verificada</span></div>
+        <a href="#profile"><img src="assets/icons/user.svg" alt="">Editar perfil</a>
+      </article>
+      <nav class="mobile-account-stats" aria-label="Resumo da conta">
+        <a href="#cart"><img src="assets/icons/cart.svg" alt=""><strong id="mobile-summary-cart">0</strong><span>Itens no carrinho</span></a>
+        <a href="#favorites"><img src="assets/icons/heart.svg" alt=""><strong id="mobile-summary-favorites">0</strong><span>Produtos curtidos</span></a>
+        <a href="#ratings"><img src="assets/icons/star.svg" alt=""><strong id="mobile-summary-ratings">0</strong><span>Avaliações feitas</span></a>
+      </nav>
+      <section class="mobile-account-card">
+        <h2>Acesso rápido</h2>
+        <nav class="mobile-account-links">
+          <a href="#cart"><img src="assets/icons/cart.svg" alt=""><span><strong>Meus produtos</strong><small>Acompanhe seus produtos</small></span><b>›</b></a>
+          <a href="#favorites"><img src="assets/icons/heart.svg" alt=""><span><strong>Favoritos</strong><small>Produtos que você salvou</small></span><b>›</b></a>
+          <a href="#manage-account"><img src="assets/icons/user.svg" alt=""><span><strong>Dados da conta</strong><small>Gerencie seus dados</small></span><b>›</b></a>
+          <a href="#manage-account"><img src="assets/icons/verified.svg" alt=""><span><strong>Segurança</strong><small>Senha e acesso</small></span><b>›</b></a>
+          <a href="#ratings"><img src="assets/icons/star.svg" alt=""><span><strong>Avaliações</strong><small>Suas notas e comentários</small></span><b>›</b></a>
+          <a href="#invites"><img src="assets/icons/gift.svg" alt=""><span><strong>Convites</strong><small>Convide amigos e ganhe</small></span><b>›</b></a>
+        </nav>
+        <a class="mobile-plus-card" href="#premium"><img src="assets/icons/sparkles.svg" alt=""><span><strong>SHOPLAB Plus</strong><small>Tenha acesso a ofertas e análises exclusivas.</small></span><b>Conhecer Plus ›</b></a>
+      </section>
+      <section class="mobile-account-card">
+        <h2>Configurações</h2>
+        <nav class="mobile-settings-links">
+          <a href="#manage-account"><img src="assets/icons/user.svg" alt=""><span><strong>Dados da conta</strong><small>Atualize suas informações pessoais</small></span><b>›</b></a>
+          <a href="#manage-account"><img src="assets/icons/feature.svg" alt=""><span><strong>Notificações</strong><small>Gerencie suas preferências</small></span><b>›</b></a>
+        </nav>
+      </section>
+      <button class="mobile-account-signout" id="mobile-sign-out" type="button"><img src="assets/icons/logout.svg" alt=""><span><strong>Sair da conta</strong><small>Encerrar sessão na SHOPLAB</small></span><b>›</b></button>
+    </section>
     <aside class="account-sidebar" aria-label="Navegação da conta">
       <div class="account-sidebar-title"><span class="account-avatar large" id="sidebar-account-avatar"></span><div><strong id="sidebar-account-name">Minha conta</strong><small id="sidebar-account-email"></small></div></div>
       <nav><a class="active" href="#profile"><img src="assets/icons/user.svg" alt="">Perfil</a><a href="#manage-account"><img src="assets/icons/user.svg" alt="">Gerenciar conta</a><a href="#premium"><img src="assets/icons/sparkles.svg" alt="">Plus</a><a href="#invites"><img src="assets/icons/gift.svg" alt="">Convites e recompensas</a><a href="#cart"><img src="assets/icons/cart.svg" alt="">Carrinho <b id="sidebar-cart-count">0</b></a><a href="#favorites"><img src="assets/icons/heart.svg" alt="">Produtos curtidos</a><a href="#ratings"><img src="assets/icons/star.svg" alt="">Minhas avaliações</a></nav>
@@ -35,6 +81,6 @@
       <section class="account-panel premium-account-panel" id="premium"><div class="account-panel-heading"><div><span class="eyebrow">SHOPLAB+</span><h2>Uma experiência de compra mais inteligente</h2><p>Busca, comparação e recomendações avançadas para você encontrar produtos melhores e fazer escolhas com mais confiança.</p></div></div><div id="premium-subscription" class="premium-subscription" aria-live="polite"><p>Carregando seu plano…</p></div></section>
     </section>
   </main>
-  <script type="module" src="assets/js/auth-page.js?v=20260721-plus-fast-account-1"></script>
+  <script type="module" src="assets/js/auth-page.js?v=20260726-mobile-account-1"></script>
 </body>
 </html>

@@ -11,7 +11,7 @@ export function cachedPremiumBrand(){
 export function setPremiumBrand(active){
   const enabled=Boolean(active);
   try{sessionStorage.setItem(PREMIUM_BRAND_KEY,enabled?'1':'0')}catch{}
-  document.querySelectorAll('.header-brand').forEach(brand=>{
+  document.querySelectorAll('.header-brand,.mobile-home-logo').forEach(brand=>{
     brand.classList.toggle('is-premium',enabled);
     brand.querySelectorAll('.default-site-logo .brand-image-main').forEach(image=>{
       image.src=DEFAULT_WORDMARK;
@@ -68,7 +68,7 @@ export function applySiteTheme(theme){
 }
 
 function themeLogo(theme){
-  const brand=document.querySelector('.header-brand');
+  const brand=document.querySelector('.header-row .header-brand');
   if(!brand||!theme?.logoUrl)return;
   const markup=`<span class="brand-images"><img class="brand-image brand-image-main" src="${esc(theme.logoUrl)}" alt="${esc(theme.logoText||'SHOPLAB')}" width="420" height="72" decoding="async" fetchpriority="high">${theme.logoHoverUrl?`<img class="brand-image brand-image-hover" src="${esc(theme.logoHoverUrl)}" alt="" width="420" height="72" decoding="async">`:''}</span>`;
   const current=brand.querySelector('.brand-images');

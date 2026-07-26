@@ -1,6 +1,7 @@
 import'./favicon.js';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
+import'./search-ui.js?v=20260726-mobile-search-1';
 import{syncAccountLibrary,setCart}from'./user-library.js';
-import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260721-shoplab-plus-logo-2';
+import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260726-mobile-header-4';
 import{SHOPLAB_CONFIG}from'./config.js';
 const $=selector=>document.querySelector(selector),page=document.body.dataset.authPage;
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -67,10 +68,12 @@ async function account(){
   const accountNav=$('.account-sidebar nav');const highlightAccountSection=()=>{const section=location.hash||'#profile';accountNav?.querySelectorAll('a[href^="#"]').forEach(link=>link.classList.toggle('active',link.getAttribute('href')===section))};highlightAccountSection();window.addEventListener('hashchange',highlightAccountSection);
   const displayName=profile.displayName||user.user_metadata?.display_name||user.email?.split('@')[0]||'Minha conta',initials=displayName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase(),avatar=user.user_metadata?.avatar_url||user.user_metadata?.picture||'';
   const paintAvatar=id=>{const target=$(id);if(target)target.innerHTML=avatar?`<img src="${esc(avatar)}" alt="Foto de ${esc(displayName)}" referrerpolicy="no-referrer">`:`<b>${esc(initials)}</b>`};
-  ['#header-account-avatar','#sidebar-account-avatar','#profile-account-avatar'].forEach(paintAvatar);
+  ['#header-account-avatar','#mobile-header-account-avatar','#mobile-overview-avatar','#sidebar-account-avatar','#profile-account-avatar'].forEach(paintAvatar);
   ['#header-account-name','#sidebar-account-name','#account-welcome-name'].forEach(selector=>{const target=$(selector);if(target)target.textContent=selector==='#account-welcome-name'?`Olá, ${displayName.split(' ')[0]}!`:displayName});
   $('#sidebar-account-email').textContent=user.email||'';
   $('#account-email').textContent=user.email;
+  $('#mobile-overview-name').textContent=displayName;
+  $('#mobile-overview-email').textContent=user.email||'';
   $('#account-new-email').value=user.email||'';
   $('#display-name').value=displayName;
   $('#favorites-list').innerHTML=rows(library.favorites||[],'favorites');
@@ -78,13 +81,14 @@ async function account(){
   $('#cart-list').innerHTML=rows(library.cart||[],'cart');
   const referral=await userApi('referrals').catch(()=>null);if(referral){const target=$('#referral-summary'),progress=referral.nextMilestone?Math.min(100,Math.round(referral.qualified/referral.nextMilestone*100)):100;target.innerHTML=`<div class="referral-numbers"><strong>${referral.qualified}</strong><span>convites qualificados</span><strong>${referral.pending}</strong><span>em validação</span></div><div class="referral-progress"><span style="width:${progress}%"></span></div><p>${referral.nextMilestone?`Faltam ${Math.max(0,referral.nextMilestone-referral.qualified)} para solicitar a recompensa de ${referral.nextMilestone} convites.`:'Você alcançou todas as metas disponíveis.'}</p><small>${esc(referral.rules)}</small>${(referral.rewards||[]).map(item=>`<div class="referral-reward"><b>Meta de ${item.milestone}</b><span>${esc(item.status)}</span></div>`).join('')}`}
   const counts={cart:(library.cart||[]).length,favorites:(library.favorites||[]).length,ratings:(library.ratings||[]).length};
-  ['#account-cart-count','#sidebar-cart-count','#summary-cart-count'].forEach(selector=>{const target=$(selector);if(target){target.textContent=counts.cart;target.hidden=!counts.cart&&selector==='#account-cart-count'}});$('#summary-favorites-count').textContent=counts.favorites;$('#summary-ratings-count').textContent=counts.ratings;
+  ['#account-cart-count','#mobile-account-cart-count','#mobile-summary-cart','#sidebar-cart-count','#summary-cart-count'].forEach(selector=>{const target=$(selector);if(target){target.textContent=counts.cart;target.hidden=!counts.cart&&['#account-cart-count','#mobile-account-cart-count'].includes(selector)}});$('#summary-favorites-count').textContent=counts.favorites;$('#summary-ratings-count').textContent=counts.ratings;$('#mobile-summary-favorites').textContent=counts.favorites;$('#mobile-summary-ratings').textContent=counts.ratings;
   $('#account-form').onsubmit=async event=>{event.preventDefault();try{await apiProfile({method:'PUT',body:JSON.stringify({displayName:$('#display-name').value})});message('Perfil salvo.','success')}catch(error){message(error.message)}};
   $('#account-email-form').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button'),email=$('#account-new-email').value.trim();if(email.toLowerCase()===String(user.email||'').toLowerCase()){securityMessage('Esse já é o e-mail atual da sua conta.');return}button.disabled=true;try{await updateAccountCredentials({email});securityMessage('Solicitação enviada. Confirme a alteração pelos e-mails enviados pela SHOPLAB.','success')}catch(error){securityMessage(error.message)}finally{button.disabled=false}};
   $('#account-password-form').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button'),password=$('#account-new-password').value,confirmation=$('#account-confirm-password').value;if(password!==confirmation){securityMessage('As senhas não coincidem. Digite a mesma senha nos dois campos.');return}if(password.length<8){securityMessage('A nova senha precisa ter pelo menos 8 caracteres.');return}button.disabled=true;try{await updateAccountCredentials({password});event.currentTarget.reset();securityMessage('Senha alterada com sucesso.','success')}catch(error){securityMessage(error.message)}finally{button.disabled=false}};
   $('#manage-sign-out').onclick=async()=>{await signOut();location.replace('entrar.html')};
-  $('#cart-list').onclick=async event=>{const button=event.target.closest('[data-remove-cart]');if(!button)return;await setCart(button.dataset.removeCart,0);button.closest('article').remove();counts.cart=Math.max(0,counts.cart-1);['#account-cart-count','#sidebar-cart-count','#summary-cart-count'].forEach(selector=>{const target=$(selector);if(target){target.textContent=counts.cart;target.hidden=!counts.cart&&selector==='#account-cart-count'}});if(!$('#cart-list article'))$('#cart-list').innerHTML=rows([],'cart')};
+  $('#cart-list').onclick=async event=>{const button=event.target.closest('[data-remove-cart]');if(!button)return;await setCart(button.dataset.removeCart,0);button.closest('article').remove();counts.cart=Math.max(0,counts.cart-1);['#account-cart-count','#mobile-account-cart-count','#mobile-summary-cart','#sidebar-cart-count','#summary-cart-count'].forEach(selector=>{const target=$(selector);if(target){target.textContent=counts.cart;target.hidden=!counts.cart&&['#account-cart-count','#mobile-account-cart-count'].includes(selector)}});if(!$('#cart-list article'))$('#cart-list').innerHTML=rows([],'cart')};
   $('#sign-out').onclick=async()=>{await signOut();location.replace('index.html')};
+  $('#mobile-sign-out').onclick=async()=>{await signOut();location.replace('index.html')};
 }
 
 async function enhanceReferralGiftCards(){
