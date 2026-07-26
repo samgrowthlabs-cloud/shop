@@ -71,6 +71,24 @@ function renderProductInformation(data){
   const description=document.querySelector('.product-description-section');if(description)information.insertAdjacentElement('afterend',description);
 }
 
+async function renderPremiumProductInsight(data){
+  if(!data||!session()||document.querySelector('.premium-product-insight'))return;
+  const anchor=document.querySelector('.product-description-section')||document.querySelector('.product-information-sections')||document.querySelector('#conteudo > .section.alt');
+  if(!anchor)return;
+  const section=document.createElement('section');section.className='section premium-product-insight is-loading';
+  section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Preparando uma conclusão personalizada…</p></div>';
+  anchor.insertAdjacentElement('afterend',section);
+  try{
+    const insight=await userApi(`products/${encodeURIComponent(data.slug)}/plus-insight`);
+    if(insight.premiumRequired){section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso.</p><a class="btn primary" href="conta.html#premium">Conhecer o SHOPLAB+</a></div>`;return}
+    if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+</span><h2>Limite mensal de novas análises atingido</h2><p>Análises já salvas em cache continuam disponíveis. Consulte seu plano para acompanhar a renovação da cota.</p><a class="btn ghost" href="conta.html#premium">Ver meu plano</a></div>';return}
+    if(!insight.conclusion?.length){section.remove();return}
+    const lines=value=>`<div>${(value||[]).map(item=>`<p>${safe(item)}</p>`).join('')}</div>`;
+    section.className='section premium-product-insight';
+    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2></div><small>${insight.cacheHit?'Análise personalizada salva':'Nova análise personalizada'}</small></div><article class="premium-insight-conclusion"><h3>Conclusão da IA</h3>${lines(insight.conclusion)}</article><div class="premium-insight-grid"><article><span>01</span><h3>Para quem é este produto</h3>${lines(insight.bestFor)}</article><article><span>02</span><h3>Como ele pode ajudar</h3>${lines(insight.howItHelps)}</article></div><small class="premium-insight-disclaimer">Análise baseada nos dados cadastrados do produto e nas suas preferências de uso. Confirme informações importantes com o fabricante.</small></div>`;
+  }catch{section.remove()}
+}
+
 function openGallery(items,startIndex,name){
   let index=Math.max(0,Math.min(startIndex,items.length-1));
   const modal=document.createElement('div');modal.className='image-viewer';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Galeria de imagens do produto');
@@ -85,7 +103,7 @@ function openGallery(items,startIndex,name){
 
 async function detailMedia(){
   const box=document.querySelector('.detail-media');if(!box||box.dataset.mediaReady)return;box.dataset.mediaReady='1';
-  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;
+  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);renderPremiumProductInsight(data);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;
   const main=items.find(x=>x.isPrimary)||items[0],mainIndex=items.indexOf(main),visible=items.slice(0,4);
   const thumbs=visible.map((item,index)=>{const remaining=items.length-3,isMore=items.length>4&&index===3;return `<button type="button" class="${item.id===main.id?'active':''} ${isMore?'more-images':''}" data-index="${index}" aria-label="${isMore?`Ver mais ${remaining} imagens`:`Ver imagem ${index+1}`}"><img src="${url(item)}" alt="" loading="lazy">${isMore?`<span>+${remaining}</span>`:''}</button>`}).join('');
   box.innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${url(main)}" alt="${safe(main.altText||data.name||'Produto')}"></button>${items.length>1?`<div class="detail-thumbs">${thumbs}</div>`:''}`;

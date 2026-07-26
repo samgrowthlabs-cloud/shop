@@ -194,6 +194,15 @@ CREATE TABLE IF NOT EXISTS comparison_analysis_cache (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS premium_product_insight_cache (
+  cache_key TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  insight_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS premium_subscriptions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL UNIQUE,
@@ -267,6 +276,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON admin_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_banners_active_period ON banners(is_active, starts_at, ends_at, sort_order);
 CREATE INDEX IF NOT EXISTS idx_header_spotlights_active ON header_spotlights(is_active, starts_at, ends_at, sort_order);
 CREATE INDEX IF NOT EXISTS idx_comparison_analysis_cache_updated ON comparison_analysis_cache(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_premium_product_insight_user ON premium_product_insight_cache(user_id,updated_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_only_one_active_seasonal_theme ON seasonal_themes(is_active) WHERE is_active=1;
 
 INSERT OR IGNORE INTO categories (id,name,slug,icon,sort_order) VALUES

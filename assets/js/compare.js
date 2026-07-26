@@ -121,6 +121,29 @@ function renderPremiumComparisonState(analysis) {
   return `<section class="container comparison-premium-gate"><span class="eyebrow">ANÁLISE INTELIGENTE SHOPLAB+</span><h2>Entenda melhor as diferenças com IA</h2><p>A comparação técnica abaixo continua gratuita. Com SHOPLAB+, a análise interpreta campos com nomes diferentes e explica qual produto é melhor para cada tipo de uso.</p><div><a class="btn primary" href="conta.html#premium">Assinar por ${money(plan.amountCents || 990)}/mês</a><span>${Number(plan.aiMonthlyLimit || 50)} novas análises por mês</span></div></section>`;
 }
 
+function applyComparisonPaywall(analysis,products=[]) {
+  const shell=document.querySelector('.comparison-shell');
+  if(!shell||shell.querySelector('.comparison-paywall'))return;
+  shell.classList.remove('is-access-checking');
+  shell.classList.add('is-premium-locked');
+  if(products.length){
+    const teaser=document.createElement('div');teaser.className='comparison-mobile-teaser';
+    teaser.innerHTML=`<span>Prévia da comparação</span><div>${products.map(product=>`<article>${mediaUrl(product)?`<img src="${safe(mediaUrl(product))}" alt="${safe(product.name)}">`:''}<strong>${safe(product.name)}</strong><small>${safe(product.brand||product.category||'Produto')}</small><b>${money(product.price)}</b></article>`).join('')}</div>`;
+    shell.prepend(teaser);
+  }
+  const plan=analysis.plan||{},gate=document.createElement('aside');
+  gate.className='comparison-paywall';
+  gate.innerHTML=`<span class="eyebrow">COMPARAÇÃO COMPLETA SHOPLAB+</span><h2>Continue para ver toda a comparação</h2><p>Desbloqueie a ficha completa, os vencedores de cada critério e o veredito personalizado da IA.</p><ul><li>Comparação completa de especificações</li><li>Melhor opção para cada tipo de uso</li><li>Conclusão e custo-benefício analisados por IA</li></ul><a class="btn primary" href="conta.html#premium">Assinar por ${money(plan.amountCents||990)}/mês</a><small>${Number(plan.aiMonthlyLimit||50)} novas análises inteligentes por mês</small>`;
+  shell.append(gate);
+  document.querySelector('.comparison-actions')?.classList.add('is-premium-locked');
+}
+
+function prepareComparisonAccessCheck(attempt=0){
+  const shell=document.querySelector('.comparison-shell');
+  if(!shell&&attempt<200){setTimeout(()=>prepareComparisonAccessCheck(attempt+1),20);return}
+  shell?.classList.add('is-access-checking');
+}
+
 function showComparisonFallbackWhenReady(products, attempt = 0) {
   const insight = document.querySelector('#comparison-intelligence-slot');
   if (!insight && attempt < 400) {
@@ -128,6 +151,7 @@ function showComparisonFallbackWhenReady(products, attempt = 0) {
     return;
   }
   if (!insight) return;
+  document.querySelector('.comparison-shell')?.classList.remove('is-access-checking');
   insight.innerHTML = `<section class="container comparison-loading comparison-loading-fallback"><div class="comparison-loading-copy"><span class="eyebrow">COMPARAÇÃO TÉCNICA DISPONÍVEL</span><h2>Os dados principais estão prontos</h2><p>A análise inteligente detalhada não ficou disponível agora, mas você pode comparar normalmente os preços e as fichas técnicas abaixo.</p></div></section>`;
 }
 
@@ -168,9 +192,13 @@ function applyComparisonAnalysisWhenReady(analysis, products, attempt = 0) {
     return;
   }
   if (!insight || !rows) return;
-  insight.innerHTML = analysis.premiumRequired || analysis.quotaExceeded
-    ? renderPremiumComparisonState(analysis)
-    : renderRecommendations(analysis, products);
+  if(analysis.premiumRequired){
+    insight.innerHTML='';
+    applyComparisonPaywall(analysis,products);
+  }else{
+    document.querySelector('.comparison-shell')?.classList.remove('is-access-checking');
+    insight.innerHTML=analysis.quotaExceeded?renderPremiumComparisonState(analysis):renderRecommendations(analysis,products);
+  }
   if (analysis.criteria?.length) rows.innerHTML = renderSpecificationRows(analysis.criteria, products);
 }
 
@@ -194,6 +222,7 @@ function requestComparisonAnalysis(slugs, products, attempt = 0, runId = compari
 function startComparisonAnalysis(slugs, products) {
   activeComparison = { slugs: [...slugs], products };
   comparisonRunId += 1;
+  prepareComparisonAccessCheck();
   requestComparisonAnalysis(slugs, products, 0, comparisonRunId);
 }
 
@@ -218,7 +247,7 @@ export async function comparisonPage() {
   const bestPrice = Math.min(...products.map(product => Number(product.price || Infinity)));
   const bestScore = Math.max(...products.map(product => Number(product.editorialScore ?? product.score ?? 0)));
   const cells = render => products.map(render).join('');
-  const specificationRows = renderSpecificationRows(criteria, products);
+  const specificationRows = '';
   startComparisonAnalysis(slugs, products);
 
   return `<main id="conteudo" class="comparison-page"><div class="container page-hero"><span class="eyebrow">COMPARADOR SHOPLAB · ${safe(category)}</span><h1 class="page-title">Compare antes de escolher</h1><p class="muted">A SHOPLAB reconhece especificações equivalentes e explica as diferenças mais importantes.</p></div><div id="comparison-intelligence-slot">${renderComparisonLoading()}</div><section class="container comparison-shell" aria-label="Comparação de produtos"><table class="comparison-table"><thead><tr><th>Critério</th>${cells(product => `<th><a href="produto.html?slug=${encodeURIComponent(product.slug)}">${mediaUrl(product) ? `<img src="${safe(mediaUrl(product))}" alt="${safe(product.name)}" loading="lazy" decoding="async">` : ''}<strong>${safe(product.name)}</strong></a><button type="button" data-remove-comparison="${safe(product.slug)}">Remover</button></th>`)}</tr></thead><tbody><tr><th>Preço atual</th>${cells(product => `<td class="${Number(product.price) === bestPrice ? 'comparison-best' : ''}"><strong>${money(product.price)}</strong>${Number(product.price) === bestPrice ? '<small>Melhor preço</small>' : ''}</td>`)}</tr><tr><th>Nota SHOPLAB</th>${cells(product => { const score = Number(product.editorialScore ?? product.score ?? 0); return `<td class="${score === bestScore ? 'comparison-best' : ''}"><strong>${score}/100 ${Number(product.isFeatured) ? '<span class="owner-recommended">★</span>' : ''}</strong>${score === bestScore ? '<small>Maior nota</small>' : ''}</td>`; })}</tr><tr><th>Marca</th>${cells(product => `<td>${safe(product.brand || '—')}</td>`)}</tr></tbody><tbody id="comparison-specification-rows">${specificationRows}</tbody><tbody><tr><th>Ver produto</th>${cells(product => `<td><a class="btn primary" href="produto.html?slug=${encodeURIComponent(product.slug)}">Ver detalhes</a></td>`)}</tr></tbody></table></section><div class="container comparison-actions"><a class="btn ghost" href="produtos.html">Adicionar ou trocar produtos</a><button class="btn ghost" type="button" data-clear-comparison>Limpar comparação</button></div></main>`;

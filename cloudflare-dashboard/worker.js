@@ -7,7 +7,7 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-26-product-media-hover-v1";
+const WORKER_BUILD = "2026-07-26-premium-related-products-v4";
 
 function allowedOrigins(env) {
   return [
@@ -168,6 +168,8 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_POSITION_MIGRATION_REQUIRED",message:"Execute category-image-position-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*comparison_analysis_cache/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"COMPARISON_CACHE_MIGRATION_REQUIRED",message:"Execute comparison-analysis-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*premium_product_insight_cache/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_PRODUCT_INSIGHT_CACHE_MIGRATION_REQUIRED",message:"Execute premium-product-insight-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*(?:premium_subscriptions|premium_ai_usage|premium_pass_payments|premium_notification_log)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_SUBSCRIPTIONS_MIGRATION_REQUIRED",message:"Execute premium-subscriptions-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*premium_settings/i.test(detail))
@@ -303,6 +305,8 @@ async function route(request, env, ctx, requestId) {
     return cancelPremiumSubscription(request, env, requestId);
   if (path === "/api/v1/user/library" && request.method === "GET")
     return userLibrary(request, env, requestId);
+  if (request.method === "GET" && /^\/api\/v1\/user\/products\/[^/]+\/plus-insight$/.test(path))
+    return premiumProductInsight(request, env, ctx, decodeURIComponent(path.split("/").at(-2)), requestId);
   if (path === "/api/v1/user/recommendations" && request.method === "GET")
     return personalizedRecommendations(request, env, requestId);
   if (path === "/api/v1/user/history/sync" && request.method === "POST")
@@ -846,7 +850,13 @@ async function trendingProducts(req, env, url, id) {
 
 async function relatedProducts(req, env, slug, id) {
   const source = await env.DB.prepare(
-    `SELECT id,name,slug,category_id categoryId,brand_id brandId,product_type productType,short_description shortDescription,full_description fullDescription,target_audience targetAudience,tags_json tagsJson,specifications_json specificationsJson,editorial_score editorialScore FROM products WHERE slug=? AND status='published'`,
+    `SELECT p.id,p.name,p.slug,p.category_id categoryId,p.brand_id brandId,p.product_type productType,c.name category,b.name brand,
+      p.short_description shortDescription,p.full_description fullDescription,p.target_audience targetAudience,
+      p.tags_json tagsJson,p.specifications_json specificationsJson,p.editorial_score editorialScore,p.updated_at updatedAt,
+      COALESCE(o.current_price_cents,p.base_price_cents) price
+     FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+     LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
+     WHERE p.slug=? AND p.status='published'`,
   )
     .bind(slug)
     .first();
@@ -877,7 +887,7 @@ async function relatedProducts(req, env, slug, id) {
       MAX(0,12-ABS(COALESCE(p.editorial_score,50)-COALESCE(?,50))*0.3)+
       COALESCE(activity.clicks,0)*4+MIN(COALESCE(activity.views,0),20)*0.5+
       COALESCE(p.editorial_score,0)*0.08
-    ) DESC,p.updated_at DESC LIMIT 30`,
+    ) DESC,p.updated_at DESC LIMIT 60`,
   )
     .bind(
       source.id,
@@ -886,18 +896,40 @@ async function relatedProducts(req, env, slug, id) {
       source.brandId,
       source.productType,
       source.editorialScore,
-    )
+  )
     .all();
-  const candidates = results.map(normalizeProduct);
-  const aiRanked = await rankRelatedProductsWithAi(env, source, candidates);
-  const response = ok(req, env, (aiRanked || candidates).slice(0, 8), id, {
-    strategy: aiRanked
-      ? "ai-context+manual+category+brand+type+score+activity"
+  let candidates = results.map(normalizeProduct);
+  const user = await activeUser(req, env);
+  const premium = user ? await premiumSubscriptionData(env, user.id) : null;
+  let premiumRanked = null;
+  let premiumAiRanked = false;
+  if (premium?.premium && candidates.length) {
+    const placeholders = candidates.map(() => "?").join(",");
+    const details = await env.DB.prepare(
+      `SELECT id,full_description fullDescription,target_audience targetAudience,
+        specifications_json specificationsJson,tags_json tagsJson FROM products WHERE id IN (${placeholders})`,
+    ).bind(...candidates.map((product) => product.id)).all();
+    const detailById = new Map((details.results || []).map((product) => [product.id, product]));
+    candidates = candidates.map((product) => ({ ...product, ...(detailById.get(product.id) || {}) }));
+    const eligible = premiumRelatedCandidatePool(source, candidates);
+    const aiRecommendations = await rankPremiumRelatedProductsWithAi(env, source, eligible);
+    const safeRecommendations = fallbackPremiumRelatedProducts(source, eligible);
+    premiumAiRanked = Boolean(aiRecommendations?.length);
+    const mergedRecommendations = mergePremiumRelatedProducts(aiRecommendations || [], safeRecommendations).slice(0, 4);
+    premiumRanked = mergedRecommendations.length ? mergedRecommendations : null;
+  }
+  const responseProducts = premium?.premium ? (premiumRanked || []) : candidates;
+  const response = ok(req, env, responseProducts.slice(0, premium?.premium ? 4 : 8), id, {
+    strategy: premiumRanked?.length
+      ? premiumAiRanked
+        ? "shoplab-plus-direct-alternatives-ai"
+        : "shoplab-plus-direct-alternatives-safe"
       : "manual+category+brand+type+score+activity",
-    aiRanked: Boolean(aiRanked),
+    aiRanked: premiumAiRanked,
+    premiumRecommendations: Boolean(premiumRanked?.length),
     candidatesEvaluated: candidates.length,
   });
-  response.headers.set("cache-control", "public, max-age=300");
+  response.headers.set("cache-control", premium?.premium ? "private, max-age=60" : "public, max-age=300");
   return response;
 }
 
@@ -912,6 +944,29 @@ const RELATED_PRODUCTS_SCHEMA = {
   },
   required: ["productIds"],
   additionalProperties: false,
+};
+
+const PREMIUM_RELATED_PRODUCTS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    recommendations: {
+      type: "array",
+      minItems: 1,
+      maxItems: 8,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          productId: { type: "string" },
+          relationType: { type: "string", enum: ["cheaper_equivalent", "more_performance", "best_value", "very_similar"] },
+          reason: { type: "string" },
+        },
+        required: ["productId", "relationType", "reason"],
+      },
+    },
+  },
+  required: ["recommendations"],
 };
 
 const PRODUCT_COMPARISON_SCHEMA = {
@@ -1482,6 +1537,123 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
   }
 }
 
+async function premiumProductInsight(req, env, ctx, slug, id) {
+  const user = await activeUser(req, env);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para acessar a análise SHOPLAB+", 401, id);
+  const premium = await premiumSubscriptionData(env, user.id);
+  if (!premium.premium)
+    return ok(req, env, { premium: false, premiumRequired: true, plan: premium.plan }, id);
+  const product = await env.DB.prepare(
+    `SELECT p.id,p.slug,p.name,p.product_type productType,p.short_description shortDescription,
+      p.full_description fullDescription,p.editorial_review editorialReview,p.editorial_score editorialScore,
+      p.specifications_json specificationsJson,p.updated_at updatedAt,c.name category,b.name brand,
+      COALESCE(o.current_price_cents,p.base_price_cents) price
+     FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+     LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
+     WHERE p.slug=? AND p.status='published'`,
+  ).bind(slug).first();
+  if (!product) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, id);
+  const [profileResult, categoryResult, searchResult, viewedResult] = await env.DB.batch([
+    env.DB.prepare(`SELECT display_name displayName FROM user_profiles WHERE user_id=?`).bind(user.id),
+    env.DB.prepare(
+      `SELECT c.name,COUNT(*) score FROM events e JOIN products p ON p.slug=e.product_slug
+       LEFT JOIN categories c ON c.id=p.category_id WHERE e.user_id=? AND e.created_at>=datetime('now','-90 days')
+       GROUP BY c.name ORDER BY score DESC LIMIT 5`,
+    ).bind(user.id),
+    env.DB.prepare(
+      `SELECT query_text queryText,COUNT(*) score FROM events WHERE user_id=? AND query_text IS NOT NULL
+       AND query_text<>'' AND created_at>=datetime('now','-90 days')
+       GROUP BY query_text ORDER BY score DESC LIMIT 5`,
+    ).bind(user.id),
+    env.DB.prepare(
+      `SELECT p.name,c.name category FROM user_view_history h JOIN products p ON p.slug=h.product_slug
+       LEFT JOIN categories c ON c.id=p.category_id WHERE h.user_id=? ORDER BY h.viewed_at DESC LIMIT 6`,
+    ).bind(user.id),
+  ]);
+  const context = {
+    displayName: profileResult.results?.[0]?.displayName || "",
+    topCategories: (categoryResult.results || []).map((item) => item.name).filter(Boolean),
+    searches: (searchResult.results || []).map((item) => item.queryText).filter(Boolean),
+    recentlyViewed: (viewedResult.results || []).map((item) => ({ name: item.name, category: item.category })),
+  };
+  const version = await sha256(`premium-product-insight-v1|${user.id}|${product.id}|${product.updatedAt}|${JSON.stringify(context)}`);
+  const cached = await env.DB.prepare(
+    `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
+  ).bind(version, user.id).first();
+  if (cached?.insightJson) {
+    try {
+      return ok(req, env, { ...JSON.parse(cached.insightJson), premium: true, cacheHit: true, usage: premium.usage }, id);
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "premium_product_insight_cache_invalid", cacheKey: version, error: String(error?.message || error) }));
+    }
+  }
+  if (!env.AI) return ok(req, env, { premium: true, unavailable: true, usage: premium.usage }, id);
+  const usage = await reservePremiumAiGeneration(env, user.id);
+  if (!usage.allowed) return ok(req, env, { premium: true, quotaExceeded: true, usage }, id);
+  try {
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        conclusion: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" } },
+        bestFor: { type: "array", minItems: 2, maxItems: 3, items: { type: "string" } },
+        howItHelps: { type: "array", minItems: 2, maxItems: 3, items: { type: "string" } },
+      },
+      required: ["conclusion", "bestFor", "howItHelps"],
+    };
+    const result = await env.AI.run(String(env.PREMIUM_PRODUCT_INSIGHT_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8"), {
+      messages: [
+        { role: "system", content: "Você cria análises personalizadas SHOPLAB+ em português brasileiro. Use somente os dados fornecidos. Não invente desempenho, recursos ou resultados. Cada item deve ser uma linha curta, clara e útil. A conclusão deve ter 3 ou 4 linhas; para quem é e como ajuda devem ter 2 ou 3 linhas cada. Considere o histórico apenas para personalizar a adequação, sem mencioná-lo diretamente nem expor dados do usuário. Retorne somente o JSON solicitado." },
+        { role: "user", content: JSON.stringify({
+          product: {
+            name: product.name, category: product.category, brand: product.brand, priceCents: product.price,
+            shortDescription: product.shortDescription, fullDescription: String(product.fullDescription || "").slice(0, 3000),
+            editorialReview: String(product.editorialReview || "").slice(0, 1800),
+            editorialScore: product.editorialScore, specifications: parse(product.specificationsJson, []).slice(0, 24),
+          },
+          userContext: context,
+        }) },
+      ],
+      response_format: { type: "json_schema", json_schema: schema },
+      temperature: 0.2,
+      max_tokens: 700,
+    }, {
+      gateway: {
+        id: String(env.AI_GATEWAY_ID || "default"),
+        skipCache: false,
+        cacheTtl: 2592000,
+        cacheKey: `premium-product-insight-v1:${version}`,
+        collectLog: true,
+        metadata: { feature: "premium-product-insight", productSlug: product.slug },
+      },
+    });
+    const raw = result?.response && typeof result.response === "object"
+      ? result.response
+      : JSON.parse(String(result?.response || "{}").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+    const lines = (value, minimum, maximum) => (Array.isArray(value) ? value : [])
+      .map((item) => String(item || "").trim().slice(0, 260)).filter(Boolean).slice(0, maximum)
+      .filter((_, index, array) => array.length >= minimum || index < array.length);
+    const insight = {
+      conclusion: lines(raw.conclusion, 3, 4),
+      bestFor: lines(raw.bestFor, 2, 3),
+      howItHelps: lines(raw.howItHelps, 2, 3),
+    };
+    if (insight.conclusion.length < 3 || insight.bestFor.length < 2 || insight.howItHelps.length < 2)
+      throw new Error("PREMIUM_PRODUCT_INSIGHT_INCOMPLETE");
+    await env.DB.prepare(
+      `INSERT INTO premium_product_insight_cache(cache_key,user_id,product_id,insight_json)
+       VALUES(?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET insight_json=excluded.insight_json,updated_at=CURRENT_TIMESTAMP`,
+    ).bind(version, user.id, product.id, JSON.stringify(insight)).run();
+    return ok(req, env, { ...insight, premium: true, cacheHit: false, usage }, id);
+  } catch (error) {
+    await env.DB.prepare(
+      `UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`,
+    ).bind(user.id, usage.period).run();
+    console.warn(JSON.stringify({ event: "premium_product_insight_failed", productSlug: slug, error: String(error?.message || error) }));
+    return ok(req, env, { premium: true, generationFailed: true, usage: { ...usage, used: Math.max(0, usage.used - 1), remaining: Math.min(usage.limit, usage.remaining + 1) } }, id);
+  }
+}
+
 async function reservePremiumAiGeneration(env, userId) {
   const plan = await resolvedPremiumPlan(env);
   const period = premiumPeriodKey();
@@ -1522,7 +1694,31 @@ async function analyzeProductComparison(req, env, ctx, id) {
     plan: premium.plan,
     usage: premium.usage,
   };
-  if (!premium.premium) return ok(req, env, technicalResult, id);
+  if (!premium.premium) {
+    const teaserCriteria = (fallback.criteria || []).slice(0, 2).map((criterion) => ({
+      label: criterion.label,
+      explanation: "",
+      winnerSlugs: [],
+      values: (criterion.values || []).map((value) => ({
+        productSlug: value.productSlug,
+        rawValue: value.rawValue,
+        displayValue: value.displayValue,
+        assessment: "neutral",
+        note: "",
+      })),
+    }));
+    return ok(req, env, {
+      algorithm: "public-comparison-teaser-v1",
+      summary: "A comparação foi iniciada. Assine o SHOPLAB+ para acessar todos os critérios, vencedores e o veredito da IA.",
+      criteria: teaserCriteria,
+      lockedCriteriaCount: Math.max(0, (fallback.criteria || []).length - teaserCriteria.length),
+      premium: false,
+      premiumRequired: true,
+      subscriptionStatus: premium.status,
+      plan: premium.plan,
+      usage: premium.usage,
+    }, id);
+  }
   const hasComparisonContext = products.some((product) =>
     product.specifications.length ||
     String(product.shortDescription || "").trim() ||
@@ -1592,6 +1788,212 @@ async function analyzeProductComparison(req, env, ctx, id) {
     }, id);
   }
   return ok(req, env, { ...fallback, premium: true, processing: true, usage: premium.usage }, id);
+}
+
+function premiumRelationText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function premiumProductFamily(product) {
+  const value = premiumRelationText([
+    product.name,
+    product.productType,
+    product.category,
+    product.shortDescription,
+  ].join(" "));
+  const families = [
+    ["notebook", /\b(notebook|laptop|ultrabook|macbook|vivobook|chromebook|galaxy book)\b/],
+    ["smartphone", /\b(smartphone|celular|iphone|telefone movel|poco phone)\b/],
+    ["smartwatch", /\b(smartwatch|relogio inteligente|smart band|smartband)\b/],
+    ["livro", /\b(livro|ebook|e-book|kindle|autor|editora)\b/],
+    ["audio", /\b(fone|headset|headphone|earbuds|caixa de som|alto-falante)\b/],
+    ["camera", /\b(camera|webcam|filmadora)\b/],
+    ["console", /\b(console|playstation|xbox|nintendo switch)\b/],
+    ["monitor", /\b(monitor|display gamer)\b/],
+    ["tablet", /\b(tablet|ipad|galaxy tab)\b/],
+    ["desktop", /\b(desktop|computador|pc gamer|all in one)\b/],
+  ];
+  return families.find(([, pattern]) => pattern.test(value))?.[0] || "";
+}
+
+function premiumRelatedCandidatePool(source, candidates) {
+  const sourceType = premiumRelationText(source.productType);
+  const sourceCategory = premiumRelationText(source.category);
+  const sourceFamily = premiumProductFamily(source);
+  if (sourceFamily) {
+    const sameFamily = candidates.filter((product) => premiumProductFamily(product) === sourceFamily);
+    if (sameFamily.length) return sameFamily;
+  }
+  const sameCategory = candidates.filter((product) =>
+    sourceCategory && premiumRelationText(product.category) === sourceCategory,
+  );
+  const sameTypeAndCategory = sameCategory.filter((product) =>
+    sourceType && premiumRelationText(product.productType) === sourceType,
+  );
+  if (sameTypeAndCategory.length) return sameTypeAndCategory;
+  return sameCategory.filter((product) => {
+    const candidateType = premiumRelationText(product.productType);
+    return !sourceType || !candidateType || candidateType === sourceType;
+  });
+}
+
+function premiumRelationTokens(product) {
+  const ignored = new Set(["para", "com", "sem", "uma", "the", "and", "produto", "gb", "de", "da", "do", "em"]);
+  const content = [
+    product.name,
+    product.productType,
+    product.category,
+    product.shortDescription,
+    product.fullDescription,
+    JSON.stringify(parse(product.tagsJson, [])),
+    JSON.stringify(parse(product.specificationsJson, [])),
+  ].join(" ");
+  return new Set(
+    premiumRelationText(content)
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2 && !ignored.has(token)),
+  );
+}
+
+function fallbackPremiumRelatedProducts(source, candidates) {
+  const sourceTokens = premiumRelationTokens(source);
+  const sourcePrice = Number(source.price || 0);
+  return candidates
+    .map((product) => {
+      const candidateTokens = premiumRelationTokens(product);
+      let overlap = 0;
+      for (const token of candidateTokens) if (sourceTokens.has(token)) overlap += 1;
+      const sameType = premiumRelationText(product.productType) === premiumRelationText(source.productType);
+      const sameBrand = premiumRelationText(product.brand) === premiumRelationText(source.brand);
+      const cheaper = sourcePrice > 0 && Number(product.price || 0) < sourcePrice;
+      const relationType = cheaper && sameType
+        ? "cheaper_equivalent"
+        : sameType && Number(product.editorialScore || 0) > Number(source.editorialScore || 0)
+          ? "more_performance"
+          : sameType
+            ? "very_similar"
+            : "best_value";
+      const relationLabel = {
+        cheaper_equivalent: "Similar mais barato",
+        more_performance: "Mais desempenho",
+        best_value: "Melhor custo-benefício",
+        very_similar: "Alternativa muito próxima",
+      }[relationType];
+      const priceDifference = Math.abs(Number(product.price || 0) - sourcePrice);
+      const relationReason = cheaper && sameType
+        ? `Atende ao mesmo tipo de uso e custa ${moneyCents(priceDifference)} menos que este produto.`
+        : sameType
+          ? `É do mesmo tipo de produto e compartilha ${Math.max(1, overlap)} características relevantes da ficha.`
+          : `Alternativa da mesma categoria, selecionada pela proximidade de uso e faixa de preço.`;
+      return {
+        ...product,
+        premiumRelation: true,
+        relationType,
+        relationLabel,
+        relationReason,
+        priceDifferenceCents: Number(product.price || 0) - sourcePrice,
+        _premiumScore: overlap * 8 + (sameType ? 80 : 0) + (sameBrand ? 12 : 0) + (cheaper ? 8 : 0),
+      };
+    })
+    .sort((a, b) => b._premiumScore - a._premiumScore)
+    .map(({ _premiumScore, ...product }) => product);
+}
+
+function mergePremiumRelatedProducts(primary, fallback) {
+  const merged = [];
+  const used = new Set();
+  for (const product of [...primary, ...fallback]) {
+    if (!product?.id || used.has(product.id)) continue;
+    used.add(product.id);
+    merged.push(product);
+  }
+  return merged;
+}
+
+function moneyCents(value) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, Number(value || 0)) / 100);
+}
+
+async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
+  if (!env.AI || !candidates.length) return null;
+  const version = await sha256(`premium-related-v1|${source.slug}:${source.updatedAt}:${source.price}|${candidates.map((product) => `${product.slug}:${product.updatedAt}:${product.price}`).join("|")}`);
+  try {
+    const compact = (product) => ({
+      id: product.id,
+      name: product.name,
+      productType: product.productType,
+      category: product.category,
+      brand: product.brand,
+      priceCents: Number(product.price || 0),
+      editorialScore: product.editorialScore,
+      shortDescription: String(product.shortDescription || "").slice(0, 600),
+      fullDescription: String(product.fullDescription || "").slice(0, 1600),
+      targetAudience: String(product.targetAudience || "").slice(0, 500),
+      tags: parse(product.tagsJson, []).slice(0, 12),
+      specifications: parse(product.specificationsJson, []).slice(0, 20),
+    });
+    const result = await env.AI.run(String(env.PREMIUM_RELATED_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8"), {
+      messages: [
+        {
+          role: "system",
+          content: "Você é o recomendador SHOPLAB+ de alternativas diretas. Não recomende apenas por pertencer à mesma categoria. Selecione de 4 a 8 produtos, quando houver opções realmente válidas, que atendam praticamente à mesma necessidade do produto principal. Priorize primeiro o equivalente mais barato, depois uma opção de maior desempenho, o melhor custo-benefício e as alternativas mais parecidas. Classifique cada escolha como: cheaper_equivalent quando for realmente semelhante e mais barata; more_performance quando os dados fornecidos mostrarem recursos ou desempenho potencialmente superiores; best_value quando equilibrar melhor preço e recursos; very_similar quando for a alternativa mais próxima. Use somente preço, descrição e especificações fornecidos. Nunca invente benchmark, desempenho ou característica. Não use more_performance sem evidência concreta na ficha. Não recomende acessórios ou complementos quando o principal for um produto completo. É melhor retornar menos produtos do que incluir uma relação fraca. Escreva um motivo curto, específico e comparativo em português brasileiro. Retorne somente o JSON solicitado.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ source: compact(source), candidates: candidates.map(compact) }),
+        },
+      ],
+      response_format: { type: "json_schema", json_schema: PREMIUM_RELATED_PRODUCTS_SCHEMA },
+      temperature: 0,
+      max_tokens: 900,
+    }, {
+      gateway: {
+        id: String(env.AI_GATEWAY_ID || "default"),
+        skipCache: false,
+        cacheTtl: 2592000,
+        cacheKey: `premium-related-v1:${version}`,
+        collectLog: true,
+        metadata: { feature: "premium-related-products", sourceSlug: source.slug },
+      },
+    });
+    const value = result?.response && typeof result.response === "object"
+      ? result.response
+      : JSON.parse(String(result?.response || "{}").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+    const byId = new Map(candidates.map((product) => [product.id, product]));
+    const labels = {
+      cheaper_equivalent: "Similar mais barato",
+      more_performance: "Mais desempenho",
+      best_value: "Melhor custo-benefício",
+      very_similar: "Alternativa muito próxima",
+    };
+    const selected = [];
+    const used = new Set();
+    for (const recommendation of Array.isArray(value?.recommendations) ? value.recommendations : []) {
+      const product = byId.get(recommendation?.productId);
+      if (!product || used.has(product.id)) continue;
+      let relationType = recommendation.relationType;
+      if (relationType === "cheaper_equivalent" && Number(product.price || 0) >= Number(source.price || 0))
+        relationType = "very_similar";
+      if (!labels[relationType]) relationType = "very_similar";
+      used.add(product.id);
+      selected.push({
+        ...product,
+        premiumRelation: true,
+        relationType,
+        relationLabel: labels[relationType],
+        relationReason: String(recommendation.reason || "").trim().slice(0, 240),
+        priceDifferenceCents: Number(product.price || 0) - Number(source.price || 0),
+      });
+    }
+    return selected.length ? selected : null;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "premium_related_products_fallback", productSlug: source.slug, error: String(error?.message || error) }));
+    return null;
+  }
 }
 
 async function rankRelatedProductsWithAi(env, source, candidates) {
