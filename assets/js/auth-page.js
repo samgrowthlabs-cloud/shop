@@ -51,7 +51,7 @@ async function refreshPremiumPaymentReturn(){
   const result=new URLSearchParams(location.search).get('premium_payment');if(!result)return;
   const target=$('#premium-subscription');if(result==='failure'){target?.insertAdjacentHTML('afterbegin','<p class="auth-message error">O pagamento não foi concluído. Você pode tentar novamente.</p>');return}
   target?.insertAdjacentHTML('afterbegin','<p class="auth-message success">Confirmando o pagamento com a Stripe…</p>');
-  for(let attempt=0;attempt<6;attempt+=1){if(attempt)await new Promise(resolve=>setTimeout(resolve,2000));try{const data=await userApi('subscription');renderPremiumSubscription(data);if(data.premium){history.replaceState(null,'','conta.html#premium');return}}catch{}}
+  for(let attempt=0;attempt<6;attempt+=1){if(attempt)await new Promise(resolve=>setTimeout(resolve,2000));try{const data=await userApi('subscription');renderPremiumSubscription(data);if(data.premium){history.replaceState(null,'','conta.html?aba=plus');return}}catch{}}
   target?.insertAdjacentHTML('afterbegin','<p class="auth-message">O pagamento ainda está sendo processado. Atualize esta página em alguns instantes.</p>');
 }
 
@@ -65,7 +65,18 @@ async function account(){
   refreshPremiumPaymentReturn();
   subscriptionRequest.then(subscription=>{if(!subscription&&!cachedSubscription&&$('#premium-subscription'))$('#premium-subscription').innerHTML='<p>Não foi possível carregar o plano SHOPLAB+ agora. Tente atualizar a página.</p>'});
   startPresence();
-  const accountNav=$('.account-sidebar nav');const highlightAccountSection=()=>{const section=location.hash||'#profile';accountNav?.querySelectorAll('a[href^="#"]').forEach(link=>link.classList.toggle('active',link.getAttribute('href')===section))};highlightAccountSection();window.addEventListener('hashchange',highlightAccountSection);
+  const accountTabs={perfil:'profile',gerenciar:'manage-account',plus:'premium',convites:'invites',carrinho:'cart',favoritos:'favorites',avaliacoes:'ratings'};
+  const legacyTabs={profile:'perfil','manage-account':'gerenciar',premium:'plus',invites:'convites',cart:'carrinho',favorites:'favoritos',ratings:'avaliacoes','cart-list':'carrinho','favorites-list':'favoritos','ratings-list':'avaliacoes'};
+  const accountParams=new URLSearchParams(location.search),legacyTab=legacyTabs[location.hash.slice(1)],hasRequestedTab=accountTabs[accountParams.get('aba')]||legacyTab||accountParams.has('premium_payment');
+  let activeTab=accountParams.get('aba');
+  if(accountParams.has('premium_payment'))activeTab='plus';
+  if(!accountTabs[activeTab])activeTab=legacyTab||'perfil';
+  if(location.hash){const cleanUrl=new URL(location.href);cleanUrl.hash='';cleanUrl.searchParams.set('aba',activeTab);history.replaceState(null,'',cleanUrl)}
+  if(hasRequestedTab)document.body.dataset.accountSection=activeTab;
+  const accountTabTitles={perfil:'Meu perfil',gerenciar:'Gerenciar conta',plus:'SHOPLAB Plus',convites:'Convites e recompensas',carrinho:'Meu carrinho',favoritos:'Produtos curtidos',avaliacoes:'Minhas avaliações'};
+  const mobileTabTitle=$('#mobile-account-tab-title');if(mobileTabTitle)mobileTabTitle.textContent=accountTabTitles[activeTab]||'Minha conta';
+  Object.entries(accountTabs).forEach(([tab,id])=>{const panel=document.getElementById(id);if(panel)panel.hidden=tab!==activeTab});
+  $('.account-sidebar nav')?.querySelectorAll('[data-account-tab]').forEach(link=>{const active=link.dataset.accountTab===activeTab;link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')});
   const displayName=profile.displayName||user.user_metadata?.display_name||user.email?.split('@')[0]||'Minha conta',initials=displayName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase(),avatar=user.user_metadata?.avatar_url||user.user_metadata?.picture||'';
   const paintAvatar=id=>{const target=$(id);if(target)target.innerHTML=avatar?`<img src="${esc(avatar)}" alt="Foto de ${esc(displayName)}" referrerpolicy="no-referrer">`:`<b>${esc(initials)}</b>`};
   ['#header-account-avatar','#mobile-header-account-avatar','#mobile-overview-avatar','#sidebar-account-avatar','#profile-account-avatar'].forEach(paintAvatar);

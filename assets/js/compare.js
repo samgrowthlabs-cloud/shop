@@ -117,8 +117,8 @@ function renderComparisonLoading() {
 
 function renderPremiumComparisonState(analysis) {
   const plan = analysis.plan || {};
-  if (analysis.quotaExceeded) return `<section class="container comparison-premium-gate"><span class="eyebrow">LIMITE MENSAL ATINGIDO</span><h2>A comparação técnica continua disponível</h2><p>Você já utilizou as ${Number(analysis.usage?.limit || 0)} novas análises inteligentes deste mês. Resultados SHOPLAB+ que já estiverem em cache continuam disponíveis sem gastar outra análise.</p><a class="btn primary" href="conta.html#premium">Ver meu plano</a></section>`;
-  return `<section class="container comparison-premium-gate"><span class="eyebrow">ANÁLISE INTELIGENTE SHOPLAB+</span><h2>Entenda melhor as diferenças com IA</h2><p>A comparação técnica abaixo continua gratuita. Com SHOPLAB+, a análise interpreta campos com nomes diferentes e explica qual produto é melhor para cada tipo de uso.</p><div><a class="btn primary" href="conta.html#premium">Assinar por ${money(plan.amountCents || 990)}/mês</a><span>${Number(plan.aiMonthlyLimit || 50)} novas análises por mês</span></div></section>`;
+  if (analysis.quotaExceeded) return `<section class="container comparison-premium-gate"><span class="eyebrow">LIMITE MENSAL ATINGIDO</span><h2>A comparação técnica continua disponível</h2><p>Você já utilizou as ${Number(analysis.usage?.limit || 0)} novas análises inteligentes deste mês. Resultados SHOPLAB+ que já estiverem em cache continuam disponíveis sem gastar outra análise.</p><a class="btn primary" href="conta.html?aba=plus">Ver meu plano</a></section>`;
+  return `<section class="container comparison-premium-gate"><span class="eyebrow">ANÁLISE INTELIGENTE SHOPLAB+</span><h2>Entenda melhor as diferenças com IA</h2><p>A comparação técnica abaixo continua gratuita. Com SHOPLAB+, a análise interpreta campos com nomes diferentes e explica qual produto é melhor para cada tipo de uso.</p><div><a class="btn primary" href="conta.html?aba=plus">Assinar por ${money(plan.amountCents || 990)}/mês</a><span>${Number(plan.aiMonthlyLimit || 50)} novas análises por mês</span></div></section>`;
 }
 
 function applyComparisonPaywall(analysis,products=[]) {
@@ -133,7 +133,7 @@ function applyComparisonPaywall(analysis,products=[]) {
   }
   const plan=analysis.plan||{},gate=document.createElement('aside');
   gate.className='comparison-paywall';
-  gate.innerHTML=`<span class="eyebrow">COMPARAÇÃO COMPLETA SHOPLAB+</span><h2>Continue para ver toda a comparação</h2><p>Desbloqueie a ficha completa, os vencedores de cada critério e o veredito personalizado da IA.</p><ul><li>Comparação completa de especificações</li><li>Melhor opção para cada tipo de uso</li><li>Conclusão e custo-benefício analisados por IA</li></ul><a class="btn primary" href="conta.html#premium">Assinar por ${money(plan.amountCents||990)}/mês</a><small>${Number(plan.aiMonthlyLimit||50)} novas análises inteligentes por mês</small>`;
+  gate.innerHTML=`<span class="eyebrow">COMPARAÇÃO COMPLETA SHOPLAB+</span><h2>Continue para ver toda a comparação</h2><p>Desbloqueie a ficha completa, os vencedores de cada critério e o veredito personalizado da IA.</p><ul><li>Comparação completa de especificações</li><li>Melhor opção para cada tipo de uso</li><li>Conclusão e custo-benefício analisados por IA</li></ul><a class="btn primary" href="conta.html?aba=plus">Assinar por ${money(plan.amountCents||990)}/mês</a><small>${Number(plan.aiMonthlyLimit||50)} novas análises inteligentes por mês</small>`;
   shell.append(gate);
   document.querySelector('.comparison-actions')?.classList.add('is-premium-locked');
 }

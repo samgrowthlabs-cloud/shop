@@ -13,7 +13,7 @@ async function initialize(){
   let config;
   try{config=await userApi('subscription/payment-config')}
   catch(error){$('#premium-checkout-loading').hidden=true;showMessage(error.message);return}
-  if(config.premium){location.replace('conta.html#premium');return}
+  if(config.premium){location.replace('conta.html?aba=plus');return}
   const plan=config.plan||{};
   $('#pass-days').textContent=`${Number(plan.passDays||30)} dias`;
   $('#pass-price').textContent=money(plan.passAmountCents||plan.amountCents||0);
@@ -26,7 +26,7 @@ async function initialize(){
     button.disabled=true;button.textContent='Abrindo a Stripe…';showMessage('Criando uma sessão segura de pagamento…','loading');
     try{
       const result=await userApi('subscription/pass-checkout',{method:'POST'});
-      if(result.premium){location.replace('conta.html#premium');return}
+      if(result.premium){location.replace('conta.html?aba=plus');return}
       if(!/^https:\/\//i.test(result.checkoutUrl||''))throw new Error('O checkout seguro não retornou um endereço válido.');
       location.href=result.checkoutUrl;
     }catch(error){showMessage(error.message);button.disabled=false;button.textContent='Tentar novamente'}

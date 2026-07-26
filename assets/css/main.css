@@ -2662,7 +2662,16 @@ body[data-page="home"] .home-banner-arrow:focus-visible{opacity:1}
 }
 
 /* Visão geral da conta inspirada em aplicativo no celular. */
-.mobile-account-overview{display:none}
+.mobile-account-overview,.mobile-account-tab-header{display:none}
+body[data-auth-page="account"] .account-panel[hidden]{display:none!important}
+body[data-auth-page="account"][data-account-section] .account-panel{display:none!important}
+body[data-auth-page="account"][data-account-section="perfil"] #profile,
+body[data-auth-page="account"][data-account-section="gerenciar"] #manage-account,
+body[data-auth-page="account"][data-account-section="plus"] #premium,
+body[data-auth-page="account"][data-account-section="convites"] #invites,
+body[data-auth-page="account"][data-account-section="carrinho"] #cart,
+body[data-auth-page="account"][data-account-section="favoritos"] #favorites,
+body[data-auth-page="account"][data-account-section="avaliacoes"] #ratings{display:block!important}
 @media(max-width:700px){
   body[data-auth-page="account"]{background:#f4f7f6}
   body[data-auth-page="account"] .account-dashboard{
@@ -2672,12 +2681,82 @@ body[data-page="home"] .home-banner-arrow:focus-visible{opacity:1}
     background:#f4f7f6!important;
   }
   body[data-auth-page="account"] .mobile-account-overview{display:grid;gap:10px}
+  body[data-auth-page="account"][data-account-section] .mobile-account-overview{display:none}
+  body[data-auth-page="account"][data-account-section] .account-panel:not([hidden]){display:block!important}
+  body[data-auth-page="account"][data-account-section] .account-welcome,
+  body[data-auth-page="account"][data-account-section] .account-summary-grid{display:none}
+  body[data-auth-page="account"][data-account-section] .account-dashboard{
+    padding:0 0 30px!important;
+    background:#fff!important;
+  }
+  body[data-auth-page="account"][data-account-section] .account-dashboard-content{background:#fff}
+  body[data-auth-page="account"][data-account-section] .mobile-account-tab-header{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-height:66px;
+    padding:11px 16px;
+    border-bottom:1px solid #e1e9e7;
+    background:#fff;
+  }
+  .mobile-account-tab-header>a{
+    display:grid;
+    place-items:center;
+    width:38px;
+    height:38px;
+    flex:0 0 38px;
+    border:1px solid #d9e4e1;
+    border-radius:50%;
+    color:#17312c;
+    font-size:30px;
+    font-weight:400;
+    line-height:1;
+  }
+  .mobile-account-tab-header>div{display:grid;gap:1px;min-width:0}
+  .mobile-account-tab-header small{color:#087c70;font-size:9px;font-weight:850;letter-spacing:.12em}
+  .mobile-account-tab-header strong{overflow:hidden;color:#172321;font-size:17px;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
   body[data-auth-page="account"] .account-sidebar,
   body[data-auth-page="account"] .account-welcome,
   body[data-auth-page="account"] .account-summary-grid{display:none!important}
   body[data-auth-page="account"] .account-dashboard-content{display:block!important}
   body[data-auth-page="account"] .account-panel{display:none;margin-top:12px!important}
   body[data-auth-page="account"] .account-panel:target{display:block!important}
+  body[data-auth-page="account"][data-account-section] .account-panel{
+    width:100%;
+    margin:0!important;
+    padding:18px 16px 26px;
+    border:0;
+    border-radius:0;
+    box-shadow:none;
+  }
+  body[data-auth-page="account"][data-account-section] .account-panel-heading{
+    align-items:flex-start;
+    margin-bottom:16px;
+    padding-bottom:15px;
+  }
+  body[data-auth-page="account"][data-account-section] .account-panel-heading>img{
+    width:34px;
+    height:34px;
+    padding:7px;
+    border-radius:10px;
+    background:#eaf7f4;
+  }
+  body[data-auth-page="account"][data-account-section] .account-panel-heading h2{font-size:20px}
+  body[data-auth-page="account"][data-account-section] .account-settings-card{
+    gap:9px;
+    padding:16px;
+    border-color:#dfe8e5;
+    border-radius:14px;
+    background:#f9fcfb;
+  }
+  body[data-auth-page="account"][data-account-section] .account-settings-card h3{font-size:18px}
+  body[data-auth-page="account"][data-account-section] .account-settings-card input{
+    min-height:48px;
+    padding:11px 12px;
+    border-radius:10px;
+    font-size:16px;
+  }
+  body[data-auth-page="account"][data-account-section] .account-settings-card .btn{min-height:46px;border-radius:10px}
 
   .mobile-account-title{display:block!important;padding:0 2px 2px!important}
   .mobile-account-title h1{margin:0;color:#172321;font-size:24px;line-height:1.1;letter-spacing:-.03em}
@@ -3135,5 +3214,118 @@ body[data-page="home"] .home-banner-slide.is-active .home-banner-bleed{
     animation:none!important;
     transition:none!important;
     transform:none!important;
+  }
+}
+
+/* Minha conta no desktop: painel mais compacto, legível e com hierarquia clara. */
+@media(min-width:901px){
+  body[data-auth-page="account"]{background:#f2f6f5}
+  body[data-auth-page="account"] .account-dashboard{
+    width:min(1320px,calc(100% - 48px));
+    max-width:1320px;
+    grid-template-columns:250px minmax(0,1fr);
+    gap:28px;
+    padding:34px 0 72px;
+    background:transparent;
+  }
+  body[data-auth-page="account"] .account-sidebar{
+    top:132px;
+    min-height:590px;
+    padding:18px;
+    border:1px solid #dfe9e6;
+    border-radius:20px;
+    background:#fff;
+    box-shadow:0 16px 42px rgba(19,61,52,.08);
+  }
+  body[data-auth-page="account"] .account-sidebar-title{padding:8px 6px 20px}
+  body[data-auth-page="account"] .account-sidebar nav a{
+    min-height:46px;
+    padding:10px 12px;
+    border:0;
+    border-radius:11px;
+  }
+  body[data-auth-page="account"] .account-sidebar nav a:hover,
+  body[data-auth-page="account"] .account-sidebar nav a.active{
+    border:0;
+    background:#eaf7f4;
+    color:#087c70;
+  }
+  body[data-auth-page="account"] .account-dashboard-content{gap:18px}
+  body[data-auth-page="account"] .account-welcome{
+    position:relative;
+    min-height:150px;
+    padding:30px 34px;
+    overflow:hidden;
+    border-radius:22px;
+    background:linear-gradient(120deg,#073e37 0%,#087c70 68%,#0ba894 135%);
+    color:#fff;
+    box-shadow:0 18px 42px rgba(7,84,73,.2);
+  }
+  body[data-auth-page="account"] .account-welcome::after{
+    content:"";
+    position:absolute;
+    right:-55px;
+    bottom:-95px;
+    width:260px;
+    height:260px;
+    border:45px solid rgba(255,255,255,.07);
+    border-radius:50%;
+  }
+  body[data-auth-page="account"] .account-welcome .eyebrow{color:#8ff0df}
+  body[data-auth-page="account"] .account-welcome h1{font-size:34px;letter-spacing:-.035em}
+  body[data-auth-page="account"] .account-welcome p{color:#d8f0eb}
+  body[data-auth-page="account"] .account-profile-avatar{
+    position:relative;
+    z-index:1;
+    border:1px solid rgba(255,255,255,.28);
+    background:rgba(255,255,255,.15);
+    color:#fff;
+    box-shadow:0 8px 24px rgba(0,0,0,.12);
+  }
+  body[data-auth-page="account"] .account-summary-grid{gap:12px}
+  body[data-auth-page="account"] .account-summary-grid a{
+    min-height:108px;
+    padding:18px;
+    border:1px solid #dfe9e6;
+    border-radius:16px;
+    background:#fff;
+    box-shadow:0 8px 22px rgba(20,55,47,.055);
+  }
+  body[data-auth-page="account"] .account-summary-grid a:hover{
+    background:#fff;
+    box-shadow:0 14px 30px rgba(20,55,47,.1);
+    transform:translateY(-2px);
+  }
+  body[data-auth-page="account"] .account-summary-grid a>img{
+    width:34px;
+    height:34px;
+    padding:7px;
+    border-radius:10px;
+    background:#e9f7f4;
+  }
+  body[data-auth-page="account"] .account-panel{
+    padding:26px 28px;
+    border:1px solid #dfe9e6;
+    border-radius:18px;
+    background:#fff;
+    box-shadow:0 10px 28px rgba(20,55,47,.055);
+  }
+  body[data-auth-page="account"] .account-panel-heading>img{
+    width:36px;
+    height:36px;
+    padding:8px;
+    border-radius:11px;
+    background:#e9f7f4;
+  }
+  body[data-auth-page="account"] .account-panel-heading h2{font-size:23px;letter-spacing:-.02em}
+  body[data-auth-page="account"] .account-profile-form input{border-radius:10px;background:#fbfdfc}
+  body[data-auth-page="account"] .account-settings-card{
+    border-color:#e0e9e6;
+    border-radius:14px;
+    background:#f9fcfb;
+  }
+  body[data-auth-page="account"] .premium-account-panel{
+    border-color:#a9dcd3;
+    background:linear-gradient(135deg,#fff 0%,#edf9f6 100%);
   }
 }

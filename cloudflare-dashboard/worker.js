@@ -4429,7 +4429,7 @@ async function sendRewardNotificationEmail(apiKey,from,accountUrl,reward,recipie
 async function sendManualRewardEmail(env,reward,recipient){
   const apiKey=String(env.RESEND_API_KEY||""),from=String(env.REWARD_EMAIL_FROM||"");
   if(!apiKey||!from)return {status:"skipped",id:null,error:"RESEND_API_KEY ou REWARD_EMAIL_FROM não configurado"};
-  const accountUrl=`${String(env.PUBLIC_SITE_URL||allowedOrigins(env)[0]||"").replace(/\/+$/,"")}/conta.html#invites`;
+  const accountUrl=`${String(env.PUBLIC_SITE_URL||allowedOrigins(env)[0]||"").replace(/\/+$/,"")}/conta.html?aba=convites`;
   return sendRewardNotificationEmail(apiKey,from,accountUrl,reward,recipient);
 }
 
@@ -6012,7 +6012,7 @@ async function sendPremiumNotification(env, { eventKey, userId, kind, amountCent
   }
   const plan = await resolvedPremiumPlan(env);
   const content = premiumEmailContent(kind, { planName: plan.name, amountCents, accessExpiresAt });
-  const accountUrl = `${String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "")}/conta.html#premium`;
+  const accountUrl = `${String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "")}/conta.html?aba=plus`;
   const safeName = htmlAttribute(profile.displayName || "cliente");
   const safeMessage = htmlAttribute(content.message);
   try {
@@ -6484,7 +6484,7 @@ async function createStripeCustomerPortal(req, env, id) {
       params: {
         customer: customerId,
         locale: "pt-BR",
-        return_url: `${siteOrigin}/conta.html#premium`,
+        return_url: `${siteOrigin}/conta.html?aba=plus`,
       },
     });
     if (!/^https:\/\//i.test(String(portal.url || "")))
