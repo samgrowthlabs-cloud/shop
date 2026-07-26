@@ -135,6 +135,8 @@ document.addEventListener('click',async event=>{
   button.disabled=false;button.innerHTML=original;
 },true);
 
-function scan(){document.querySelectorAll('.product-card').forEach(cardMedia);detailMedia()}
+const mediaObserver='IntersectionObserver'in window?new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting)return;mediaObserver.unobserve(entry.target);cardMedia(entry.target)}),{rootMargin:'240px'}):null;
+function queueCardMedia(card){if(card.dataset.mediaObserved)return;card.dataset.mediaObserved='1';if(mediaObserver)mediaObserver.observe(card);else cardMedia(card)}
+function scan(){document.querySelectorAll('.product-card').forEach(queueCardMedia);detailMedia()}
 new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
 document.readyState==='loading'?document.addEventListener('DOMContentLoaded',scan):scan();

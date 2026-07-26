@@ -2954,3 +2954,54 @@ iframe,video,canvas,svg,table{max-width:100%}
   body[data-page="product"] .premium-related-card{width:100%;min-width:0;scroll-snap-align:start}
   body[data-page="product"] .premium-related-card .product-body{min-height:220px}
 }
+
+/* Carrosséis de produtos da Home: até dez itens, sem poluir a interface. */
+body[data-page="home"] .product-rail{position:relative}
+body[data-page="home"] .product-rail>.products{
+  display:flex!important;
+  grid-template-columns:none!important;
+  gap:16px!important;
+  overflow-x:auto!important;
+  padding:2px 2px 14px!important;
+  scroll-behavior:smooth;
+  scroll-snap-type:x mandatory;
+  scrollbar-width:none;
+}
+body[data-page="home"] .product-rail>.products::-webkit-scrollbar{display:none}
+body[data-page="home"] .product-rail>.products>.product-card{
+  flex:0 0 calc((100% - 48px)/4)!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  scroll-snap-align:start;
+}
+.product-rail-arrow{
+  position:absolute;
+  top:42%;
+  z-index:8;
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  border:1px solid #d8e5e1;
+  border-radius:50%;
+  background:#fff;
+  color:#087c70;
+  font:700 36px/1 Arial,sans-serif;
+  box-shadow:0 8px 24px rgba(12,62,54,.16);
+  opacity:0;
+  cursor:pointer;
+  transform:translateY(-50%) scale(.92);
+  transition:opacity .18s ease,transform .18s ease;
+}
+.product-rail-arrow.previous{left:-22px}
+.product-rail-arrow.next{right:-22px}
+.product-rail:hover .product-rail-arrow,.product-rail:focus-within .product-rail-arrow{opacity:1;transform:translateY(-50%) scale(1)}
+.product-rail-arrow:disabled{opacity:0!important;pointer-events:none}
+@media(max-width:760px){
+  body[data-page="home"] .product-rail>.products{gap:10px!important;margin-right:calc(var(--mobile-gutter,16px) * -1)!important;padding-right:var(--mobile-gutter,16px)!important}
+  body[data-page="home"] .product-rail>.products>.product-card{flex-basis:min(72vw,270px)!important}
+  .product-rail-arrow{top:38%;width:36px;height:36px;font-size:30px;opacity:.94;transform:translateY(-50%)}
+  .product-rail-arrow.previous{left:-8px}
+  .product-rail-arrow.next{right:-8px}
+}
