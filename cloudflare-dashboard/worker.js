@@ -7,7 +7,7 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-26-premium-related-products-v4";
+const WORKER_BUILD = "2026-07-26-plus-ai-fast-v2";
 
 function allowedOrigins(env) {
   return [
@@ -255,6 +255,7 @@ async function route(request, env, ctx, requestId) {
     return relatedProducts(
       request,
       env,
+      ctx,
       decodeURIComponent(path.split("/").at(-2)),
       requestId,
     );
@@ -848,7 +849,7 @@ async function trendingProducts(req, env, url, id) {
   });
 }
 
-async function relatedProducts(req, env, slug, id) {
+async function relatedProducts(req, env, ctx, slug, id) {
   const source = await env.DB.prepare(
     `SELECT p.id,p.name,p.slug,p.category_id categoryId,p.brand_id brandId,p.product_type productType,c.name category,b.name brand,
       p.short_description shortDescription,p.full_description fullDescription,p.target_audience targetAudience,
@@ -912,8 +913,13 @@ async function relatedProducts(req, env, slug, id) {
     const detailById = new Map((details.results || []).map((product) => [product.id, product]));
     candidates = candidates.map((product) => ({ ...product, ...(detailById.get(product.id) || {}) }));
     const eligible = premiumRelatedCandidatePool(source, candidates);
-    const aiRecommendations = await rankPremiumRelatedProductsWithAi(env, source, eligible);
     const safeRecommendations = fallbackPremiumRelatedProducts(source, eligible);
+    const aiTask = rankPremiumRelatedProductsWithAi(env, source, eligible);
+    if (ctx?.waitUntil) ctx.waitUntil(aiTask.catch(() => null));
+    const aiRecommendations = await Promise.race([
+      aiTask,
+      new Promise((resolve) => setTimeout(() => resolve(null), 180)),
+    ]);
     premiumAiRanked = Boolean(aiRecommendations?.length);
     const mergedRecommendations = mergePremiumRelatedProducts(aiRecommendations || [], safeRecommendations).slice(0, 4);
     premiumRanked = mergedRecommendations.length ? mergedRecommendations : null;
@@ -1553,6 +1559,17 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
      WHERE p.slug=? AND p.status='published'`,
   ).bind(slug).first();
   if (!product) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, id);
+  const version = await sha256(`premium-product-insight-v2|${user.id}|${product.id}|${product.updatedAt}`);
+  const cached = await env.DB.prepare(
+    `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
+  ).bind(version, user.id).first();
+  if (cached?.insightJson) {
+    try {
+      return ok(req, env, { ...JSON.parse(cached.insightJson), premium: true, cacheHit: true, usage: premium.usage }, id);
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "premium_product_insight_cache_invalid", cacheKey: version, error: String(error?.message || error) }));
+    }
+  }
   const [profileResult, categoryResult, searchResult, viewedResult] = await env.DB.batch([
     env.DB.prepare(`SELECT display_name displayName FROM user_profiles WHERE user_id=?`).bind(user.id),
     env.DB.prepare(
@@ -1576,17 +1593,6 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     searches: (searchResult.results || []).map((item) => item.queryText).filter(Boolean),
     recentlyViewed: (viewedResult.results || []).map((item) => ({ name: item.name, category: item.category })),
   };
-  const version = await sha256(`premium-product-insight-v1|${user.id}|${product.id}|${product.updatedAt}|${JSON.stringify(context)}`);
-  const cached = await env.DB.prepare(
-    `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
-  ).bind(version, user.id).first();
-  if (cached?.insightJson) {
-    try {
-      return ok(req, env, { ...JSON.parse(cached.insightJson), premium: true, cacheHit: true, usage: premium.usage }, id);
-    } catch (error) {
-      console.warn(JSON.stringify({ event: "premium_product_insight_cache_invalid", cacheKey: version, error: String(error?.message || error) }));
-    }
-  }
   if (!env.AI) return ok(req, env, { premium: true, unavailable: true, usage: premium.usage }, id);
   const usage = await reservePremiumAiGeneration(env, user.id);
   if (!usage.allowed) return ok(req, env, { premium: true, quotaExceeded: true, usage }, id);
@@ -1601,7 +1607,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
       },
       required: ["conclusion", "bestFor", "howItHelps"],
     };
-    const result = await env.AI.run(String(env.PREMIUM_PRODUCT_INSIGHT_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8"), {
+    const result = await env.AI.run(String(env.PREMIUM_PRODUCT_INSIGHT_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast"), {
       messages: [
         { role: "system", content: "Você cria análises personalizadas SHOPLAB+ em português brasileiro. Use somente os dados fornecidos. Não invente desempenho, recursos ou resultados. Cada item deve ser uma linha curta, clara e útil. A conclusão deve ter 3 ou 4 linhas; para quem é e como ajuda devem ter 2 ou 3 linhas cada. Considere o histórico apenas para personalizar a adequação, sem mencioná-lo diretamente nem expor dados do usuário. Retorne somente o JSON solicitado." },
         { role: "user", content: JSON.stringify({
@@ -1616,13 +1622,13 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
       ],
       response_format: { type: "json_schema", json_schema: schema },
       temperature: 0.2,
-      max_tokens: 700,
+      max_tokens: 480,
     }, {
       gateway: {
         id: String(env.AI_GATEWAY_ID || "default"),
         skipCache: false,
         cacheTtl: 2592000,
-        cacheKey: `premium-product-insight-v1:${version}`,
+        cacheKey: `premium-product-insight-v2:${version}`,
         collectLog: true,
         metadata: { feature: "premium-product-insight", productSlug: product.slug },
       },
@@ -1767,7 +1773,7 @@ async function analyzeProductComparison(req, env, ctx, id) {
       await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
       return ok(req, env, { ...technicalResult, premium: true, premiumRequired: false, quotaExceeded: true, usage }, id);
     }
-    const analysis = await generateAndPersistProductComparison(env, ctx, {
+    const generationTask = generateAndPersistProductComparison(env, ctx, {
       version,
       cacheKey,
       slugs,
@@ -1776,15 +1782,13 @@ async function analyzeProductComparison(req, env, ctx, id) {
       userId: user.id,
       usagePeriod: usage.period,
     });
-    premium.usage = usage;
-    if (analysis)
-      return ok(req, env, { ...analysis, premium: true, usage }, id);
+    if (ctx?.waitUntil) ctx.waitUntil(generationTask);
     return ok(req, env, {
       ...technicalResult,
       premium: true,
       premiumRequired: false,
-      generationFailed: true,
-      usage: { ...usage, used: Math.max(0, usage.used - 1), remaining: Math.min(usage.limit, usage.remaining + 1) },
+      processing: true,
+      usage,
     }, id);
   }
   return ok(req, env, { ...fallback, premium: true, processing: true, usage: premium.usage }, id);
