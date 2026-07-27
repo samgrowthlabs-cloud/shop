@@ -1,0 +1,1 @@
+ALTER TABLE banners ADD COLUMN style_json TEXT NOT NULL DEFAULT '{}';

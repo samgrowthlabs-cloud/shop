@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS banners (
   desktop_position_x INTEGER NOT NULL DEFAULT 50, desktop_position_y INTEGER NOT NULL DEFAULT 50,
   desktop_scale INTEGER NOT NULL DEFAULT 100, mobile_position_x INTEGER NOT NULL DEFAULT 50,
   mobile_position_y INTEGER NOT NULL DEFAULT 50, mobile_scale INTEGER NOT NULL DEFAULT 100,
-  targeting_json TEXT NOT NULL DEFAULT '{}',
+    targeting_json TEXT NOT NULL DEFAULT '{}', style_json TEXT NOT NULL DEFAULT '{}',
   starts_at TEXT, ends_at TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -179,6 +179,10 @@ CREATE TABLE IF NOT EXISTS header_spotlights (
   link_url TEXT NOT NULL DEFAULT 'promocoes.html', alt_text TEXT NOT NULL DEFAULT '',
   spotlight_position_x INTEGER NOT NULL DEFAULT 50, spotlight_position_y INTEGER NOT NULL DEFAULT 50,
   spotlight_scale INTEGER NOT NULL DEFAULT 100,
+  spotlight_rotation INTEGER NOT NULL DEFAULT 0,
+  spotlight_animation TEXT NOT NULL DEFAULT 'fade',
+  spotlight_animation_duration INTEGER NOT NULL DEFAULT 700,
+  spotlight_animation_delay INTEGER NOT NULL DEFAULT 0,
   starts_at TEXT, ends_at TEXT,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -254,6 +258,20 @@ CREATE TABLE IF NOT EXISTS premium_notification_log (
   error TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS premium_access_grants (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  days INTEGER NOT NULL CHECK(days BETWEEN 1 AND 3650),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','claimed','expired','cancelled')),
+  claim_expires_at TEXT NOT NULL,
+  claimed_at TEXT,
+  access_expires_at TEXT,
+  pass_payment_id TEXT UNIQUE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_premium_access_grants_user ON premium_access_grants(user_id,status,claim_expires_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_premium_subscriptions_provider_id ON premium_subscriptions(provider_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_premium_subscriptions_status ON premium_subscriptions(status, updated_at DESC);

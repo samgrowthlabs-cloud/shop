@@ -12,6 +12,7 @@
 8. Para permitir imagem ou GIF clicável e independente dos temas no destaque direito do cabeçalho, execute uma única vez `header-spotlight-upgrade.sql`. Bancos novos já recebem essa configuração pelo `schema.sql`.
 
 9. Para manter preços importados do Mercado Livre atualizados, execute uma única vez `mercadolivre-price-sync-upgrade.sql`.
+10. Para habilitar o editor visual completo dos banners em um banco existente, execute uma única vez `banner-style-editor-upgrade.sql`. Bancos novos já recebem `style_json` pelo `schema.sql`.
 
 O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetários são armazenados em centavos.
 

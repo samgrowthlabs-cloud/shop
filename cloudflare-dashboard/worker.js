@@ -7,7 +7,7 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-26-plus-ai-fast-v2";
+const WORKER_BUILD = "2026-07-27-premium-grant-claim-v1";
 
 function allowedOrigins(env) {
   return [
@@ -88,6 +88,8 @@ export default {
         );
       if (/no such column:.*(?:spotlight_position_x|spotlight_position_y|spotlight_scale)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"HEADER_SPOTLIGHT_IMAGE_CONTROLS_MIGRATION_REQUIRED",message:"Execute header-spotlight-image-controls-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such column:.*(?:spotlight_rotation|spotlight_animation|spotlight_animation_duration|spotlight_animation_delay)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"HEADER_SPOTLIGHT_ANIMATION_MIGRATION_REQUIRED",message:"Execute header-spotlight-animation-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*user_profiles/i.test(detail))
         return respond(
           request,
@@ -110,6 +112,8 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PERSONALIZATION_MIGRATION_REQUIRED",message:"Execute personalized-recommendations-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*targeting_json/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"BANNER_PERSONALIZATION_MIGRATION_REQUIRED",message:"Execute banner-personalization-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such column:.*style_json/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"BANNER_STYLE_MIGRATION_REQUIRED",message:"Execute banner-style-editor-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*(?:desktop_position_x|desktop_position_y|desktop_scale|mobile_position_x|mobile_position_y|mobile_scale)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"BANNER_IMAGE_CONTROLS_MIGRATION_REQUIRED",message:"Execute banner-image-controls-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such (?:table|column):.*(?:user_sessions|share_links|share_visits|referrals|referral_rewards|last_seen_at|blocked_until|moderation_note)/i.test(detail))
@@ -170,6 +174,8 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"COMPARISON_CACHE_MIGRATION_REQUIRED",message:"Execute comparison-analysis-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*premium_product_insight_cache/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_PRODUCT_INSIGHT_CACHE_MIGRATION_REQUIRED",message:"Execute premium-product-insight-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*premium_access_grants/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_ACCESS_GRANTS_MIGRATION_REQUIRED",message:"Execute premium-access-grants-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*(?:premium_subscriptions|premium_ai_usage|premium_pass_payments|premium_notification_log)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_SUBSCRIPTIONS_MIGRATION_REQUIRED",message:"Execute premium-subscriptions-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*premium_settings/i.test(detail))
@@ -304,6 +310,8 @@ async function route(request, env, ctx, requestId) {
     return createPremiumPassCheckout(request, env, requestId);
   if (path === "/api/v1/user/subscription/cancel" && request.method === "PUT")
     return cancelPremiumSubscription(request, env, requestId);
+  if (path === "/api/v1/user/subscription/grant/claim" && request.method === "POST")
+    return claimPremiumAccessGrant(request, env, requestId);
   if (path === "/api/v1/user/library" && request.method === "GET")
     return userLibrary(request, env, requestId);
   if (request.method === "GET" && /^\/api\/v1\/user\/products\/[^/]+\/plus-insight$/.test(path))
@@ -503,7 +511,7 @@ async function listCategories(req, env, id) {
 async function publicSiteConfig(req, env, id) {
   const [banners, theme, stores, brands, headerPromotions, headerSpotlights] = await env.DB.batch([
     env.DB.prepare(
-      `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
+      `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
     ),
     env.DB.prepare(
       `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
@@ -518,13 +526,14 @@ async function publicSiteConfig(req, env, id) {
       `SELECT name,slug,coupon_code couponCode,rules_json rulesJson FROM promotions WHERE is_active=1 AND datetime(starts_at)<=CURRENT_TIMESTAMP AND datetime(ends_at)>=CURRENT_TIMESTAMP ORDER BY datetime(ends_at) LIMIT 3`,
     ),
     env.DB.prepare(
-      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
+      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,spotlight_rotation imageRotation,spotlight_animation animationPreset,spotlight_animation_duration animationDuration,spotlight_animation_delay animationDelay FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
     ),
   ]);
   const origin = new URL(req.url).origin;
   const rankedBanners=await personalizeBanners(req,env,banners.results||[]);
   const mediaUrl = (key) =>
     key ? `${origin}/media/${encodeURIComponent(key)}` : null;
+  const publicBannerStyle=banner=>{const style=parse(banner.styleJson||"{}",{});return JSON.stringify({...style,overlays:(Array.isArray(style.overlays)?style.overlays:[]).map(layer=>({...layer,imageUrl:mediaUrl(layer.storageKey),storageKey:undefined}))})};
   const response = ok(
     req,
     env,
@@ -533,6 +542,7 @@ async function publicSiteConfig(req, env, id) {
         ...banner,
         targetingJson: undefined,
         personalizationScore: undefined,
+        styleJson:publicBannerStyle(banner),
         desktopImageUrl: mediaUrl(banner.desktopStorageKey),
         mobileImageUrl: mediaUrl(
           banner.mobileStorageKey || banner.desktopStorageKey,
@@ -4247,6 +4257,13 @@ async function adminUserDetail(req,env,userId,id){
   ]);
   const row=profile.results?.[0];if(!row)return fail(req,env,"USER_NOT_FOUND","Usuário não encontrado",404,id);
   const premium=await premiumSubscriptionData(env,userId);
+  const premiumSources=await env.DB.prepare(`SELECT
+    EXISTS(SELECT 1 FROM premium_subscriptions WHERE user_id=? AND status='authorized') paidSubscription,
+    EXISTS(SELECT 1 FROM premium_pass_payments WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP AND (provider_payment_id IS NULL OR (provider_payment_id NOT LIKE 'admin-pass-%' AND provider_payment_id NOT LIKE 'admin-grant-%'))) paidPass,
+    EXISTS(SELECT 1 FROM premium_pass_payments WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP AND (provider_payment_id LIKE 'admin-pass-%' OR provider_payment_id LIKE 'admin-grant-%')) rewardedPass,
+    EXISTS(SELECT 1 FROM premium_access_grants WHERE user_id=? AND status='pending' AND datetime(claim_expires_at)>CURRENT_TIMESTAMP) pendingReward
+  `).bind(userId,userId,userId,userId).first();
+  premium.accessControl={paid:Boolean(premiumSources?.paidSubscription||premiumSources?.paidPass),rewarded:Boolean(premiumSources?.rewardedPass||premiumSources?.pendingReward)};
   return ok(req,env,{profile:row,premium,shares:shares.results||[],referrals:referrals.results||[],rewards:rewards.results||[],manualRewards:manualRewards.results||[],sessions:sessions.results||[],events:events.results||[],usage:usage.results?.[0]||{},topProducts:topProducts.results||[],analytics:{activityByDay:activityByDay.results||[],eventBreakdown:eventBreakdown.results||[],topSearches:topSearches.results||[],topCategories:topCategories.results||[]}},id);
 }
 
@@ -4271,21 +4288,15 @@ async function grantAdminUserPremium(req,env,userId,id){
   const body=await readJson(req,4096),days=clamp(body.days,1,3650,30);
   const profile=await env.DB.prepare(`SELECT email FROM user_profiles WHERE user_id=?`).bind(userId).first();
   if(!profile)return fail(req,env,"USER_NOT_FOUND","UsuÃ¡rio nÃ£o encontrado",404,id);
-  const current=await env.DB.prepare(
-    `SELECT access_expires_at accessExpiresAt FROM premium_pass_payments
-     WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
-     ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
-  ).bind(userId).first();
-  const now=Date.now(),currentExpiry=Date.parse(current?.accessExpiresAt||"");
-  const startsAt=Number.isFinite(currentExpiry)&&currentExpiry>now?currentExpiry:now;
-  const accessExpiresAt=new Date(startsAt+days*86400000).toISOString();
-  const passId=`admin-pass-${crypto.randomUUID()}`,grantedAt=new Date().toISOString();
-  await env.DB.prepare(
-    `INSERT INTO premium_pass_payments(
-      id,user_id,provider_payment_id,status,payer_email,amount_cents,currency,paid_at,access_expires_at,provider_updated_at
-    ) VALUES(?,?,?,'approved',?,1,'BRL',?,?,?)`,
-  ).bind(passId,userId,passId,String(profile.email||"").slice(0,320),grantedAt,accessExpiresAt,grantedAt).run();
-  return ok(req,env,{userId,days,accessExpiresAt,premium:true},id);
+  const now=Date.now(),requestedExpiry=Date.parse(String(body.claimExpiresAt||""));
+  const claimExpiresAt=new Date(Number.isFinite(requestedExpiry)&&requestedExpiry>now?Math.min(requestedExpiry,now+365*86400000):now+7*86400000).toISOString();
+  const grantId=crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE premium_access_grants SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='pending'`).bind(userId),
+    env.DB.prepare(`INSERT INTO premium_access_grants(id,user_id,days,status,claim_expires_at) VALUES(?,?,?,'pending',?)`).bind(grantId,userId,days,claimExpiresAt),
+  ]);
+  const notification=await sendPremiumNotification(env,{eventKey:`admin-grant-available:${grantId}`,userId,kind:"grant_available",days,claimExpiresAt});
+  return ok(req,env,{userId,grantId,days,claimExpiresAt,premium:false,status:"pending_claim",notificationStatus:notification?.status||"skipped"},id);
 }
 
 async function revokeAdminUserPremium(req,env,userId,id){
@@ -4296,17 +4307,20 @@ async function revokeAdminUserPremium(req,env,userId,id){
   const paidPass=await env.DB.prepare(
     `SELECT id FROM premium_pass_payments
      WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
-       AND (provider_payment_id IS NULL OR provider_payment_id NOT LIKE 'admin-pass-%')
+       AND (provider_payment_id IS NULL OR (provider_payment_id NOT LIKE 'admin-pass-%' AND provider_payment_id NOT LIKE 'admin-grant-%'))
      LIMIT 1`,
   ).bind(userId).first();
   if(paidSubscription||paidPass)
     return fail(req,env,"PAID_PREMIUM_ACCESS","O Plus pago nÃ£o pode ser retirado como prÃªmio",409,id);
-  const result=await env.DB.prepare(
-    `UPDATE premium_pass_payments SET status='cancelled',updated_at=CURRENT_TIMESTAMP
-     WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
-       AND provider_payment_id LIKE 'admin-pass-%'`,
-  ).bind(userId).run();
-  if(!result.meta.changes)
+  const [passes,grants]=await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE premium_pass_payments SET status='cancelled',updated_at=CURRENT_TIMESTAMP
+       WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+         AND (provider_payment_id LIKE 'admin-pass-%' OR provider_payment_id LIKE 'admin-grant-%')`,
+    ).bind(userId),
+    env.DB.prepare(`UPDATE premium_access_grants SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='pending'`).bind(userId),
+  ]);
+  if(!Number(passes.meta?.changes||0)&&!Number(grants.meta?.changes||0))
     return fail(req,env,"ADMIN_PREMIUM_NOT_FOUND","Este usuÃ¡rio nÃ£o possui Plus concedido pelo Admin",404,id);
   return ok(req,env,{userId,premium:false,revoked:true},id);
 }
@@ -4518,6 +4532,34 @@ async function adminDashboard(req, env, id) {
       WHERE event_type IN ('search','search_no_results') AND query_text IS NOT NULL
         AND created_at>=datetime('now','-7 days')
       GROUP BY query_text ORDER BY total DESC,MAX(created_at) DESC LIMIT 8`),
+    env.DB.prepare("SELECT COUNT(DISTINCT user_id) total FROM events WHERE user_id IS NOT NULL AND created_at>=datetime('now','-24 hours')"),
+    env.DB.prepare("SELECT COUNT(*) total FROM events WHERE event_type='product_view' AND created_at>=datetime('now','-24 hours')"),
+    env.DB.prepare("SELECT COUNT(*) total FROM events WHERE event_type='offer_click' AND created_at>=datetime('now','-24 hours')"),
+    env.DB.prepare("SELECT COUNT(*) total FROM user_sessions WHERE started_at>=datetime('now','-7 days')"),
+    env.DB.prepare("SELECT COALESCE(AVG(active_seconds),0) total FROM user_sessions WHERE started_at>=datetime('now','-7 days')"),
+    env.DB.prepare("SELECT COUNT(*) total FROM premium_subscriptions WHERE status='authorized'"),
+    env.DB.prepare("SELECT COUNT(*) total FROM premium_pass_payments WHERE status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP"),
+    env.DB.prepare("SELECT COUNT(*) total FROM premium_access_grants WHERE status='pending' AND datetime(claim_expires_at)>CURRENT_TIMESTAMP"),
+    env.DB.prepare("SELECT COALESCE(SUM(generations),0) total FROM premium_ai_usage WHERE period_key=strftime('%Y-%m','now')"),
+    env.DB.prepare(`SELECT event_type eventType,COUNT(*) total FROM events
+      WHERE created_at>=datetime('now','-7 days')
+      GROUP BY event_type ORDER BY total DESC LIMIT 12`),
+    env.DB.prepare(`WITH RECURSIVE days(day) AS (
+      SELECT date('now','-13 days') UNION ALL SELECT date(day,'+1 day') FROM days WHERE day<date('now')
+    ) SELECT days.day,COUNT(e.id) total FROM days
+      LEFT JOIN events e ON date(e.created_at)=days.day
+      GROUP BY days.day ORDER BY days.day`),
+    env.DB.prepare(`SELECT e.id,e.event_type eventType,e.product_slug productSlug,e.query_text queryText,
+      e.metadata_json metadataJson,e.created_at createdAt,up.display_name displayName,up.email,p.name productName
+      FROM events e
+      LEFT JOIN user_profiles up ON up.user_id=e.user_id
+      LEFT JOIN products p ON p.slug=e.product_slug
+      ORDER BY datetime(e.created_at) DESC LIMIT 50`),
+    env.DB.prepare(`SELECT query_text query,COUNT(*) total,MAX(created_at) lastAt FROM events
+      WHERE event_type='search_no_results' AND query_text IS NOT NULL AND created_at>=datetime('now','-30 days')
+      GROUP BY query_text ORDER BY total DESC,lastAt DESC LIMIT 10`),
+    env.DB.prepare("SELECT COUNT(*) total FROM user_ratings WHERE updated_at>=datetime('now','-7 days')"),
+    env.DB.prepare("SELECT COUNT(DISTINCT user_id) total FROM user_cart WHERE quantity>0"),
   ]);
   const total = (index) => Number(results[index].results?.[0]?.total || 0);
   return ok(
@@ -4547,6 +4589,21 @@ async function adminDashboard(req, env, id) {
       favorites: total(20),
       cartItems: total(21),
       topSearches: results[22].results || [],
+      engagedUsers24h: total(23),
+      productViews24h: total(24),
+      offerClicks24h: total(25),
+      sessions7d: total(26),
+      averageSessionSeconds7d: Math.round(total(27)),
+      paidSubscriptions: total(28),
+      activePremiumPasses: total(29),
+      pendingPremiumGrants: total(30),
+      aiGenerationsMonth: total(31),
+      eventBreakdown7d: results[32].results || [],
+      activity14d: results[33].results || [],
+      recentLogs: results[34].results || [],
+      noResultSearches: results[35].results || [],
+      ratings7d: total(36),
+      cartsWithProducts: total(37),
     },
     id,
   );
@@ -4914,7 +4971,7 @@ async function adminBanners(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,created_at createdAt FROM banners ORDER BY sort_order,created_at DESC`,
+    `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,created_at createdAt FROM banners ORDER BY sort_order,created_at DESC`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -4944,7 +5001,7 @@ async function saveBanner(req, env, bannerId, id, creating) {
   const existing = creating
     ? null
     : await env.DB.prepare(
-        "SELECT desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey FROM banners WHERE id=?",
+        "SELECT desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,style_json styleJson FROM banners WHERE id=?",
       )
         .bind(bannerId)
         .first();
@@ -5006,6 +5063,39 @@ async function saveBanner(req, env, bannerId, id, creating) {
       422,
       id,
     );
+  const existingStyle=parse(existing?.styleJson||"{}",{}),existingOverlays=Array.isArray(existingStyle.overlays)?existingStyle.overlays:[],existingOverlayById=new Map(existingOverlays.map(layer=>[String(layer.id),layer]));
+  const requestedOverlays=parse(String(form.get("overlayLayersJson")||"[]"),[]);
+  const overlayLayers=[];
+  for(const raw of (Array.isArray(requestedOverlays)?requestedOverlays:[]).slice(0,12)){
+    const layerId=String(raw?.id||"").replace(/[^a-zA-Z0-9_-]/g,"").slice(0,80);
+    if(!layerId)continue;
+    const oldLayer=existingOverlayById.get(layerId);
+    let storageKey=oldLayer?.storageKey||null;
+    const layerFile=form.get(`overlayImage:${layerId}`);
+    if(layerFile instanceof File&&layerFile.size){
+      try{storageKey=await storeSiteImage(env,layerFile,"banner-layers",bannerId)}
+      catch(error){return fail(req,env,"INVALID_OVERLAY_FILE",error.message,422,id)}
+    }
+    if(!storageKey)continue;
+    overlayLayers.push({id:layerId,storageKey,x:clamp(raw.x,0,100,50),y:clamp(raw.y,0,100,50),width:clamp(raw.width,3,100,24),scale:clamp(raw.scale,10,500,100),rotation:clamp(raw.rotation,-180,180,0),opacity:clamp(raw.opacity,0,100,100),device:["both","desktop","mobile"].includes(String(raw.device))?String(raw.device):"both",zIndex:clamp(raw.zIndex,1,50,10)});
+  }
+  const bannerStyle={
+      backgroundColor:/^#[0-9a-f]{6}$/i.test(String(form.get("backgroundColor")||""))?String(form.get("backgroundColor")):"#102a25",
+      gradientEnabled:String(form.get("gradientEnabled"))==="true",
+      gradientColorStart:/^#[0-9a-f]{6}$/i.test(String(form.get("gradientColorStart")||""))?String(form.get("gradientColorStart")):"#031916",
+      gradientColorEnd:/^#[0-9a-f]{6}$/i.test(String(form.get("gradientColorEnd")||""))?String(form.get("gradientColorEnd")):"#031916",
+      gradientAngle:clamp(form.get("gradientAngle"),0,360,90),
+      gradientStart:clamp(form.get("gradientStart"),0,100,0),
+      gradientEnd:clamp(form.get("gradientEnd"),0,100,82),
+      overlayOpacity:clamp(form.get("overlayOpacity"),0,100,90),
+      imageOpacity:clamp(form.get("imageOpacity"),0,100,100),
+      eyebrowColor:/^#[0-9a-f]{6}$/i.test(String(form.get("eyebrowColor")||""))?String(form.get("eyebrowColor")):"#7fe0cf",
+      titleColor:/^#[0-9a-f]{6}$/i.test(String(form.get("titleColor")||""))?String(form.get("titleColor")):"#ffffff",
+      messageColor:/^#[0-9a-f]{6}$/i.test(String(form.get("messageColor")||""))?String(form.get("messageColor")):"#d8e5e1",
+      overlays:overlayLayers,
+      desktop:{copyX:clamp(form.get("desktopCopyX"),5,95,28),copyY:clamp(form.get("desktopCopyY"),5,95,50),copyWidth:clamp(form.get("desktopCopyWidth"),20,90,48),titleSize:clamp(form.get("desktopTitleSize"),18,80,43),messageSize:clamp(form.get("desktopMessageSize"),10,32,14),textAlign:["left","center","right"].includes(String(form.get("desktopTextAlign")))?String(form.get("desktopTextAlign")):"left",layers:{eyebrow:{x:clamp(form.get("desktopEyebrowX"),-500,500,0),y:clamp(form.get("desktopEyebrowY"),-500,500,0),scale:clamp(form.get("desktopEyebrowScale"),25,300,100)},title:{x:clamp(form.get("desktopTitleX"),-500,500,0),y:clamp(form.get("desktopTitleY"),-500,500,0),scale:clamp(form.get("desktopTitleScale"),25,300,100)},message:{x:clamp(form.get("desktopMessageX"),-500,500,0),y:clamp(form.get("desktopMessageY"),-500,500,0),scale:clamp(form.get("desktopMessageScale"),25,300,100)}}},
+      mobile:{copyX:clamp(form.get("mobileCopyX"),5,95,38),copyY:clamp(form.get("mobileCopyY"),5,95,38),copyWidth:clamp(form.get("mobileCopyWidth"),35,96,76),titleSize:clamp(form.get("mobileTitleSize"),18,54,29),messageSize:clamp(form.get("mobileMessageSize"),10,26,14),textAlign:["left","center","right"].includes(String(form.get("mobileTextAlign")))?String(form.get("mobileTextAlign")):"left",layers:{eyebrow:{x:clamp(form.get("mobileEyebrowX"),-500,500,0),y:clamp(form.get("mobileEyebrowY"),-500,500,0),scale:clamp(form.get("mobileEyebrowScale"),25,300,100)},title:{x:clamp(form.get("mobileTitleX"),-500,500,0),y:clamp(form.get("mobileTitleY"),-500,500,0),scale:clamp(form.get("mobileTitleScale"),25,300,100)},message:{x:clamp(form.get("mobileMessageX"),-500,500,0),y:clamp(form.get("mobileMessageY"),-500,500,0),scale:clamp(form.get("mobileMessageScale"),25,300,100)}}},
+  };
   const values = [
     name,
     String(form.get("eyebrow") || "").slice(0, 80),
@@ -5020,6 +5110,7 @@ async function saveBanner(req, env, bannerId, id, creating) {
       keywords:String(form.get("targetKeywords")||"").split(",").map(value=>normalizeSearch(value)).filter(Boolean).slice(0,30),
       categories:String(form.get("targetCategories")||"").split(",").map(value=>normalizeSearch(value).replace(/\s+/g,"-")).filter(value=>/^[a-z0-9-]{2,100}$/.test(value)).slice(0,30),
     }),
+    JSON.stringify(bannerStyle),
     startsAt,
     endsAt,
     String(form.get("isActive")) === "true" ? 1 : 0,
@@ -5033,16 +5124,17 @@ async function saveBanner(req, env, bannerId, id, creating) {
   ];
   if (creating)
     await env.DB.prepare(
-      `INSERT INTO banners(id,name,eyebrow,title,message,button_text,link_url,desktop_storage_key,mobile_storage_key,alt_text,targeting_json,starts_at,ends_at,is_active,sort_order,desktop_position_x,desktop_position_y,desktop_scale,mobile_position_x,mobile_position_y,mobile_scale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO banners(id,name,eyebrow,title,message,button_text,link_url,desktop_storage_key,mobile_storage_key,alt_text,targeting_json,style_json,starts_at,ends_at,is_active,sort_order,desktop_position_x,desktop_position_y,desktop_scale,mobile_position_x,mobile_position_y,mobile_scale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
       .bind(bannerId, ...values)
       .run();
   else
     await env.DB.prepare(
-      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,desktop_position_x=?,desktop_position_y=?,desktop_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,style_json=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,desktop_position_x=?,desktop_position_y=?,desktop_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     )
       .bind(...values, bannerId)
       .run();
+  const retainedOverlayKeys=new Set(overlayLayers.map(layer=>layer.storageKey));
   const staleKeys = creating
     ? []
     : [
@@ -5050,6 +5142,7 @@ async function saveBanner(req, env, bannerId, id, creating) {
           existing.desktopStorageKey,
         existing.mobileStorageKey !== mobileStorageKey &&
           existing.mobileStorageKey,
+        ...existingOverlays.map(layer=>layer.storageKey).filter(key=>key&&!retainedOverlayKeys.has(key)),
       ].filter(Boolean);
   if (staleKeys.length) await env.MEDIA.delete(staleKeys);
   return ok(req, env, { id: bannerId }, id);
@@ -5288,7 +5381,7 @@ async function adminHeaderSpotlights(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,updated_at updatedAt FROM header_spotlights ORDER BY sort_order,created_at`,
+    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,spotlight_rotation imageRotation,spotlight_animation animationPreset,spotlight_animation_duration animationDuration,spotlight_animation_delay animationDelay,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,updated_at updatedAt FROM header_spotlights ORDER BY sort_order,created_at`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -5305,6 +5398,10 @@ function headerSpotlightValues(body) {
     clamp(body.imagePositionX, 0, 100, 50),
     clamp(body.imagePositionY, 0, 100, 50),
     clamp(body.imageScale, 10, 400, 100),
+    clamp(body.imageRotation, -180, 180, 0),
+    ["none", "fade", "slide-left", "slide-up", "zoom", "float", "pulse"].includes(body.animationPreset) ? body.animationPreset : "fade",
+    clamp(body.animationDuration, 200, 10000, 700),
+    clamp(body.animationDelay, 0, 10000, 0),
   ];
 }
 
@@ -5325,7 +5422,7 @@ async function createHeaderSpotlight(req, env, id) {
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const spotlightId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,spotlight_position_x,spotlight_position_y,spotlight_scale) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,spotlight_position_x,spotlight_position_y,spotlight_scale,spotlight_rotation,spotlight_animation,spotlight_animation_duration,spotlight_animation_delay) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(spotlightId, ...headerSpotlightValues(body)).run();
   return ok(req, env, { id: spotlightId }, id);
 }
@@ -5337,7 +5434,7 @@ async function updateHeaderSpotlight(req, env, spotlightId, id) {
   const validation = validateHeaderSpotlight(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,spotlight_position_x=?,spotlight_position_y=?,spotlight_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,spotlight_position_x=?,spotlight_position_y=?,spotlight_scale=?,spotlight_rotation=?,spotlight_animation=?,spotlight_animation_duration=?,spotlight_animation_delay=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
   ).bind(...headerSpotlightValues(body), spotlightId).run();
   if (!result.meta.changes)
     return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
@@ -5979,6 +6076,10 @@ function premiumEmailContent(kind, context = {}) {
   const expiry = context.accessExpiresAt
     ? new Date(context.accessExpiresAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
     : "";
+  const claimExpiry = context.claimExpiresAt
+    ? new Date(context.claimExpiresAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+    : "";
+  const days = Number(context.days || 0);
   const values = {
     subscription_activated: ["Sua assinatura SHOPLAB+ está ativa", `Sua assinatura ${planName}${amount ? ` de ${amount} por mês` : ""} foi ativada. Você já pode usar as comparações inteligentes.`],
     subscription_cancelled: ["Sua assinatura SHOPLAB+ foi cancelada", `A renovação automática da sua assinatura ${planName} foi cancelada. Nenhuma nova mensalidade será criada por esta assinatura.`],
@@ -5989,11 +6090,13 @@ function premiumEmailContent(kind, context = {}) {
     pass_refunded: ["Pagamento do passe SHOPLAB+ estornado", `O pagamento do passe ${planName} foi estornado e o acesso relacionado a ele foi encerrado.`],
     pass_expiring: ["Seu SHOPLAB+ expira em breve", `Seu passe ${planName}${expiry ? ` é válido até ${expiry}` : " está perto de vencer"}. Renove pela sua conta caso queira continuar usando as comparações inteligentes.`],
   };
+  values.grant_available=["Você recebeu dias grátis de SHOPLAB+",`Você recebeu ${days} ${days===1?"dia":"dias"} de ${planName}. O acesso ainda não está ativo: resgate pela sua conta${claimExpiry?` até ${claimExpiry}`:" dentro do prazo informado"}. O período começa somente depois do resgate.`];
+  values.grant_claimed=["Seu presente SHOPLAB+ foi ativado",`O resgate de ${days} ${days===1?"dia":"dias"} de ${planName} foi confirmado${expiry?` e seu acesso ficará disponível até ${expiry}`:""}.`];
   const [subject, message] = values[kind] || ["Atualização do SHOPLAB+", "Há uma atualização no seu acesso SHOPLAB+."];
   return { subject, message };
 }
 
-async function sendPremiumNotification(env, { eventKey, userId, kind, amountCents = 0, accessExpiresAt = null }) {
+async function sendPremiumNotification(env, { eventKey, userId, kind, amountCents = 0, accessExpiresAt = null, claimExpiresAt = null, days = 0 }) {
   const key = String(eventKey || "").replace(/[^a-zA-Z0-9:_-]/g, "").slice(0, 240);
   if (!key || !userId) return;
   const profile = await env.DB.prepare(
@@ -6011,7 +6114,7 @@ async function sendPremiumNotification(env, { eventKey, userId, kind, amountCent
     return;
   }
   const plan = await resolvedPremiumPlan(env);
-  const content = premiumEmailContent(kind, { planName: plan.name, amountCents, accessExpiresAt });
+  const content = premiumEmailContent(kind, { planName: plan.name, amountCents, accessExpiresAt, claimExpiresAt, days });
   const accountUrl = `${String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "")}/conta.html?aba=plus`;
   const safeName = htmlAttribute(profile.displayName || "cliente");
   const safeMessage = htmlAttribute(content.message);
@@ -6120,11 +6223,17 @@ async function premiumSubscriptionData(env, userId, { reconcilePending = false }
     }
   }
   const plan = await resolvedPremiumPlan(env);
+  await env.DB.prepare(`UPDATE premium_access_grants SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='pending' AND datetime(claim_expires_at)<=CURRENT_TIMESTAMP`).bind(userId).run();
+  const pendingGrant = await env.DB.prepare(
+    `SELECT id,days,status,claim_expires_at claimExpiresAt,created_at createdAt
+     FROM premium_access_grants WHERE user_id=? AND status='pending' AND datetime(claim_expires_at)>CURRENT_TIMESTAMP
+     ORDER BY datetime(created_at) DESC LIMIT 1`,
+  ).bind(userId).first();
   let activePass = await env.DB.prepare(
     `SELECT id,status,provider_payment_id providerPaymentId,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
      FROM premium_pass_payments WHERE user_id=? AND status='approved'
        AND datetime(access_expires_at)>CURRENT_TIMESTAMP
-     ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
+     ORDER BY CASE WHEN provider_payment_id LIKE 'admin-pass-%' OR provider_payment_id LIKE 'admin-grant-%' THEN 1 ELSE 0 END,datetime(access_expires_at) DESC LIMIT 1`,
   ).bind(userId).first();
   let pendingPass = activePass ? null : await env.DB.prepare(
     `SELECT id,status,provider_preference_id providerPreferenceId,provider_payment_id providerPaymentId,amount_cents amountCents,currency,checkout_url checkoutUrl,created_at createdAt
@@ -6144,7 +6253,7 @@ async function premiumSubscriptionData(env, userId, { reconcilePending = false }
         `SELECT id,status,provider_payment_id providerPaymentId,amount_cents amountCents,currency,paid_at paidAt,access_expires_at accessExpiresAt
          FROM premium_pass_payments WHERE user_id=? AND status='approved'
            AND datetime(access_expires_at)>CURRENT_TIMESTAMP
-         ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
+         ORDER BY CASE WHEN provider_payment_id LIKE 'admin-pass-%' OR provider_payment_id LIKE 'admin-grant-%' THEN 1 ELSE 0 END,datetime(access_expires_at) DESC LIMIT 1`,
       ).bind(userId).first();
       if (activePass) pendingPass = null;
     } catch (error) {
@@ -6161,9 +6270,45 @@ async function premiumSubscriptionData(env, userId, { reconcilePending = false }
     subscription: subscription || null,
     pass: activePass || null,
     pendingPass: pendingPass || null,
+    pendingGrant: pendingGrant || null,
     plan,
     usage: { used, limit: plan.aiMonthlyLimit, remaining: Math.max(0, plan.aiMonthlyLimit - used), period: premiumPeriodKey() },
   };
+}
+
+async function claimPremiumAccessGrant(req,env,id){
+  const user=await activeUser(req,env);
+  if(!user)return fail(req,env,"UNAUTHORIZED","Entre na sua conta",401,id);
+  const grant=await env.DB.prepare(
+    `SELECT id,days,claim_expires_at claimExpiresAt FROM premium_access_grants
+     WHERE user_id=? AND status='pending' AND datetime(claim_expires_at)>CURRENT_TIMESTAMP
+     ORDER BY datetime(created_at) DESC LIMIT 1`,
+  ).bind(user.id).first();
+  if(!grant){
+    await env.DB.prepare(`UPDATE premium_access_grants SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='pending' AND datetime(claim_expires_at)<=CURRENT_TIMESTAMP`).bind(user.id).run();
+    return fail(req,env,"PREMIUM_GRANT_NOT_AVAILABLE","Este presente expirou ou já foi resgatado",409,id);
+  }
+  const profile=await env.DB.prepare(`SELECT email FROM user_profiles WHERE user_id=?`).bind(user.id).first();
+  const activePass=await env.DB.prepare(
+    `SELECT access_expires_at accessExpiresAt FROM premium_pass_payments
+     WHERE user_id=? AND status='approved' AND datetime(access_expires_at)>CURRENT_TIMESTAMP
+     ORDER BY datetime(access_expires_at) DESC LIMIT 1`,
+  ).bind(user.id).first();
+  const now=Date.now(),currentExpiry=Date.parse(activePass?.accessExpiresAt||""),startsAt=Number.isFinite(currentExpiry)&&currentExpiry>now?currentExpiry:now;
+  const claimedAt=new Date(now).toISOString(),accessExpiresAt=new Date(startsAt+Number(grant.days)*86400000).toISOString();
+  const passId=`admin-grant-${grant.id}`;
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO premium_pass_payments(id,user_id,provider_payment_id,status,payer_email,amount_cents,currency,paid_at,access_expires_at,provider_updated_at)
+       VALUES(?,?,?,'approved',?,1,'BRL',?,?,?)`,
+    ).bind(passId,user.id,passId,String(profile?.email||user.email||"").slice(0,320),claimedAt,accessExpiresAt,claimedAt),
+    env.DB.prepare(
+      `UPDATE premium_access_grants SET status='claimed',claimed_at=?,access_expires_at=?,pass_payment_id=?,updated_at=CURRENT_TIMESTAMP
+       WHERE id=? AND user_id=? AND status='pending'`,
+    ).bind(claimedAt,accessExpiresAt,passId,grant.id,user.id),
+  ]);
+  await sendPremiumNotification(env,{eventKey:`admin-grant-claimed:${grant.id}`,userId:user.id,kind:"grant_claimed",days:Number(grant.days),accessExpiresAt});
+  return ok(req,env,{premium:true,status:"pass_active",days:Number(grant.days),accessExpiresAt},id);
 }
 
 async function userPremiumSubscription(req, env, id) {
