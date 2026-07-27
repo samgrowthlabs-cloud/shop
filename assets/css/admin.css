@@ -245,3 +245,12 @@ body,body *,body *::before,body *::after{animation:none!important;transition:non
 @media(max-width:1100px){.dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-grid-wide{grid-template-columns:1fr}}
 @media(max-width:700px){.dashboard-overview-head,.dashboard-logs-head{align-items:stretch;flex-direction:column}.dashboard-overview-head .btn{width:100%}.dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.dashboard-stats .stat{padding:13px}.dashboard-stats .stat strong{font-size:21px}.dashboard-rating-card{grid-template-columns:1fr}.dashboard-rating-card>div+div{border-top:1px solid #dce4e1;border-left:0}.dashboard-log-filters{grid-template-columns:1fr}.dashboard-log-row{grid-template-columns:34px minmax(0,1fr)}.dashboard-log-row time{grid-column:2;text-align:left}.dashboard-timeline{gap:3px;overflow:hidden}.dashboard-timeline small{font-size:8px;transform:rotate(-45deg);transform-origin:center}}
 @media(max-width:420px){.dashboard-stats{grid-template-columns:1fr}}
+
+/* Mantém o painel compacto mesmo quando existem muitos eventos. */
+.dashboard-log-list{
+  max-height:min(620px,65vh);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.dashboard-log-row{padding-right:10px}

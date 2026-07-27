@@ -7,7 +7,7 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-27-premium-grant-claim-v1";
+const WORKER_BUILD = "2026-07-27-dynamic-sitemap-v1";
 
 function allowedOrigins(env) {
   return [
@@ -223,6 +223,81 @@ export default {
   },
 };
 
+async function dynamicSitemap(env) {
+  const siteOrigin = "https://shoplab.com.br";
+  const [productQuery, categoryQuery] = await env.DB.batch([
+    env.DB.prepare(
+      "SELECT slug,COALESCE(updated_at,published_at,created_at) lastModified FROM products WHERE status='published' ORDER BY published_at DESC,name",
+    ),
+    env.DB.prepare(
+      "SELECT slug,updated_at lastModified FROM categories WHERE is_active=1 ORDER BY sort_order,name",
+    ),
+  ]);
+  const escapeXml = (value) =>
+    String(value ?? "").replace(
+      /[<>&'"]/g,
+      (character) =>
+        ({
+          "<": "&lt;",
+          ">": "&gt;",
+          "&": "&amp;",
+          "'": "&apos;",
+          '"': "&quot;",
+        })[character],
+    );
+  const date = (value) => {
+    const parsed = value ? new Date(value) : new Date();
+    return Number.isNaN(parsed.getTime())
+      ? new Date().toISOString().slice(0, 10)
+      : parsed.toISOString().slice(0, 10);
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  const staticPages = [
+    ["/", "1.0", "daily"],
+    ["/produtos.html", "0.9", "daily"],
+    ["/promocoes.html", "0.8", "daily"],
+    ["/novidades.html", "0.8", "daily"],
+    ["/sobre.html", "0.5", "monthly"],
+    ["/contato.html", "0.4", "monthly"],
+    ["/politica-de-afiliados.html", "0.3", "yearly"],
+    ["/politica-de-privacidade.html", "0.3", "yearly"],
+    ["/termos-de-uso.html", "0.3", "yearly"],
+  ].map(([path, priority, changefreq]) => ({
+    loc: `${siteOrigin}${path}`,
+    lastmod: today,
+    priority,
+    changefreq,
+  }));
+  const categories = (categoryQuery.results || []).map((category) => ({
+    loc: `${siteOrigin}/categoria.html?slug=${encodeURIComponent(category.slug)}`,
+    lastmod: date(category.lastModified),
+    priority: "0.7",
+    changefreq: "weekly",
+  }));
+  const products = (productQuery.results || []).map((product) => ({
+    loc: `${siteOrigin}/produto.html?slug=${encodeURIComponent(product.slug)}`,
+    lastmod: date(product.lastModified),
+    priority: "0.8",
+    changefreq: "weekly",
+  }));
+  const urls = [...staticPages, ...categories, ...products]
+    .map(
+      (entry) =>
+        `<url><loc>${escapeXml(entry.loc)}</loc><lastmod>${entry.lastmod}</lastmod><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`,
+    )
+    .join("");
+  return new Response(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`,
+    {
+      headers: {
+        "content-type": "application/xml; charset=utf-8",
+        "cache-control": "public, max-age=300, s-maxage=300",
+        "x-content-type-options": "nosniff",
+      },
+    },
+  );
+}
+
 async function route(request, env, ctx, requestId) {
   const url = new URL(request.url),
     path = url.pathname.replace(/\/+$/, "") || "/";
@@ -230,6 +305,8 @@ async function route(request, env, ctx, requestId) {
     return cors(request, env, new Response(null, { status: 204 }));
   if (path === "/api/v1/health")
     return ok(request, env, { status: "ok", build: WORKER_BUILD }, requestId);
+  if (request.method === "GET" && path === "/sitemap.xml")
+    return dynamicSitemap(env);
 
   if (request.method === "GET" && path === "/api/v1/categories")
     return listCategories(request, env, requestId);

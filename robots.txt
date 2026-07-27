@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /auth-callback.html
+Disallow: /premium-checkout.html
+Disallow: /recuperar-senha.html
+Disallow: /redefinir-senha.html
 Sitemap: https://shoplab.com.br/sitemap.xml
+Sitemap: https://shoplab.bidjorysamuel.workers.dev/sitemap.xml

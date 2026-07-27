@@ -1,0 +1,38 @@
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+
+/entrar*
+  X-Robots-Tag: noindex, follow
+
+/cadastro*
+  X-Robots-Tag: noindex, follow
+
+/conta*
+  X-Robots-Tag: noindex, nofollow
+
+/auth-callback*
+  X-Robots-Tag: noindex, nofollow
+
+/recuperar-senha*
+  X-Robots-Tag: noindex, nofollow
+
+/redefinir-senha*
+  X-Robots-Tag: noindex, nofollow
+
+/premium-checkout*
+  X-Robots-Tag: noindex, nofollow
+
+/busca*
+  X-Robots-Tag: noindex, follow
+
+/comparar*
+  X-Robots-Tag: noindex, follow
+
+/404.html
+  X-Robots-Tag: noindex, follow
+
+/robots.txt
+  Content-Type: text/plain; charset=utf-8
+
+/sitemap.xml
+  Content-Type: application/xml; charset=utf-8
