@@ -1,6 +1,6 @@
 import'./favicon.js';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
 import'./search-ui.js?v=20260726-mobile-search-1';
-import{syncAccountLibrary,setCart}from'./user-library.js';
+import{syncAccountLibrary,setCart}from'./user-library.js?v=20260727-lista-1';
 import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260726-mobile-header-4';
 import{SHOPLAB_CONFIG}from'./config.js';
 const $=selector=>document.querySelector(selector),page=document.body.dataset.authPage;
@@ -15,7 +15,7 @@ const saveSubscriptionCache=(userId,data)=>{try{sessionStorage.setItem(subscript
 let redirectError=null;try{acceptRedirectSession()}catch(error){redirectError=error}
 
 function rows(items,kind){
-  const icon=kind==='favorites'?'heart':kind==='ratings'?'star':'cart';
+  const icon=kind==='favorites'?'heart':kind==='ratings'?'star':'list';
   if(!items.length)return`<div class="account-empty"><img src="assets/icons/${icon}.svg" alt=""><p>Nada por aqui ainda.</p></div>`;
   return `<div class="account-list">${items.map(item=>{const image=item.storageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(item.storageKey)}`:item.externalUrl||'';return`<article><a class="account-product-thumb" href="produto.html?slug=${encodeURIComponent(item.slug)}" aria-label="Ver ${esc(item.name||item.slug)}">${image?`<img src="${esc(image)}" alt="${esc(item.altText||item.name||'Produto')}" loading="lazy" decoding="async">`:`<img class="fallback" src="assets/icons/${icon}.svg" alt="">`}</a><a class="account-product-copy" href="produto.html?slug=${encodeURIComponent(item.slug)}"><strong>${esc(item.name||String(item.slug).replaceAll('-',' '))}</strong>${item.price!=null?`<small>${money(item.price)}</small>`:''}</a>${kind==='cart'?`<div class="account-item-side"><button class="btn ghost" type="button" data-remove-cart="${esc(item.slug)}" data-cart-quantity="${Number(item.quantity)||1}">Remover</button></div>`:''}${kind==='favorites'?'<img class="account-status-icon favorite" src="assets/icons/heart.svg" alt="Produto curtido">':''}${kind==='ratings'?`<span class="account-rating" aria-label="${Number(item.rating)} de 5 estrelas">${'★'.repeat(Number(item.rating))}${'☆'.repeat(5-Number(item.rating))}</span>`:''}</article>`}).join('')}</div>`;
 }
@@ -68,15 +68,15 @@ async function account(){
   refreshPremiumPaymentReturn();
   subscriptionRequest.then(subscription=>{if(!subscription&&!cachedSubscription&&$('#premium-subscription'))$('#premium-subscription').innerHTML='<p>Não foi possível carregar o plano SHOPLAB+ agora. Tente atualizar a página.</p>'});
   startPresence();
-  const accountTabs={perfil:'profile',gerenciar:'manage-account',plus:'premium',convites:'invites',carrinho:'cart',favoritos:'favorites',avaliacoes:'ratings'};
-  const legacyTabs={profile:'perfil','manage-account':'gerenciar',premium:'plus',invites:'convites',cart:'carrinho',favorites:'favoritos',ratings:'avaliacoes','cart-list':'carrinho','favorites-list':'favoritos','ratings-list':'avaliacoes'};
+  const accountTabs={perfil:'profile',gerenciar:'manage-account',plus:'premium',convites:'invites',lista:'cart',favoritos:'favorites',avaliacoes:'ratings'};
+  const legacyTabs={profile:'perfil','manage-account':'gerenciar',premium:'plus',invites:'convites',cart:'lista',carrinho:'lista',favorites:'favoritos',ratings:'avaliacoes','cart-list':'lista','favorites-list':'favoritos','ratings-list':'avaliacoes'};
   const accountParams=new URLSearchParams(location.search),legacyTab=legacyTabs[location.hash.slice(1)],hasRequestedTab=accountTabs[accountParams.get('aba')]||legacyTab||accountParams.has('premium_payment');
   let activeTab=accountParams.get('aba');
   if(accountParams.has('premium_payment'))activeTab='plus';
   if(!accountTabs[activeTab])activeTab=legacyTab||'perfil';
   if(location.hash){const cleanUrl=new URL(location.href);cleanUrl.hash='';cleanUrl.searchParams.set('aba',activeTab);history.replaceState(null,'',cleanUrl)}
   if(hasRequestedTab)document.body.dataset.accountSection=activeTab;
-  const accountTabTitles={perfil:'Meu perfil',gerenciar:'Gerenciar conta',plus:'SHOPLAB Plus',convites:'Convites e recompensas',carrinho:'Meu carrinho',favoritos:'Produtos curtidos',avaliacoes:'Minhas avaliações'};
+  const accountTabTitles={perfil:'Meu perfil',gerenciar:'Gerenciar conta',plus:'SHOPLAB Plus',convites:'Convites e recompensas',lista:'Minha lista',favoritos:'Produtos curtidos',avaliacoes:'Minhas avaliações'};
   const mobileTabTitle=$('#mobile-account-tab-title');if(mobileTabTitle)mobileTabTitle.textContent=accountTabTitles[activeTab]||'Minha conta';
   Object.entries(accountTabs).forEach(([tab,id])=>{const panel=document.getElementById(id);if(panel)panel.hidden=tab!==activeTab});
   $('.account-sidebar nav')?.querySelectorAll('[data-account-tab]').forEach(link=>{const active=link.dataset.accountTab===activeTab;link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')});

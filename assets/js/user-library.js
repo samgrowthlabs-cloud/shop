@@ -205,11 +205,13 @@ export async function bindLibraryUI() {
     };
   });
   if (!slug || !document.querySelector(".detail")) return;
+  const duplicatedActions = [...document.querySelectorAll(".detail .user-product-actions")];
+  duplicatedActions.slice(1).forEach((actions) => actions.remove());
   const target = document.querySelector(".detail>div:last-child");
-  if (!target || target.querySelector(".user-product-actions")) return;
+  if (!target || document.querySelector(".detail .user-product-actions")) return;
   target.insertAdjacentHTML(
     "beforeend",
-    `<section class="user-product-actions"><div class="public-rating detail-public-rating" data-rating-summary="${slug}"></div><button class="btn ghost product-like" data-like-product="${slug}" type="button">♡ Curtir</button><button class="btn primary product-cart" type="button">Adicionar ao carrinho</button><div class="user-stars" aria-label="Sua avaliação"><span>Sua avaliação:</span>${[1, 2, 3, 4, 5].map((value) => `<button type="button" data-star="${value}" aria-label="${value} estrelas">★</button>`).join("")}</div></section>`,
+    `<section class="user-product-actions"><div class="public-rating detail-public-rating" data-rating-summary="${slug}"></div><button class="btn ghost product-like" data-like-product="${slug}" type="button">♡ Curtir</button><button class="btn primary product-cart" type="button">Adicionar à lista</button><div class="user-stars" aria-label="Sua avaliação"><span>Sua avaliação:</span>${[1, 2, 3, 4, 5].map((value) => `<button type="button" data-star="${value}" aria-label="${value} estrelas">★</button>`).join("")}</div></section>`,
   );
   await bindLibraryUI();
   const paintStars = (value) =>
@@ -234,16 +236,16 @@ export async function bindLibraryUI() {
   });
   const cartButton = document.querySelector(".product-cart");
   if (localLibrary().cart[slug]) {
-    cartButton.textContent = "Já está no carrinho ✓";
+    cartButton.textContent = "Já está na lista ✓";
     cartButton.classList.add("is-added");
   }
   cartButton.onclick = async () => {
-    cartButton.textContent = "Adicionado ao carrinho ✓";
+    cartButton.textContent = "Adicionado à lista ✓";
     cartButton.classList.add("is-added");
     try {
       await setCart(slug, 1);
     } catch {
-      cartButton.textContent = "Adicionar ao carrinho";
+      cartButton.textContent = "Adicionar à lista";
       cartButton.classList.remove("is-added");
       location.href = `entrar.html?next=${encodeURIComponent(location.pathname + location.search)}`;
     }

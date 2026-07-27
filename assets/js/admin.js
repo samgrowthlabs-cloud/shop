@@ -79,7 +79,7 @@ async function dashboard(){
   d.eventBreakdown7d=Array.isArray(d.eventBreakdown7d)?d.eventBreakdown7d:[];
   d.activity14d=Array.isArray(d.activity14d)?d.activity14d:[];
   d.noResultSearches=Array.isArray(d.noResultSearches)?d.noResultSearches:[];
-  const eventNames={product_view:'Visualizou produto',offer_click:'Clicou em uma oferta',search:'Fez uma busca',favorite_add:'Adicionou aos favoritos',favorite_remove:'Removeu dos favoritos',cart_add:'Adicionou ao carrinho',cart_remove:'Removeu do carrinho',share:'Compartilhou produto',comparison_start:'Iniciou comparação',comparison_view:'Visualizou comparação',ai_analysis:'Gerou análise com IA',page_view:'Acessou uma página'};
+  const eventNames={product_view:'Visualizou produto',offer_click:'Clicou em uma oferta',search:'Fez uma busca',favorite_add:'Adicionou aos favoritos',favorite_remove:'Removeu dos favoritos',cart_add:'Adicionou à lista',cart_remove:'Removeu da lista',share:'Compartilhou produto',comparison_start:'Iniciou comparação',comparison_view:'Visualizou comparação',ai_analysis:'Gerou análise com IA',page_view:'Acessou uma página'};
   const eventLabel=value=>eventNames[value]||String(value||'Evento').replaceAll('_',' ');
   const conversion=d.productViews24h?Math.round(Number(d.offerClicks24h||0)/Number(d.productViews24h)*1000)/10:0;
   const cards=[
@@ -90,7 +90,7 @@ async function dashboard(){
     ['Assinaturas pagas',d.paidSubscriptions,'SHOPLAB+ ativas'],['Plus presenteado',d.activePremiumPasses,'Acessos premiados ativos'],
     ['Presentes pendentes',d.pendingPremiumGrants,'Ainda não resgatados'],['Análises com IA',d.aiGenerationsMonth,'Geradas neste mês'],
     ['Produtos publicados',d.published,`${d.products} produtos cadastrados`],['Ofertas ativas',d.activeOffers,`${d.offerClicks} cliques acumulados`],
-    ['Carrinhos ativos',d.cartsWithProducts,`${d.cartItems} itens adicionados`],['Avaliações novas',d.ratings7d,'Nos últimos 7 dias'],
+    ['Listas ativas',d.cartsWithProducts,`${d.cartItems} produtos salvos`],['Avaliações novas',d.ratings7d,'Nos últimos 7 dias'],
   ];
   const maxActivity=Math.max(1,...d.activity14d.map(x=>Number(x.total||0)));
   const ranking=(items,label,value)=>items.length?items.map(x=>`<div class="chart-row"><span>${esc(x[label]||'Sem identificação')}</span><div class="bar"><span style="width:${Math.max(7,Number(x[value]||0)/Math.max(1,Number(items[0]?.[value]||0))*100)}%"></span></div><b>${Number(x[value]||0).toLocaleString('pt-BR')}</b></div>`).join(''):'<div class="empty">Ainda não há dados para este período.</div>';
