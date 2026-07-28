@@ -3620,3 +3620,202 @@ body[data-page="home"] .home-banner-slide.is-active .home-banner-bleed{
     line-height:1.05;
   }
 }
+
+/* Página de produto: galeria ampla e bloco comercial claro no desktop. */
+.offer-price-top{display:flex;align-items:center;gap:10px;min-height:24px}
+.offer-price-top .old{margin:0;color:#7b8784;font-size:13px;font-weight:600;text-decoration-thickness:1px}
+.offer-installments{margin:0 0 15px!important;color:var(--muted)!important;font-size:13px!important}
+.offer-installments strong{color:var(--text);font-weight:800}
+
+@media(min-width:901px){
+  body[data-page="product"] .page-hero{padding-top:28px}
+  body[data-page="product"] .page-hero>.muted{margin:0 0 14px;font-size:12px}
+  body[data-page="product"] .page-hero>.detail{
+    grid-template-columns:minmax(0,1.4fr) minmax(360px,.72fr);
+    align-items:start;
+    gap:22px;
+    overflow:visible;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+  }
+  body[data-page="product"] .detail>.detail-media{
+    align-self:start;
+    min-height:0;
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:#fff;
+    padding:18px;
+    box-shadow:0 16px 38px rgba(19,54,47,.06);
+  }
+  body[data-page="product"] .detail-media:has(.detail-main-image){
+    grid-template-columns:78px minmax(0,1fr);
+    gap:14px;
+    padding:18px;
+  }
+  body[data-page="product"] .detail-media:has(.detail-main-image) .detail-main-image{
+    height:540px!important;
+    min-height:540px!important;
+    max-height:540px!important;
+    border-radius:12px;
+    background:#fff;
+  }
+  body[data-page="product"] .detail-main-image img{
+    display:block!important;
+    width:auto!important;
+    height:auto!important;
+    max-width:calc(100% - 28px)!important;
+    max-height:calc(100% - 28px)!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    transform:none!important;
+  }
+  body[data-page="product"] .detail-media:has(.detail-main-image) .detail-thumbs button{
+    width:76px;
+    height:76px;
+    border-color:#dbe6e3;
+    background:#fff;
+  }
+  body[data-page="product"] .detail-media:has(.detail-main-image) .detail-thumbs button.active{border-color:var(--accent)}
+  body[data-page="product"] .detail>div:last-child{
+    display:block;
+    min-width:0;
+    padding:24px;
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:var(--surface);
+    box-shadow:0 16px 38px rgba(19,54,47,.06);
+  }
+  body[data-page="product"] .detail .page-title{
+    margin:0 0 8px;
+    font-size:clamp(24px,2vw,32px);
+    line-height:1.14;
+    letter-spacing:-.035em;
+  }
+  body[data-page="product"] .detail-brand,
+  body[data-page="product"] .product-tech-highlights{display:none!important}
+  body[data-page="product"] .product-short-description{
+    display:-webkit-box;
+    margin:8px 0 10px;
+    overflow:hidden;
+    color:var(--muted);
+    font-size:13px;
+    line-height:1.5;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+  }
+  body[data-page="product"] .detail-share,
+  body[data-page="product"] .detail-favorite{
+    margin:4px 6px 12px 0;
+    border-radius:8px;
+    font-size:12px;
+  }
+  body[data-page="product"] .detail .offer{
+    margin:0;
+    padding:20px 0 0;
+    border:0;
+    border-top:1px solid var(--border);
+    border-radius:0;
+    background:transparent!important;
+    box-shadow:none;
+  }
+  body[data-page="product"] .detail .offer-label{
+    margin-bottom:8px;
+    color:#60716d;
+    font-size:12px;
+    font-weight:800;
+  }
+  body[data-page="product"] .detail .offer-price-top{margin-bottom:1px}
+  body[data-page="product"] .detail .offer-price-top .old{color:#899592;font-size:14px}
+  body[data-page="product"] .detail .offer .detail-discount{
+    margin:0;
+    padding:5px 9px;
+    border-radius:999px;
+    background:#dcf5dc;
+    color:#168038;
+    font-size:12px;
+  }
+  body[data-page="product"] .detail .offer .price{
+    display:block;
+    margin:0 0 2px;
+    color:#172321;
+    font-size:42px;
+    line-height:1.05;
+    letter-spacing:-.04em;
+  }
+  body[data-page="product"] .detail .offer-installments{margin-bottom:18px!important}
+  body[data-page="product"] .detail .offer-seller{
+    min-height:42px;
+    margin:0 0 14px;
+    padding:9px 10px;
+    border:1px solid #dce7e4;
+    border-radius:9px;
+    background:#f6faf9;
+  }
+  body[data-page="product"] .detail .offer .offer-seller p{font-size:11px;line-height:1.35}
+  body[data-page="product"] .detail .offer .btn.primary{min-height:52px;border-radius:8px;font-size:16px}
+  body[data-page="product"] .detail .offer-redirect{justify-content:center;margin-top:9px;font-size:10px}
+  body[data-page="product"] .detail .offer+small{margin-top:9px;font-size:10px;line-height:1.45}
+}
+
+/* A moldura nunca muda ao trocar a foto, e nenhuma imagem é recortada. */
+body[data-page="product"] .detail-main-image{
+  position:relative;
+  overflow:hidden;
+  place-items:center;
+}
+body[data-page="product"] .detail-main-image img{
+  display:block!important;
+  width:auto!important;
+  height:auto!important;
+  max-width:calc(100% - 20px)!important;
+  max-height:calc(100% - 20px)!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  transform:none!important;
+}
+@media(max-width:760px){
+  body[data-page="product"] .detail-main-image{
+    --detail-gallery-height:min(92vw,440px);
+    height:var(--detail-gallery-height)!important;
+    min-height:var(--detail-gallery-height)!important;
+    max-height:var(--detail-gallery-height)!important;
+  }
+}
+@media(max-width:420px){
+  body[data-page="product"] .detail-main-image{--detail-gallery-height:min(92vw,390px)}
+}
+
+/* Desktop: as duas colunas formam um único bloco visual e a foto sempre cabe inteira. */
+@media(min-width:901px){
+  body[data-page="product"] .page-hero>.detail{
+    align-items:stretch;
+  }
+  body[data-page="product"] .detail>.detail-media{
+    align-self:stretch;
+    height:100%;
+  }
+  body[data-page="product"] .detail-media:has(.detail-main-image){
+    grid-template-rows:minmax(540px,1fr);
+  }
+  body[data-page="product"] .detail-media:has(.detail-main-image) .detail-main-image{
+    align-self:stretch;
+    width:100%;
+    height:100%!important;
+    min-height:540px!important;
+    max-height:none!important;
+    padding:0!important;
+  }
+  body[data-page="product"] .detail-main-image img{
+    display:block!important;
+    width:100%!important;
+    height:100%!important;
+    max-width:100%!important;
+    max-height:100%!important;
+    padding:30px!important;
+    object-fit:contain!important;
+    object-position:center center!important;
+    transform:none!important;
+  }
+}

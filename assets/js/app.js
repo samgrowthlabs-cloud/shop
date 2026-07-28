@@ -1,6 +1,6 @@
 import'./favicon.js';import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js?v=20260726-plus-related-5';
 import'./search-ui.js?v=20260721-trash-clear-1';
-import'./public-media.js?v=20260727-mobile-product-order-3';
+import'./public-media.js?v=20260728-product-gallery-stable-2';
 import{bindComparisonUI,comparisonPage}from'./compare.js?v=20260726-mobile-paywall-3';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260727-lista-2';
