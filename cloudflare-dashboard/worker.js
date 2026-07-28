@@ -254,14 +254,14 @@ async function dynamicSitemap(env) {
   const today = new Date().toISOString().slice(0, 10);
   const staticPages = [
     ["/", "1.0", "daily"],
-    ["/produtos.html", "0.9", "daily"],
-    ["/promocoes.html", "0.8", "daily"],
-    ["/novidades.html", "0.8", "daily"],
-    ["/sobre.html", "0.5", "monthly"],
-    ["/contato.html", "0.4", "monthly"],
-    ["/politica-de-afiliados.html", "0.3", "yearly"],
-    ["/politica-de-privacidade.html", "0.3", "yearly"],
-    ["/termos-de-uso.html", "0.3", "yearly"],
+    ["/produtos", "0.9", "daily"],
+    ["/promocoes", "0.8", "daily"],
+    ["/novidades", "0.8", "daily"],
+    ["/sobre", "0.5", "monthly"],
+    ["/contato", "0.4", "monthly"],
+    ["/politica-de-afiliados", "0.3", "yearly"],
+    ["/politica-de-privacidade", "0.3", "yearly"],
+    ["/termos-de-uso", "0.3", "yearly"],
   ].map(([path, priority, changefreq]) => ({
     loc: `${siteOrigin}${path}`,
     lastmod: today,
@@ -269,13 +269,13 @@ async function dynamicSitemap(env) {
     changefreq,
   }));
   const categories = (categoryQuery.results || []).map((category) => ({
-    loc: `${siteOrigin}/categoria.html?slug=${encodeURIComponent(category.slug)}`,
+    loc: `${siteOrigin}/categoria?slug=${encodeURIComponent(category.slug)}`,
     lastmod: date(category.lastModified),
     priority: "0.7",
     changefreq: "weekly",
   }));
   const products = (productQuery.results || []).map((product) => ({
-    loc: `${siteOrigin}/produto.html?slug=${encodeURIComponent(product.slug)}`,
+    loc: `${siteOrigin}/produto?slug=${encodeURIComponent(product.slug)}`,
     lastmod: date(product.lastModified),
     priority: "0.8",
     changefreq: "weekly",

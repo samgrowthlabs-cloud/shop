@@ -31,14 +31,14 @@ function setSeo({title,description,canonical,robots='index,follow',image=''}={})
 }
 const staticSeo={
   home:['SHOPLAB — Compare preços e encontre o produto certo','Compare preços, especificações e avaliações para encontrar o produto certo. A SHOPLAB reúne ofertas e análises claras para você comprar melhor.','/'],
-  catalog:['Produtos analisados e ofertas — SHOPLAB','Explore produtos, preços, avaliações e ofertas selecionadas pela SHOPLAB.','/produtos.html'],
-  promotions:['Promoções e ofertas em destaque — SHOPLAB','Confira promoções monitoradas e compare preços antes de visitar a loja parceira.','/promocoes.html'],
-  new:['Novidades em produtos — SHOPLAB','Veja os produtos adicionados recentemente ao catálogo da SHOPLAB.','/novidades.html'],
-  about:['Sobre a SHOPLAB','Conheça a curadoria, os critérios de análise e a transparência da SHOPLAB.','/sobre.html'],
-  contact:['Contato — SHOPLAB','Fale com a SHOPLAB para enviar dúvidas, correções, sugestões ou propostas de parceria.','/contato.html'],
-  affiliates:['Política de afiliados — SHOPLAB','Entenda os links afiliados e a independência editorial da SHOPLAB.','/politica-de-afiliados.html'],
-  privacy:['Política de privacidade — SHOPLAB','Saiba como a SHOPLAB trata dados pessoais, cookies, segurança e direitos.','/politica-de-privacidade.html'],
-  terms:['Termos de uso — SHOPLAB','Consulte as regras de uso, preços, conteúdo editorial e links parceiros.','/termos-de-uso.html'],
+  catalog:['Produtos analisados e ofertas — SHOPLAB','Explore produtos, preços, avaliações e ofertas selecionadas pela SHOPLAB.','/produtos'],
+  promotions:['Promoções e ofertas em destaque — SHOPLAB','Confira promoções monitoradas e compare preços antes de visitar a loja parceira.','/promocoes'],
+  new:['Novidades em produtos — SHOPLAB','Veja os produtos adicionados recentemente ao catálogo da SHOPLAB.','/novidades'],
+  about:['Sobre a SHOPLAB','Conheça a curadoria, os critérios de análise e a transparência da SHOPLAB.','/sobre'],
+  contact:['Contato — SHOPLAB','Fale com a SHOPLAB para enviar dúvidas, correções, sugestões ou propostas de parceria.','/contato'],
+  affiliates:['Política de afiliados — SHOPLAB','Entenda os links afiliados e a independência editorial da SHOPLAB.','/politica-de-afiliados'],
+  privacy:['Política de privacidade — SHOPLAB','Saiba como a SHOPLAB trata dados pessoais, cookies, segurança e direitos.','/politica-de-privacidade'],
+  terms:['Termos de uso — SHOPLAB','Consulte as regras de uso, preços, conteúdo editorial e links parceiros.','/termos-de-uso'],
 };
 if(staticSeo[page]){const[title,description,path]=staticSeo[page];setSeo({title,description,canonical:seoUrl(path,'')})}
 const VIEWED_PRODUCTS_KEY='shoplab:viewed-products';
@@ -79,10 +79,10 @@ async function listing(){
   const prices=all.map(product=>Number(product.price)||0).filter(Boolean),priceFloor=prices.length?Math.floor(Math.min(...prices)/100)*100:0,priceCeil=prices.length?Math.ceil(Math.max(...prices)/100)*100:10000;
   const minSelected=Math.max(priceFloor,Number(params.get('minPrice'))||priceFloor),maxSelected=Math.min(priceCeil,Number(params.get('maxPrice'))||priceCeil);
   const selectedStore=(siteConfig.stores||[]).find(item=>item.slug===store),title=store?`Produtos da loja ${esc(selectedStore?.name||store.replace(/-/g,' '))}`:page==='search'?`Resultados para “${esc(q)}”`:page==='new'?'Adicionados recentemente':page==='category'?`Categoria: ${esc(pageCategory?.name||slug.replace(/-/g,' '))}`:page==='brand'?`Marca: ${esc(slug.replace(/-/g,' '))}`:page==='author'?`Autor: ${esc(slug.replace(/-/g,' '))}`:'Catálogo completo';
-  if(page==='search')setSeo({title:`Busca por ${q||'produtos'} — SHOPLAB`,description:'Resultados da busca interna da SHOPLAB.',canonical:seoUrl('/busca.html',q?`?q=${encodeURIComponent(q)}`:''),robots:'noindex,follow'});
-  if(page==='category'){const name=pageCategory?.name||slug.replace(/-/g,' ');setSeo({title:`${name} — produtos e ofertas | SHOPLAB`,description:`Compare produtos, preços e ofertas de ${name} selecionados pela SHOPLAB.`,canonical:seoUrl('/categoria.html',`?slug=${encodeURIComponent(slug)}`)})}
-  if(page==='brand'){const name=slug.replace(/-/g,' ');setSeo({title:`Produtos ${name} — SHOPLAB`,description:`Compare produtos, preços e ofertas da marca ${name} na SHOPLAB.`,canonical:seoUrl('/marca.html',`?slug=${encodeURIComponent(slug)}`)})}
-  if(page==='author'){const name=slug.replace(/-/g,' ');setSeo({title:`Livros de ${name} — SHOPLAB`,description:`Veja livros, preços e ofertas de ${name} selecionados pela SHOPLAB.`,canonical:seoUrl('/autor.html',`?slug=${encodeURIComponent(slug)}`)})}
+  if(page==='search')setSeo({title:`Busca por ${q||'produtos'} — SHOPLAB`,description:'Resultados da busca interna da SHOPLAB.',canonical:seoUrl('/busca',q?`?q=${encodeURIComponent(q)}`:''),robots:'noindex,follow'});
+  if(page==='category'){const name=pageCategory?.name||slug.replace(/-/g,' ');setSeo({title:`${name} — produtos e ofertas | SHOPLAB`,description:`Compare produtos, preços e ofertas de ${name} selecionados pela SHOPLAB.`,canonical:seoUrl('/categoria',`?slug=${encodeURIComponent(slug)}`)})}
+  if(page==='brand'){const name=slug.replace(/-/g,' ');setSeo({title:`Produtos ${name} — SHOPLAB`,description:`Compare produtos, preços e ofertas da marca ${name} na SHOPLAB.`,canonical:seoUrl('/marca',`?slug=${encodeURIComponent(slug)}`)})}
+  if(page==='author'){const name=slug.replace(/-/g,' ');setSeo({title:`Livros de ${name} — SHOPLAB`,description:`Veja livros, preços e ofertas de ${name} selecionados pela SHOPLAB.`,canonical:seoUrl('/autor',`?slug=${encodeURIComponent(slug)}`)})}
   const categoryOptions=categories.map(item=>`<option value="${esc(item.name)}" ${(pageCategory?.name||initialCategory)===item.name?'selected':''}>${esc(item.name)}</option>`).join('');
   window.__shoplabListing={products:all,card,priceFloor,priceCeil,premiumSearch:intelligentSearch?.meta?.premiumSearch};
   return `<main id="conteudo"><div class="container page-hero"><span class="eyebrow">Laboratório de produtos</span><h1 class="page-title">${title}</h1><p class="muted" id="listing-summary">${all.length} produtos encontrados · resultados disponíveis.</p></div><section class="section listing-section"><div class="container catalog"><aside class="filters" aria-label="Filtros de produtos"><div class="filters-title"><strong>Filtrar resultados</strong><span>Refine sua busca</span></div><label for="category">Categoria</label><select id="category" ${pageCategory?'disabled':''}><option value="">Todas as categorias</option>${categoryOptions}</select><fieldset class="price-filter"><legend>Faixa de preço</legend><div class="price-values"><output id="min-price-label">${money(minSelected)}</output><span>até</span><output id="max-price-label">${money(maxSelected)}</output></div><div class="range-track"><input id="min-price" type="range" min="${priceFloor}" max="${priceCeil}" step="100" value="${minSelected}" aria-label="Preço mínimo"><input id="max-price" type="range" min="${priceFloor}" max="${priceCeil}" step="100" value="${maxSelected}" aria-label="Preço máximo"></div></fieldset><label class="check-filter"><input id="promotions-only" type="checkbox" ${params.get('promotion')==='1'?'checked':''}><span>Somente promoções</span></label><button class="btn ghost clear-filters" id="clear-filters" type="button">Limpar filtros</button></aside><div class="catalog-results"><div class="toolbar"><span id="result-count">${all.length} resultados</span><label class="sort-control">Ordenar por <select id="sort"><option value="" ${!initialSort?'selected':''}>Relevância</option><option value="price-asc" ${initialSort==='price-asc'?'selected':''}>Menor preço</option><option value="price-desc" ${initialSort==='price-desc'?'selected':''}>Maior preço</option><option value="discount" ${initialSort==='discount'?'selected':''}>Maior desconto</option></select></label></div><div class="products" id="listing-products"></div><div class="empty-results" id="empty-results" hidden><b>Nenhum produto nesta faixa.</b><span>Tente ampliar o preço ou remover algum filtro.</span><button class="btn ghost" type="button" data-clear-filters>Limpar filtros</button></div></div></div></section></main>`
@@ -112,9 +112,9 @@ function institutional(){const content={about:['Sobre a SHOPLAB','Transformamos 
 const renderProductDetail=detail;
 detail=async()=>{
   const html=await renderProductDetail(),slug=params.get('slug')||'habitos-atomicos',product=await getProductBySlug(slug);
-  if(!product){setSeo({title:'Produto não encontrado — SHOPLAB',description:'Este produto não está disponível.',canonical:seoUrl('/produto.html',`?slug=${encodeURIComponent(slug)}`),robots:'noindex,follow'});return html}
+  if(!product){setSeo({title:'Produto não encontrado — SHOPLAB',description:'Este produto não está disponível.',canonical:seoUrl('/produto',`?slug=${encodeURIComponent(slug)}`),robots:'noindex,follow'});return html}
   const image=product.primaryStorageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(product.primaryStorageKey)}`:product.primaryExternalUrl||'';
-  const canonical=seoUrl('/produto.html',`?slug=${encodeURIComponent(product.slug)}`),description=product.shortDescription||product.description||`Compare preço, oferta e detalhes de ${product.name} antes de comprar.`;
+  const canonical=seoUrl('/produto',`?slug=${encodeURIComponent(product.slug)}`),description=product.shortDescription||product.description||`Compare preço, oferta e detalhes de ${product.name} antes de comprar.`;
   setSeo({title:`${product.name} — preço e análise | SHOPLAB`,description,canonical,image});
   let schema=document.head.querySelector('script[data-seo-product]');
   if(!schema){schema=document.createElement('script');schema.type='application/ld+json';schema.dataset.seoProduct='';document.head.append(schema)}
