@@ -1,7 +1,7 @@
 import'./favicon.js';import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js?v=20260726-plus-related-5';
 import'./search-ui.js?v=20260721-trash-clear-1';
-import'./public-media.js?v=20260728-product-magnifier-5';
-import{bindComparisonUI,comparisonPage}from'./compare.js?v=20260726-mobile-paywall-3';
+import'./public-media.js?v=20260729-remove-installments-2';
+import{bindComparisonUI,comparisonPage}from'./compare.js?v=20260729-free-ai-credits-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260727-lista-2';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';

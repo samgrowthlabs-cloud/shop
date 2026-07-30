@@ -61,7 +61,7 @@ function renderProductInformation(data){
   const productTitle=detailCopy?.querySelector('h1');if(productTitle&&data.brand&&!detailCopy.querySelector('.detail-brand')){const brandLogo=data.brandLogoUrl?`<img src="${safe(data.brandLogoUrl)}" alt="Logo ${safe(data.brand)}">`:'';productTitle.insertAdjacentHTML('afterend',`<div class="detail-brand">${brandLogo}<span><small>Marca</small><strong>${safe(data.brand)}</strong></span></div>`);const oldBrandText=[...detailCopy.querySelectorAll(':scope > p.muted')].find(item=>item.textContent.trim()===String(data.brand).trim());oldBrandText?.remove()}
   const shareButton=detailCopy?.querySelector('.detail-share'),compareSvg='<img src="assets/icons/compare.svg" alt="">';if(shareButton&&!detailCopy.querySelector('.detail-favorite')){shareButton.innerHTML='<img src="assets/icons/share.svg" alt=""><span>Compartilhar</span>';shareButton.insertAdjacentHTML('beforebegin',`<button class="btn ghost detail-favorite icon-compare compare-product" type="button" data-compare-product="${safe(data.slug)}" data-compare-name="${safe(data.name)}" data-compare-category="${safe(data.category||'Sem categoria')}" aria-pressed="false">${compareSvg}<span>Comparar</span></button>`)}
   const currentPrice=Number(data.price||0),oldPrice=Number(data.oldPrice||0),discount=oldPrice>currentPrice&&currentPrice>0?Math.round((1-currentPrice/oldPrice)*100):Number(data.discount||0);
-  if(offer){const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),logo=data.storeLogoUrl?`<img src="${safe(data.storeLogoUrl)}" alt="Logo ${safe(data.store||'da loja')}">`:'<span aria-hidden="true">🤝</span>',installments=currentPrice>0?money(Math.ceil(currentPrice/5)):'';offer.innerHTML=`<small class="offer-label">Melhor preço encontrado</small><div class="offer-price-top">${oldPrice>currentPrice?`<span class="old">${money(oldPrice)}</span>`:''}${discount>0?`<span class="detail-discount">-${discount}%</span>`:''}</div><div class="price">${money(currentPrice)}</div>${installments?`<p class="offer-installments">ou 5x de <strong>${installments}</strong> sem juros</p>`:''}<div class="offer-seller">${logo}<p>Vendido por <strong>${safe(data.store||'loja parceira')}</strong> · parceiro verificado</p><img class="offer-verified" src="assets/icons/verified.svg" alt="Verificado"></div><a class="btn primary" href="#" data-offer="${safe(data.slug)}">Ir para oferta <span aria-hidden="true">→</span></a><small class="offer-redirect"><img src="assets/icons/shield-check.svg" alt=""> Você será redirecionado para a loja parceira.</small>`}
+  if(offer){const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),logo=data.storeLogoUrl?`<img src="${safe(data.storeLogoUrl)}" alt="Logo ${safe(data.store||'da loja')}">`:'<span aria-hidden="true">🤝</span>';offer.innerHTML=`<small class="offer-label">Melhor preço encontrado</small><div class="offer-price-top">${oldPrice>currentPrice?`<span class="old">${money(oldPrice)}</span>`:''}${discount>0?`<span class="detail-discount">-${discount}%</span>`:''}</div><div class="price">${money(currentPrice)}</div><div class="offer-seller">${logo}<p>Vendido por <strong>${safe(data.store||'loja parceira')}</strong> · parceiro verificado</p><img class="offer-verified" src="assets/icons/verified.svg" alt="Verificado"></div><a class="btn primary" href="#" data-offer="${safe(data.slug)}">Ir para oferta <span aria-hidden="true">→</span></a><small class="offer-redirect"><img src="assets/icons/shield-check.svg" alt=""> Você será redirecionado para a loja parceira.</small>`}
   const priority=['Processador','Memória RAM','Armazenamento','Tamanho da tela','Tela','Placa de vídeo','Bateria','Resolução','Capacidade','Tipo'];
   const highlights=[...priority.map(name=>specifications.find(item=>item.name.toLocaleLowerCase('pt-BR')===name.toLocaleLowerCase('pt-BR'))).filter(Boolean),...specifications].filter((item,index,list)=>list.findIndex(other=>other.name===item.name)===index).slice(0,4);
   if(offer&&highlights.length)offer.insertAdjacentHTML('beforebegin',`<div class="product-tech-highlights">${highlights.map(item=>`<div><span>${specificationIcon(item.name)}</span><strong>${safe(item.value)}</strong><small>${safe(item.name)}</small></div>`).join('')}</div>`);
@@ -127,21 +127,38 @@ function arrangeMobileOffer(){
 }
 
 async function renderPremiumProductInsight(data,insightPromise){
-  if(!data||!session()||document.querySelector('.premium-product-insight'))return;
+  if(!data||document.querySelector('.premium-product-insight'))return;
   const anchor=document.querySelector('.product-description-section')||document.querySelector('.product-information-sections')||document.querySelector('#conteudo > .section.alt');
   if(!anchor)return;
   const section=document.createElement('section');section.className='section premium-product-insight is-loading';
+  if(!session()){
+    section.className='section premium-product-insight is-locked free-ai-login';
+    section.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Crie sua conta ou faça login para usar comparação inteligente e análises personalizadas. Você começa com 5 créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar e usar meus créditos</a></div>`;
+    anchor.insertAdjacentElement('afterend',section);
+    return;
+  }
   section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Preparando uma conclusão personalizada…</p></div>';
   anchor.insertAdjacentElement('afterend',section);
   try{
     const insight=await(insightPromise||userApi(`products/${encodeURIComponent(data.slug)}/plus-insight`));
+    if(insight.freeCreditsExhausted){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SEUS 5 CRÉDITOS FORAM USADOS</span><h2>Continue analisando com SHOPLAB+</h2><p>Você já aproveitou suas análises gratuitas. Assine para receber novas análises inteligentes todos os meses.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>';return}
     if(insight.premiumRequired){section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>`;return}
     if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+</span><h2>Limite mensal de novas análises atingido</h2><p>Análises já salvas em cache continuam disponíveis. Consulte seu plano para acompanhar a renovação da cota.</p><a class="btn ghost" href="conta.html?aba=plus">Ver meu plano</a></div>';return}
     if(!insight.conclusion?.length){section.remove();return}
     const lines=value=>`<div>${(value||[]).map(item=>`<p>${safe(item)}</p>`).join('')}</div>`;
     section.className='section premium-product-insight';
     section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2></div><small>${insight.cacheHit?'Análise personalizada salva':'Nova análise personalizada'}</small></div><article class="premium-insight-conclusion"><h3>Conclusão da IA</h3>${lines(insight.conclusion)}</article><div class="premium-insight-grid"><article><span>01</span><h3>Para quem é este produto</h3>${lines(insight.bestFor)}</article><article><span>02</span><h3>Como ele pode ajudar</h3>${lines(insight.howItHelps)}</article></div><small class="premium-insight-disclaimer">Análise baseada nos dados cadastrados do produto e nas suas preferências de uso. Confirme informações importantes com o fabricante.</small></div>`;
-  }catch{section.remove()}
+    if(insight.freeAccess){
+      const label=section.querySelector('.premium-insight-head .eyebrow'),status=section.querySelector('.premium-insight-head small');
+      if(label)label.textContent='CRÉDITO GRÁTIS · ANÁLISE PARA VOCÊ';
+      if(status)status.textContent=`${Number(insight.freeCredits?.remaining||0)} créditos grátis restantes`;
+    }
+  }catch(error){
+    if(/entre na sua conta/i.test(String(error?.message||''))){
+      section.className='section premium-product-insight is-locked free-ai-login';
+      section.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Sua sessão expirou. Entre novamente para usar seus créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar na minha conta</a></div>`;
+    }else section.remove();
+  }
 }
 
 function openGallery(items,startIndex,name){

@@ -192,12 +192,29 @@ function applyComparisonAnalysisWhenReady(analysis, products, attempt = 0) {
     return;
   }
   if (!insight || !rows) return;
+  if(analysis.loginRequired){
+    document.querySelector('.comparison-shell')?.classList.remove('is-access-checking');
+    insight.innerHTML=`<section class="container comparison-premium-gate free-ai-login"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para começar a comparação inteligente</h2><p>Faça login para liberar a análise completa por IA. Sua conta começa com 5 créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar e usar meus créditos</a></section>`;
+    return;
+  }
   if(analysis.premiumRequired){
     insight.innerHTML='';
     applyComparisonPaywall(analysis,products);
+    if(analysis.freeCreditsExhausted){
+      const gate=document.querySelector('.comparison-paywall');
+      if(gate){
+        gate.querySelector('.eyebrow').textContent='SEUS 5 CRÉDITOS FORAM USADOS';
+        gate.querySelector('h2').textContent='Continue comparando com SHOPLAB+';
+        gate.querySelector('p').textContent='Você já aproveitou suas comparações gratuitas. Assine para receber novas análises inteligentes todos os meses.';
+      }
+    }
   }else{
     document.querySelector('.comparison-shell')?.classList.remove('is-access-checking');
     insight.innerHTML=analysis.quotaExceeded?renderPremiumComparisonState(analysis):renderRecommendations(analysis,products);
+    if(analysis.freeAccess){
+      const label=insight.querySelector('.comparison-intelligence-heading .eyebrow');
+      if(label)label.textContent=`CRÉDITO GRÁTIS · ${Number(analysis.freeCredits?.remaining||0)} RESTANTES`;
+    }
   }
   if (analysis.criteria?.length) rows.innerHTML = renderSpecificationRows(analysis.criteria, products);
 }

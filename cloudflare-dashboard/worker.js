@@ -172,6 +172,8 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_POSITION_MIGRATION_REQUIRED",message:"Execute category-image-position-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*comparison_analysis_cache/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"COMPARISON_CACHE_MIGRATION_REQUIRED",message:"Execute comparison-analysis-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*free_ai_credit_usage/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"FREE_AI_CREDITS_MIGRATION_REQUIRED",message:"Execute free-ai-credits-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*premium_product_insight_cache/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_PRODUCT_INSIGHT_CACHE_MIGRATION_REQUIRED",message:"Execute premium-product-insight-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*premium_access_grants/i.test(detail))
@@ -1554,7 +1556,7 @@ function cacheComparisonAtEdge(ctx, cacheKey, analysis) {
   }
 }
 
-async function generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback, userId, usagePeriod }) {
+async function generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback, userId, usagePeriod, freeFeatureKey }) {
   try {
     const primaryModel = String(env.PREMIUM_COMPARISON_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8");
     const fallbackModel = String(env.PREMIUM_COMPARISON_FALLBACK_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast");
@@ -1622,10 +1624,9 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
     return analysis;
   } catch (error) {
     console.warn(JSON.stringify({ event: "ai_product_comparison_failed", cacheKey: version, error: String(error?.message || error) }));
-    await env.DB.batch([
-      env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version),
-      env.DB.prepare(`UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`).bind(userId, usagePeriod),
-    ]);
+    await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
+    if (freeFeatureKey) await refundFreeAiCredit(env, userId, freeFeatureKey);
+    else await env.DB.prepare(`UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`).bind(userId, usagePeriod).run();
     return null;
   }
 }
@@ -1634,8 +1635,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para acessar a análise SHOPLAB+", 401, id);
   const premium = await premiumSubscriptionData(env, user.id);
-  if (!premium.premium)
-    return ok(req, env, { premium: false, premiumRequired: true, plan: premium.plan }, id);
+  let freeAccess = null;
   const product = await env.DB.prepare(
     `SELECT p.id,p.slug,p.name,p.product_type productType,p.short_description shortDescription,
       p.full_description fullDescription,p.editorial_review editorialReview,p.editorial_score editorialScore,
@@ -1646,13 +1646,18 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
      WHERE p.slug=? AND p.status='published'`,
   ).bind(slug).first();
   if (!product) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, id);
+  if (!premium.premium) {
+    freeAccess = await reserveFreeAiCredit(env, user.id, `product-insight:${slug}`, "product_insight");
+    if (!freeAccess.allowed)
+      return ok(req, env, { premium: false, premiumRequired: true, freeCreditsExhausted: true, freeCredits: freeAccess, plan: premium.plan }, id);
+  }
   const version = await sha256(`premium-product-insight-v2|${user.id}|${product.id}|${product.updatedAt}`);
   const cached = await env.DB.prepare(
     `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
   ).bind(version, user.id).first();
   if (cached?.insightJson) {
     try {
-      return ok(req, env, { ...JSON.parse(cached.insightJson), premium: true, cacheHit: true, usage: premium.usage }, id);
+      return ok(req, env, { ...JSON.parse(cached.insightJson), premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, cacheHit: true, usage: premium.usage }, id);
     } catch (error) {
       console.warn(JSON.stringify({ event: "premium_product_insight_cache_invalid", cacheKey: version, error: String(error?.message || error) }));
     }
@@ -1680,8 +1685,11 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     searches: (searchResult.results || []).map((item) => item.queryText).filter(Boolean),
     recentlyViewed: (viewedResult.results || []).map((item) => ({ name: item.name, category: item.category })),
   };
-  if (!env.AI) return ok(req, env, { premium: true, unavailable: true, usage: premium.usage }, id);
-  const usage = await reservePremiumAiGeneration(env, user.id);
+  if (!env.AI) {
+    if (!premium.premium) await refundFreeAiCredit(env, user.id, freeAccess.featureKey);
+    return ok(req, env, { premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, unavailable: true, usage: premium.usage }, id);
+  }
+  const usage = premium.premium ? await reservePremiumAiGeneration(env, user.id) : freeAccess;
   if (!usage.allowed) return ok(req, env, { premium: true, quotaExceeded: true, usage }, id);
   try {
     const schema = {
@@ -1737,13 +1745,17 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
       `INSERT INTO premium_product_insight_cache(cache_key,user_id,product_id,insight_json)
        VALUES(?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET insight_json=excluded.insight_json,updated_at=CURRENT_TIMESTAMP`,
     ).bind(version, user.id, product.id, JSON.stringify(insight)).run();
-    return ok(req, env, { ...insight, premium: true, cacheHit: false, usage }, id);
+    return ok(req, env, { ...insight, premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, cacheHit: false, usage }, id);
   } catch (error) {
-    await env.DB.prepare(
-      `UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`,
-    ).bind(user.id, usage.period).run();
+    if (premium.premium) {
+      await env.DB.prepare(
+        `UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`,
+      ).bind(user.id, usage.period).run();
+    } else {
+      await refundFreeAiCredit(env, user.id, freeAccess.featureKey);
+    }
     console.warn(JSON.stringify({ event: "premium_product_insight_failed", productSlug: slug, error: String(error?.message || error) }));
-    return ok(req, env, { premium: true, generationFailed: true, usage: { ...usage, used: Math.max(0, usage.used - 1), remaining: Math.min(usage.limit, usage.remaining + 1) } }, id);
+    return ok(req, env, { premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, generationFailed: true, usage: { ...usage, used: Math.max(0, usage.used - 1), remaining: Math.min(usage.limit, usage.remaining + 1) } }, id);
   }
 }
 
@@ -1757,6 +1769,40 @@ async function reservePremiumAiGeneration(env, userId) {
   ).bind(userId, period, plan.aiMonthlyLimit).first();
   const used = Number(row?.generations || 0);
   return { allowed: Boolean(row), used, limit: plan.aiMonthlyLimit, remaining: Math.max(0, plan.aiMonthlyLimit - used), period };
+}
+
+const FREE_AI_CREDIT_LIMIT = 5;
+
+async function reserveFreeAiCredit(env, userId, featureKey, featureType) {
+  const normalizedKey = String(featureKey || "").slice(0, 240);
+  const existing = await env.DB.prepare(
+    `SELECT 1 found FROM free_ai_credit_usage WHERE user_id=? AND feature_key=?`,
+  ).bind(userId, normalizedKey).first();
+  if (!existing) {
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO free_ai_credit_usage(user_id,feature_key,feature_type)
+       SELECT ?,?,? WHERE (SELECT COUNT(*) FROM free_ai_credit_usage WHERE user_id=?)<?`,
+    ).bind(userId, normalizedKey, String(featureType || "ai").slice(0, 40), userId, FREE_AI_CREDIT_LIMIT).run();
+  }
+  const [access, count] = await Promise.all([
+    env.DB.prepare(`SELECT 1 found FROM free_ai_credit_usage WHERE user_id=? AND feature_key=?`).bind(userId, normalizedKey).first(),
+    env.DB.prepare(`SELECT COUNT(*) used FROM free_ai_credit_usage WHERE user_id=?`).bind(userId).first(),
+  ]);
+  const used = Math.min(FREE_AI_CREDIT_LIMIT, Number(count?.used || 0));
+  return {
+    allowed: Boolean(access),
+    reused: Boolean(existing),
+    used,
+    limit: FREE_AI_CREDIT_LIMIT,
+    remaining: Math.max(0, FREE_AI_CREDIT_LIMIT - used),
+    featureKey: normalizedKey,
+  };
+}
+
+async function refundFreeAiCredit(env, userId, featureKey) {
+  await env.DB.prepare(
+    `DELETE FROM free_ai_credit_usage WHERE user_id=? AND feature_key=?`,
+  ).bind(userId, String(featureKey || "").slice(0, 240)).run();
 }
 
 async function analyzeProductComparison(req, env, ctx, id) {
@@ -1779,15 +1825,35 @@ async function analyzeProductComparison(req, env, ctx, id) {
   const fallback = fallbackProductComparison(products);
   const user = await activeUser(req, env);
   const premium = user ? await premiumSubscriptionData(env, user.id) : { premium: false, status: "free", plan: await resolvedPremiumPlan(env), usage: null };
+  if (!user) return ok(req, env, {
+    algorithm: "public-comparison-login-v1",
+    criteria: (fallback.criteria || []).slice(0, 2),
+    premium: false,
+    premiumRequired: false,
+    loginRequired: true,
+    freeCredits: { used: 0, limit: FREE_AI_CREDIT_LIMIT, remaining: FREE_AI_CREDIT_LIMIT },
+    plan: premium.plan,
+  }, id);
+  const hasComparisonContext = products.some((product) =>
+    product.specifications.length ||
+    String(product.shortDescription || "").trim() ||
+    String(product.fullDescription || "").trim() ||
+    String(product.editorialReview || "").trim(),
+  );
+  const freeAccess = !premium.premium && hasComparisonContext
+    ? await reserveFreeAiCredit(env, user.id, `comparison:${[...slugs].sort().join(",")}`, "comparison")
+    : null;
   const technicalResult = {
     ...fallback,
     premium: premium.premium,
-    premiumRequired: !premium.premium,
+    premiumRequired: Boolean(!premium.premium && freeAccess && !freeAccess.allowed),
+    freeAccess: Boolean(!premium.premium && freeAccess?.allowed),
+    freeCredits: freeAccess,
     subscriptionStatus: premium.status,
     plan: premium.plan,
     usage: premium.usage,
   };
-  if (!premium.premium) {
+  if (!premium.premium && freeAccess && !freeAccess.allowed) {
     const teaserCriteria = (fallback.criteria || []).slice(0, 2).map((criterion) => ({
       label: criterion.label,
       explanation: "",
@@ -1801,29 +1867,25 @@ async function analyzeProductComparison(req, env, ctx, id) {
       })),
     }));
     return ok(req, env, {
-      algorithm: "public-comparison-teaser-v1",
+      algorithm: "free-credits-exhausted-v1",
       summary: "A comparação foi iniciada. Assine o SHOPLAB+ para acessar todos os critérios, vencedores e o veredito da IA.",
       criteria: teaserCriteria,
       lockedCriteriaCount: Math.max(0, (fallback.criteria || []).length - teaserCriteria.length),
       premium: false,
       premiumRequired: true,
+      freeCreditsExhausted: true,
+      freeCredits: freeAccess,
       subscriptionStatus: premium.status,
       plan: premium.plan,
       usage: premium.usage,
     }, id);
   }
-  const hasComparisonContext = products.some((product) =>
-    product.specifications.length ||
-    String(product.shortDescription || "").trim() ||
-    String(product.fullDescription || "").trim() ||
-    String(product.editorialReview || "").trim(),
-  );
   if (!hasComparisonContext) return ok(req, env, technicalResult, id);
   const version = await sha256(`comparison-v12|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
   const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
   try {
     const cached = await caches.default.match(cacheKey);
-    if (cached) return ok(req, env, { ...(await cached.json()), premium: true, usage: premium.usage }, id);
+    if (cached) return ok(req, env, { ...(await cached.json()), premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, usage: premium.usage }, id);
   } catch (error) {
     console.warn(JSON.stringify({ event: "comparison_cache_read_failed", error: String(error?.message || error) }));
   }
@@ -1835,13 +1897,16 @@ async function analyzeProductComparison(req, env, ctx, id) {
       const analysis = JSON.parse(durableCache.analysisJson);
       if (analysis && typeof analysis === "object") {
         cacheComparisonAtEdge(ctx, cacheKey, analysis);
-        return ok(req, env, { ...analysis, premium: true, usage: premium.usage }, id);
+        return ok(req, env, { ...analysis, premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, usage: premium.usage }, id);
       }
     } catch (error) {
       console.warn(JSON.stringify({ event: "comparison_durable_cache_invalid", cacheKey: version, error: String(error?.message || error) }));
     }
   }
-  if (!env.AI) return ok(req, env, technicalResult, id);
+  if (!env.AI) {
+    if (!premium.premium && freeAccess) await refundFreeAiCredit(env, user.id, freeAccess.featureKey);
+    return ok(req, env, technicalResult, id);
+  }
   let claimed = false;
   if (!durableCache) {
     const claim = await env.DB.prepare(
@@ -1855,7 +1920,7 @@ async function analyzeProductComparison(req, env, ctx, id) {
     claimed = Boolean(claim.meta.changes);
   }
   if (claimed) {
-    const usage = await reservePremiumAiGeneration(env, user.id);
+    const usage = premium.premium ? await reservePremiumAiGeneration(env, user.id) : freeAccess;
     if (!usage.allowed) {
       await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
       return ok(req, env, { ...technicalResult, premium: true, premiumRequired: false, quotaExceeded: true, usage }, id);
@@ -1868,17 +1933,20 @@ async function analyzeProductComparison(req, env, ctx, id) {
       fallback,
       userId: user.id,
       usagePeriod: usage.period,
+      freeFeatureKey: premium.premium ? null : freeAccess.featureKey,
     });
     if (ctx?.waitUntil) ctx.waitUntil(generationTask);
     return ok(req, env, {
       ...technicalResult,
-      premium: true,
+      premium: premium.premium,
       premiumRequired: false,
+      freeAccess: !premium.premium,
+      freeCredits: freeAccess,
       processing: true,
       usage,
     }, id);
   }
-  return ok(req, env, { ...fallback, premium: true, processing: true, usage: premium.usage }, id);
+  return ok(req, env, { ...fallback, premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, processing: true, usage: premium.usage }, id);
 }
 
 function premiumRelationText(value) {
