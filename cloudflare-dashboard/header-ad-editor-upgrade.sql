@@ -1,0 +1,11 @@
+ALTER TABLE header_ad_strips ADD COLUMN image_position_x INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE header_ad_strips ADD COLUMN image_position_y INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE header_ad_strips ADD COLUMN image_scale INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE header_ad_strips ADD COLUMN mobile_position_x INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE header_ad_strips ADD COLUMN mobile_position_y INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE header_ad_strips ADD COLUMN mobile_scale INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE header_ad_strips ADD COLUMN image_rotation INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE header_ad_strips ADD COLUMN animation_preset TEXT NOT NULL DEFAULT 'fade';
+ALTER TABLE header_ad_strips ADD COLUMN animation_duration INTEGER NOT NULL DEFAULT 700;
+ALTER TABLE header_ad_strips ADD COLUMN animation_delay INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE header_ad_strips ADD COLUMN style_json TEXT NOT NULL DEFAULT '{}';

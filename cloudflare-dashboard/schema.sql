@@ -304,6 +304,34 @@ CREATE INDEX IF NOT EXISTS idx_promotion_products_product ON promotion_products(
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON admin_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_banners_active_period ON banners(is_active, starts_at, ends_at, sort_order);
 CREATE INDEX IF NOT EXISTS idx_header_spotlights_active ON header_spotlights(is_active, starts_at, ends_at, sort_order);
+
+CREATE TABLE IF NOT EXISTS header_ad_strips (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  storage_key TEXT,
+  link_url TEXT NOT NULL,
+  alt_text TEXT,
+  starts_at TEXT,
+  ends_at TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  image_position_x INTEGER NOT NULL DEFAULT 50,
+  image_position_y INTEGER NOT NULL DEFAULT 50,
+  image_scale INTEGER NOT NULL DEFAULT 100,
+  mobile_position_x INTEGER NOT NULL DEFAULT 50,
+  mobile_position_y INTEGER NOT NULL DEFAULT 50,
+  mobile_scale INTEGER NOT NULL DEFAULT 100,
+  image_rotation INTEGER NOT NULL DEFAULT 0,
+  animation_preset TEXT NOT NULL DEFAULT 'fade',
+  animation_duration INTEGER NOT NULL DEFAULT 700,
+  animation_delay INTEGER NOT NULL DEFAULT 0,
+  style_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_header_ad_strips_active
+  ON header_ad_strips(is_active, starts_at, ends_at, sort_order);
 CREATE INDEX IF NOT EXISTS idx_comparison_analysis_cache_updated ON comparison_analysis_cache(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_premium_product_insight_user ON premium_product_insight_cache(user_id,updated_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_only_one_active_seasonal_theme ON seasonal_themes(is_active) WHERE is_active=1;

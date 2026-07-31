@@ -10,9 +10,10 @@
 6. Para adicionar preço normal ao cadastro de produtos, execute uma única vez `product-pricing-upgrade.sql`.
 7. Em bancos existentes, execute uma única vez `brand-store-logo-upgrade.sql` para permitir logos de marcas e lojas. Bancos novos já recebem essas colunas pelo `schema.sql`.
 8. Para permitir imagem ou GIF clicável e independente dos temas no destaque direito do cabeçalho, execute uma única vez `header-spotlight-upgrade.sql`. Bancos novos já recebem essa configuração pelo `schema.sql`.
+9. Para a faixa publicitária independente abaixo do menu, execute `header-ad-strips-upgrade.sql`. Se a tabela já existir, execute uma única vez `header-ad-editor-upgrade.sql` para habilitar enquadramento separado de computador/celular, zoom, rotação e animação. Se o editor visual básico já estiver instalado, execute também `header-ad-layers-upgrade.sql` para habilitar fundo, gradiente, textos e imagens em camadas.
 
-9. Para manter preços importados do Mercado Livre atualizados, execute uma única vez `mercadolivre-price-sync-upgrade.sql`.
-10. Para habilitar o editor visual completo dos banners em um banco existente, execute uma única vez `banner-style-editor-upgrade.sql`. Bancos novos já recebem `style_json` pelo `schema.sql`.
+10. Para manter preços importados do Mercado Livre atualizados, execute uma única vez `mercadolivre-price-sync-upgrade.sql`.
+11. Para habilitar o editor visual completo dos banners em um banco existente, execute uma única vez `banner-style-editor-upgrade.sql`. Bancos novos já recebem `style_json` pelo `schema.sql`.
 
 O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetários são armazenados em centavos.
 

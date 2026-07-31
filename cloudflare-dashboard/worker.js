@@ -86,6 +86,10 @@ export default {
           },
           503,
         );
+      if (/no such table:.*header_ad_strips/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"HEADER_AD_STRIPS_MIGRATION_REQUIRED",message:"Execute header-ad-strips-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such column:.*(?:image_position_x|mobile_position_x|animation_preset)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"HEADER_AD_EDITOR_MIGRATION_REQUIRED",message:"Execute header-ad-editor-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*(?:spotlight_position_x|spotlight_position_y|spotlight_scale)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"HEADER_SPOTLIGHT_IMAGE_CONTROLS_MIGRATION_REQUIRED",message:"Execute header-spotlight-image-controls-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*(?:spotlight_rotation|spotlight_animation|spotlight_animation_duration|spotlight_animation_delay)/i.test(detail))
@@ -536,6 +540,18 @@ async function route(request, env, ctx, requestId) {
     return updateHeaderSpotlight(request, env, path.split("/").pop(), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/header-spotlights\/[^/]+$/.test(path))
     return deleteHeaderSpotlight(request, env, path.split("/").pop(), requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/header-ads")
+    return adminHeaderAds(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/header-ads")
+    return createHeaderAd(request, env, requestId);
+  if (request.method === "POST" && /^\/api\/v1\/admin\/header-ads\/[^/]+\/media$/.test(path))
+    return uploadHeaderAdMedia(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "POST" && /^\/api\/v1\/admin\/header-ads\/[^/]+\/layers$/.test(path))
+    return uploadHeaderAdLayer(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/header-ads\/[^/]+$/.test(path))
+    return updateHeaderAd(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/header-ads\/[^/]+$/.test(path))
+    return deleteHeaderAd(request, env, path.split("/").pop(), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/banners")
     return createBanner(request, env, requestId);
   if (request.method === "PUT" && path.startsWith("/api/v1/admin/banners/"))
@@ -588,7 +604,7 @@ async function listCategories(req, env, id) {
 }
 
 async function publicSiteConfig(req, env, id) {
-  const [banners, theme, stores, brands, headerPromotions, headerSpotlights] = await env.DB.batch([
+  const [banners, theme, stores, brands, headerPromotions, headerSpotlights, headerAds] = await env.DB.batch([
     env.DB.prepare(
       `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
     ),
@@ -606,6 +622,9 @@ async function publicSiteConfig(req, env, id) {
     ),
     env.DB.prepare(
       `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,spotlight_rotation imageRotation,spotlight_animation animationPreset,spotlight_animation_duration animationDuration,spotlight_animation_delay animationDelay FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
+    ),
+    env.DB.prepare(
+      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,style_json styleJson FROM header_ad_strips WHERE is_active=1 AND (storage_key IS NOT NULL OR style_json<>'{}') AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
     ),
   ]);
   const origin = new URL(req.url).origin;
@@ -639,6 +658,13 @@ async function publicSiteConfig(req, env, id) {
         ...spotlight,
         mediaUrl: mediaUrl(spotlight.storageKey),
       })),
+      headerAds: (headerAds.results || []).map((ad) => {
+        const style=parse(ad.styleJson||"{}",{});
+        style.layers=(Array.isArray(style.layers)?style.layers:[]).map(layer=>({...layer,imageUrl:layer.storageKey?mediaUrl(layer.storageKey):undefined,storageKey:undefined}));
+        const hasDesignedBackground=style.backgroundType==="gradient"||!["","#ffffff"].includes(String(style.backgroundColor||"").toLowerCase());
+        if(!ad.storageKey&&!style.layers.length&&!hasDesignedBackground)return null;
+        return {...ad,mediaUrl:mediaUrl(ad.storageKey),styleJson:JSON.stringify(style)};
+      }).filter(Boolean),
       stores: stores.results || [],
       brands: brands.results || [],
       headerPromotions: (headerPromotions.results || []).map((promotion) => ({
@@ -5075,13 +5101,18 @@ function optionalExpiryDate(value) {
 
 function validDestination(value) {
   const destination = String(value || "").trim();
+  if (!destination || destination.length > 1000 || /[\u0000-\u001f\u007f\\]/.test(destination))
+    return null;
+
   const localDestination = destination.replace(/^\.\//, "").replace(/^\//, "");
   if (
-    /^(?:produto|categoria|promocoes|produtos|busca|novidades)\.html(?:[?#].*)?$/.test(
+    !destination.startsWith("//") &&
+    /^(?:[a-z0-9][a-z0-9_-]*\/)*[a-z0-9][a-z0-9_-]*\.html(?:[?#][^\s]*)?$/i.test(
       localDestination,
     )
   )
     return localDestination;
+
   try {
     const parsed = new URL(destination);
     return ["http:", "https:"].includes(parsed.protocol) ? destination : null;
@@ -5625,6 +5656,103 @@ async function deleteHeaderSpotlight(req, env, spotlightId, id) {
     return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
   await env.DB.prepare(`DELETE FROM header_spotlights WHERE id=?`).bind(spotlightId).run();
   if (spotlight.storageKey && env.MEDIA) await env.MEDIA.delete(spotlight.storageKey);
+  return ok(req, env, { deleted: true }, id);
+}
+
+async function adminHeaderAds(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  const { results } = await env.DB.prepare(
+    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,style_json styleJson,updated_at updatedAt FROM header_ad_strips ORDER BY sort_order,created_at`,
+  ).all();
+  return ok(req, env, results || [], id);
+}
+
+function headerAdValues(body) {
+  const rawStyle=parse(body.styleJson||"{}",{}),safeColor=(value,fallback)=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):fallback;
+  const layers=(Array.isArray(rawStyle.layers)?rawStyle.layers:[]).slice(0,24).map((layer,index)=>({id:String(layer.id||crypto.randomUUID()).slice(0,100),type:layer.type==="text"?"text":"image",text:String(layer.text||"").slice(0,300),storageKey:String(layer.storageKey||"").slice(0,500),device:["both","desktop","mobile"].includes(layer.device)?layer.device:"both",x:clamp(layer.x,0,100,50),y:clamp(layer.y,0,100,50),width:clamp(layer.width,2,100,20),scale:clamp(layer.scale,10,500,100),rotation:clamp(layer.rotation,-180,180,0),opacity:clamp(layer.opacity,0,100,100),fontSize:clamp(layer.fontSize,8,72,16),fontWeight:clamp(layer.fontWeight,300,900,700),color:safeColor(layer.color,"#ffffff"),zIndex:clamp(layer.zIndex,1,100,index+1)}));
+  const styleJson=JSON.stringify({backgroundType:rawStyle.backgroundType==="gradient"?"gradient":"solid",backgroundColor:safeColor(rawStyle.backgroundColor,"#ffffff"),gradientStart:safeColor(rawStyle.gradientStart,"#ffffff"),gradientEnd:safeColor(rawStyle.gradientEnd,"#eef5f3"),gradientAngle:clamp(rawStyle.gradientAngle,0,360,90),layers});
+  return [
+    String(body.name || "").trim().slice(0, 140),
+    validDestination(body.linkUrl),
+    String(body.altText || "").trim().slice(0, 250),
+    optionalDate(body.startsAt),
+    optionalDate(body.endsAt),
+    body.isActive === false ? 0 : 1,
+    clamp(body.sortOrder, -10000, 10000, 0),
+    clamp(body.imagePositionX, 0, 100, 50),
+    clamp(body.imagePositionY, 0, 100, 50),
+    clamp(body.imageScale, 10, 400, 100),
+    clamp(body.mobilePositionX, 0, 100, 50),
+    clamp(body.mobilePositionY, 0, 100, 50),
+    clamp(body.mobileScale, 10, 400, 100),
+    clamp(body.imageRotation, -180, 180, 0),
+    ["none", "fade", "slide-left", "slide-up", "zoom", "float", "pulse"].includes(body.animationPreset) ? body.animationPreset : "fade",
+    clamp(body.animationDuration, 200, 10000, 700),
+    clamp(body.animationDelay, 0, 5000, 0),
+    styleJson,
+  ];
+}
+
+function validateHeaderAd(body) {
+  const values = headerAdValues(body);
+  if (!values[0]) return "Informe um nome para o anÃºncio";
+  if (!values[1]) return "Informe um destino vÃ¡lido";
+  if (values[3] && values[4] && Date.parse(values[4]) <= Date.parse(values[3])) return "O tÃ©rmino deve ser posterior ao inÃ­cio";
+  return null;
+}
+
+async function createHeaderAd(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  const body = await readJson(req, 12000), validation = validateHeaderAd(body);
+  if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
+  const adId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO header_ad_strips(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,image_position_x,image_position_y,image_scale,mobile_position_x,mobile_position_y,mobile_scale,image_rotation,animation_preset,animation_duration,animation_delay,style_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  ).bind(adId, ...headerAdValues(body)).run();
+  return ok(req, env, { id: adId }, id);
+}
+
+async function updateHeaderAd(req, env, adId, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  const body = await readJson(req, 12000), validation = validateHeaderAd(body);
+  if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
+  const result = await env.DB.prepare(
+    `UPDATE header_ad_strips SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,image_position_x=?,image_position_y=?,image_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,image_rotation=?,animation_preset=?,animation_duration=?,animation_delay=?,style_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  ).bind(...headerAdValues(body), adId).run();
+  if (!result.meta.changes) return fail(req, env, "HEADER_AD_NOT_FOUND", "AnÃºncio nÃ£o encontrado", 404, id);
+  return ok(req, env, { id: adId }, id);
+}
+
+async function uploadHeaderAdMedia(req, env, adId, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  if (!env.MEDIA) return fail(req, env, "R2_NOT_CONFIGURED", "O binding R2 MEDIA nÃ£o foi configurado", 503, id);
+  const current = await env.DB.prepare(`SELECT storage_key storageKey FROM header_ad_strips WHERE id=?`).bind(adId).first();
+  if (!current) return fail(req, env, "HEADER_AD_NOT_FOUND", "AnÃºncio nÃ£o encontrado", 404, id);
+  const form = await req.formData();
+  let storageKey;
+  try { storageKey = await storeSiteImage(env, form.get("file"), "header-ad-strips", adId); }
+  catch (error) { return fail(req, env, "INVALID_FILE", error.message, 422, id); }
+  await env.DB.prepare(`UPDATE header_ad_strips SET storage_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(storageKey, adId).run();
+  if (current.storageKey) await env.MEDIA.delete(current.storageKey);
+  return ok(req, env, { storageKey }, id);
+}
+
+async function uploadHeaderAdLayer(req, env, adId, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  if (!env.MEDIA) return fail(req, env, "R2_NOT_CONFIGURED", "O binding R2 MEDIA não foi configurado", 503, id);
+  const exists=await env.DB.prepare(`SELECT id FROM header_ad_strips WHERE id=?`).bind(adId).first();
+  if (!exists) return fail(req, env, "HEADER_AD_NOT_FOUND", "Anúncio não encontrado", 404, id);
+  const form=await req.formData();
+  try { const storageKey=await storeSiteImage(env,form.get("file"),"header-ad-layers",adId);return ok(req,env,{storageKey,mediaUrl:mediaUrl(storageKey)},id); }
+  catch(error){ return fail(req,env,"INVALID_FILE",error.message,422,id); }
+}
+
+async function deleteHeaderAd(req, env, adId, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  const ad = await env.DB.prepare(`SELECT storage_key storageKey FROM header_ad_strips WHERE id=?`).bind(adId).first();
+  if (!ad) return fail(req, env, "HEADER_AD_NOT_FOUND", "AnÃºncio nÃ£o encontrado", 404, id);
+  await env.DB.prepare(`DELETE FROM header_ad_strips WHERE id=?`).bind(adId).run();
+  if (ad.storageKey && env.MEDIA) await env.MEDIA.delete(ad.storageKey);
   return ok(req, env, { deleted: true }, id);
 }
 
