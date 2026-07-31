@@ -7,7 +7,47 @@ const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-27-dynamic-sitemap-v1";
+const WORKER_BUILD = "2026-07-31-admin-ai-free-limit-v2";
+const AI_FEATURES = {
+  search_intent: { label: "Interpretação da pesquisa", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+  premium_search: { label: "Ordenação da pesquisa SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8" },
+  comparison: { label: "Comparação de produtos", model: "@cf/qwen/qwen3-30b-a3b-fp8", fallback: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+  product_insight: { label: "Análise do produto", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+  premium_related: { label: "Alternativas SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8" },
+  related_ranking: { label: "Produtos relacionados", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+  product_draft: { label: "Assistente de cadastro", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+};
+const WORKERS_AI_MODELS = [
+  { id: "@cf/qwen/qwen3-30b-a3b-fp8", name: "Qwen3 30B A3B FP8" },
+  { id: "@cf/qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" },
+  { id: "@cf/mistralai/mistral-small-3.1-24b-instruct", name: "Mistral Small 3.1 24B" },
+  { id: "@cf/openai/gpt-oss-20b", name: "GPT-OSS 20B" },
+  { id: "@cf/openai/gpt-oss-120b", name: "GPT-OSS 120B" },
+  { id: "@cf/nvidia/nemotron-3-120b-a12b", name: "Nemotron 3 120B A12B" },
+];
+
+async function aiFeatureSetting(env, featureKey) {
+  const defaults = AI_FEATURES[featureKey];
+  if (!defaults) throw new Error(`AI_FEATURE_UNKNOWN:${featureKey}`);
+  try {
+    const row = await env.DB.prepare(
+      `SELECT provider,model_id modelId,fallback_model_id fallbackModelId,is_enabled isEnabled,updated_at updatedAt
+       FROM ai_feature_settings WHERE feature_key=?`,
+    ).bind(featureKey).first();
+    return {
+      featureKey,
+      provider: row?.provider || "workers-ai",
+      modelId: row?.modelId || defaults.model,
+      fallbackModelId: row?.fallbackModelId || defaults.fallback || null,
+      isEnabled: row ? Boolean(row.isEnabled) : true,
+      updatedAt: row?.updatedAt || null,
+    };
+  } catch (error) {
+    if (/no such table:.*ai_feature_settings/i.test(String(error?.message || error)))
+      return { featureKey, provider: "workers-ai", modelId: defaults.model, fallbackModelId: defaults.fallback || null, isEnabled: true, updatedAt: null };
+    throw error;
+  }
+}
 
 function allowedOrigins(env) {
   return [
@@ -222,10 +262,7 @@ export default {
     }
   },
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(Promise.allSettled([
-      syncMercadoLivrePrices(env, { limit: 40 }),
-      sendPremiumPassExpiryReminders(env),
-    ]));
+    ctx.waitUntil(sendPremiumPassExpiryReminders(env));
   },
 };
 
@@ -427,6 +464,10 @@ async function route(request, env, ctx, requestId) {
     return adminPremiumSettings(request, env, requestId);
   if (request.method === "PUT" && path === "/api/v1/admin/premium-settings")
     return updateAdminPremiumSettings(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/ai-settings")
+    return adminAiSettings(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/ai-settings")
+    return updateAdminAiSettings(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/users")
     return adminUsers(request, env, url, requestId);
   if (request.method === "GET" && /^\/api\/v1\/admin\/users\/[^/]+\/events$/.test(path))
@@ -934,16 +975,29 @@ async function trendingProducts(req, env, url, id) {
       SELECT product_slug,
         SUM(CASE WHEN event_type='product_view' THEN 1 ELSE 0 END) views,
         SUM(CASE WHEN event_type='offer_click' THEN 1 ELSE 0 END) clicks,
-        SUM(CASE WHEN event_type='search_result_click' THEN 1 ELSE 0 END) searchClicks
+        SUM(CASE WHEN event_type='search_result_click' THEN 1 ELSE 0 END) searchClicks,
+        SUM(CASE WHEN event_type='search' THEN 1 ELSE 0 END) searches,
+        SUM(CASE WHEN event_type='favorite' THEN 1 ELSE 0 END) favorites,
+        SUM(CASE WHEN event_type='share' THEN 1 ELSE 0 END) shares,
+        SUM(CASE
+          WHEN event_type NOT IN ('product_view','offer_click','search_result_click','search','favorite','share') THEN 0
+          WHEN created_at>=datetime('now','-2 days') THEN 1.8
+          WHEN created_at>=datetime('now','-7 days') THEN 1.25
+          ELSE 1
+        END) recency
       FROM events
       WHERE created_at>=datetime('now','-14 days') AND product_slug IS NOT NULL
       GROUP BY product_slug
     ) activity ON activity.product_slug=p.slug
     WHERE p.status='published'
     ORDER BY (
-      COALESCE(activity.clicks,0)*12+
-      COALESCE(activity.searchClicks,0)*6+
-      COALESCE(activity.views,0)*2+
+      MIN(COALESCE(activity.clicks,0),50)*12+
+      MIN(COALESCE(activity.searchClicks,0),80)*6+
+      MIN(COALESCE(activity.searches,0),80)*5+
+      MIN(COALESCE(activity.favorites,0),50)*7+
+      MIN(COALESCE(activity.shares,0),50)*5+
+      MIN(COALESCE(activity.views,0),150)*2+
+      MIN(COALESCE(activity.recency,0),150)*0.75+
       COALESCE(p.editorial_score,0)*0.18+
       p.is_featured*8+
       CASE WHEN p.published_at>=datetime('now','-30 days') THEN 5 ELSE 0 END
@@ -955,8 +1009,12 @@ async function trendingProducts(req, env, url, id) {
     windowDays: 14,
     signals: [
       "offerClicks",
+      "searches",
       "searchClicks",
       "views",
+      "favorites",
+      "shares",
+      "recentActivity",
       "editorialScore",
       "featured",
       "freshness",
@@ -1584,8 +1642,10 @@ function cacheComparisonAtEdge(ctx, cacheKey, analysis) {
 
 async function generateAndPersistProductComparison(env, ctx, { version, cacheKey, slugs, products, fallback, userId, usagePeriod, freeFeatureKey }) {
   try {
-    const primaryModel = String(env.PREMIUM_COMPARISON_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8");
-    const fallbackModel = String(env.PREMIUM_COMPARISON_FALLBACK_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast");
+    const aiSetting = await aiFeatureSetting(env, "comparison");
+    if (!aiSetting.isEnabled) throw new Error("AI_COMPARISON_DISABLED");
+    const primaryModel = aiSetting.modelId;
+    const fallbackModel = aiSetting.fallbackModelId;
     const models = [...new Set([primaryModel, fallbackModel].filter(Boolean))];
     const messages = [
         {
@@ -1672,12 +1732,15 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
      WHERE p.slug=? AND p.status='published'`,
   ).bind(slug).first();
   if (!product) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, id);
+  const insightAiSetting = await aiFeatureSetting(env, "product_insight");
+  if (!insightAiSetting.isEnabled)
+    return fail(req, env, "AI_FEATURE_DISABLED", "A análise de produto está desativada", 409, id);
   if (!premium.premium) {
     freeAccess = await reserveFreeAiCredit(env, user.id, `product-insight:${slug}`, "product_insight");
     if (!freeAccess.allowed)
       return ok(req, env, { premium: false, premiumRequired: true, freeCreditsExhausted: true, freeCredits: freeAccess, plan: premium.plan }, id);
   }
-  const version = await sha256(`premium-product-insight-v2|${user.id}|${product.id}|${product.updatedAt}`);
+  const version = await sha256(`premium-product-insight-v2|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
   const cached = await env.DB.prepare(
     `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
   ).bind(version, user.id).first();
@@ -1728,7 +1791,9 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
       },
       required: ["conclusion", "bestFor", "howItHelps"],
     };
-    const result = await env.AI.run(String(env.PREMIUM_PRODUCT_INSIGHT_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast"), {
+    const aiSetting = insightAiSetting;
+    if (!aiSetting.isEnabled) throw new Error("AI_PRODUCT_INSIGHT_DISABLED");
+    const result = await env.AI.run(aiSetting.modelId, {
       messages: [
         { role: "system", content: "Você cria análises personalizadas SHOPLAB+ em português brasileiro. Use somente os dados fornecidos. Não invente desempenho, recursos ou resultados. Cada item deve ser uma linha curta, clara e útil. A conclusão deve ter 3 ou 4 linhas; para quem é e como ajuda devem ter 2 ou 3 linhas cada. Considere o histórico apenas para personalizar a adequação, sem mencioná-lo diretamente nem expor dados do usuário. Retorne somente o JSON solicitado." },
         { role: "user", content: JSON.stringify({
@@ -1797,9 +1862,23 @@ async function reservePremiumAiGeneration(env, userId) {
   return { allowed: Boolean(row), used, limit: plan.aiMonthlyLimit, remaining: Math.max(0, plan.aiMonthlyLimit - used), period };
 }
 
-const FREE_AI_CREDIT_LIMIT = 5;
+const DEFAULT_FREE_AI_CREDIT_LIMIT = 5;
+
+async function resolvedFreeAiCreditLimit(env) {
+  try {
+    const row = await env.DB.prepare(
+      `SELECT free_credit_limit freeCreditLimit FROM ai_general_settings WHERE id='default'`,
+    ).first();
+    return clamp(row?.freeCreditLimit, 0, 10000, DEFAULT_FREE_AI_CREDIT_LIMIT);
+  } catch (error) {
+    if (/no such table:.*ai_general_settings/i.test(String(error?.message || error)))
+      return DEFAULT_FREE_AI_CREDIT_LIMIT;
+    throw error;
+  }
+}
 
 async function reserveFreeAiCredit(env, userId, featureKey, featureType) {
+  const freeCreditLimit = await resolvedFreeAiCreditLimit(env);
   const normalizedKey = String(featureKey || "").slice(0, 240);
   const existing = await env.DB.prepare(
     `SELECT 1 found FROM free_ai_credit_usage WHERE user_id=? AND feature_key=?`,
@@ -1808,19 +1887,19 @@ async function reserveFreeAiCredit(env, userId, featureKey, featureType) {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO free_ai_credit_usage(user_id,feature_key,feature_type)
        SELECT ?,?,? WHERE (SELECT COUNT(*) FROM free_ai_credit_usage WHERE user_id=?)<?`,
-    ).bind(userId, normalizedKey, String(featureType || "ai").slice(0, 40), userId, FREE_AI_CREDIT_LIMIT).run();
+    ).bind(userId, normalizedKey, String(featureType || "ai").slice(0, 40), userId, freeCreditLimit).run();
   }
   const [access, count] = await Promise.all([
     env.DB.prepare(`SELECT 1 found FROM free_ai_credit_usage WHERE user_id=? AND feature_key=?`).bind(userId, normalizedKey).first(),
     env.DB.prepare(`SELECT COUNT(*) used FROM free_ai_credit_usage WHERE user_id=?`).bind(userId).first(),
   ]);
-  const used = Math.min(FREE_AI_CREDIT_LIMIT, Number(count?.used || 0));
+  const used = Math.min(freeCreditLimit, Number(count?.used || 0));
   return {
     allowed: Boolean(access),
     reused: Boolean(existing),
     used,
-    limit: FREE_AI_CREDIT_LIMIT,
-    remaining: Math.max(0, FREE_AI_CREDIT_LIMIT - used),
+    limit: freeCreditLimit,
+    remaining: Math.max(0, freeCreditLimit - used),
     featureKey: normalizedKey,
   };
 }
@@ -1851,13 +1930,14 @@ async function analyzeProductComparison(req, env, ctx, id) {
   const fallback = fallbackProductComparison(products);
   const user = await activeUser(req, env);
   const premium = user ? await premiumSubscriptionData(env, user.id) : { premium: false, status: "free", plan: await resolvedPremiumPlan(env), usage: null };
+  const freeCreditLimit = await resolvedFreeAiCreditLimit(env);
   if (!user) return ok(req, env, {
     algorithm: "public-comparison-login-v1",
     criteria: (fallback.criteria || []).slice(0, 2),
     premium: false,
     premiumRequired: false,
     loginRequired: true,
-    freeCredits: { used: 0, limit: FREE_AI_CREDIT_LIMIT, remaining: FREE_AI_CREDIT_LIMIT },
+    freeCredits: { used: 0, limit: freeCreditLimit, remaining: freeCreditLimit },
     plan: premium.plan,
   }, id);
   const hasComparisonContext = products.some((product) =>
@@ -1907,7 +1987,9 @@ async function analyzeProductComparison(req, env, ctx, id) {
     }, id);
   }
   if (!hasComparisonContext) return ok(req, env, technicalResult, id);
-  const version = await sha256(`comparison-v12|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
+  const comparisonAiSetting = await aiFeatureSetting(env, "comparison");
+  if (!comparisonAiSetting.isEnabled) return ok(req, env, technicalResult, id);
+  const version = await sha256(`comparison-v12|${comparisonAiSetting.modelId}|${comparisonAiSetting.fallbackModelId || ""}|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
   const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
   try {
     const cached = await caches.default.match(cacheKey);
@@ -2121,7 +2203,9 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
       tags: parse(product.tagsJson, []).slice(0, 12),
       specifications: parse(product.specificationsJson, []).slice(0, 20),
     });
-    const result = await env.AI.run(String(env.PREMIUM_RELATED_AI_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8"), {
+    const aiSetting = await aiFeatureSetting(env, "premium_related");
+    if (!aiSetting.isEnabled) return null;
+    const result = await env.AI.run(aiSetting.modelId, {
       messages: [
         {
           role: "system",
@@ -2184,6 +2268,8 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
 async function rankRelatedProductsWithAi(env, source, candidates) {
   if (!env.AI || candidates.length < 2) return null;
   try {
+    const aiSetting = await aiFeatureSetting(env, "related_ranking");
+    if (!aiSetting.isEnabled) return null;
     const sourceContext = {
       name: source.name,
       productType: source.productType,
@@ -2203,7 +2289,7 @@ async function rankRelatedProductsWithAi(env, source, candidates) {
       editorialScore: product.editorialScore,
       price: product.price,
     }));
-    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+    const result = await env.AI.run(aiSetting.modelId, {
       messages: [
         {
           role: "system",
@@ -2293,6 +2379,8 @@ async function getProductV2(req, env, slug, id) {
     store: offer.store,
     storeLogoUrl: offer.storeLogoUrl,
     offerId: offer.id,
+    priceLastCheckedAt: offer.lastCheckedAt || row.price_synced_at || null,
+    priceSyncStatus: row.price_sync_status || null,
   });
   const activePromotions = (campaigns.results || []).map((campaign) => ({
     ...campaign,
@@ -3059,8 +3147,10 @@ function premiumSearchSelection(ranked, baseline) {
 
 async function premiumSearchRank(env, ctx, query, intent, products) {
   const baseline = premiumSearchBaseline(products);
+  const aiSetting = await aiFeatureSetting(env, "premium_search");
+  if (!aiSetting.isEnabled) return { products: baseline.slice(0, 24), aiUsed: false, explanation: "Ordenado por relevância, qualidade e custo-benefício." };
   if (!env.AI || baseline.length < 2) return { products: baseline.slice(0, 24), aiUsed: false, explanation: "Ordenado por relevância, qualidade e custo-benefício." };
-  const signature = await sha256(`premium-search-v1|${normalizeSearch(query)}|${JSON.stringify(intent || {})}|${baseline.map((item) => `${item.slug}:${item.updatedAt}:${item.price}:${item.editorialScore}:${item.ratingAverage}:${item.ratingTotal}`).join("|")}`);
+  const signature = await sha256(`premium-search-v1|${aiSetting.modelId}|${normalizeSearch(query)}|${JSON.stringify(intent || {})}|${baseline.map((item) => `${item.slug}:${item.updatedAt}:${item.price}:${item.editorialScore}:${item.ratingAverage}:${item.ratingTotal}`).join("|")}`);
   const cacheKey = new Request(`https://premium-search.shoplab.internal/v1/${signature}`);
   try {
     const cached = await caches.default.match(cacheKey);
@@ -3074,7 +3164,7 @@ async function premiumSearchRank(env, ctx, query, intent, products) {
     console.warn(JSON.stringify({ event: "premium_search_cache_read_failed", error: String(error?.message || error) }));
   }
   try {
-    const model = String(env.PREMIUM_SEARCH_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast");
+    const model = aiSetting.modelId;
     const result = await env.AI.run(model, {
       messages: [
         { role: "system", content: "Você reranqueia resultados da SHOPLAB para assinantes SHOPLAB+. Considere primeiro a intenção e a finalidade declaradas na busca. Depois avalie aderência técnica, qualidade editorial, avaliações com sua quantidade, preço, desconto e custo-benefício. Produto mais barato não é automaticamente melhor; produto caro precisa justificar a diferença com dados fornecidos. Campo ausente não significa desempenho ruim. Não invente especificações, benchmarks ou benefícios. Use somente os slugs fornecidos, sem repetir, e escreva motivos curtos em português brasileiro. Retorne primeiro os produtos realmente mais adequados." },
@@ -3212,11 +3302,12 @@ async function searchV2(req, env, url, ctx, id) {
   if (premiumRanking) results = premiumRanking.products;
   ctx.waitUntil(
     env.DB.prepare(
-      `INSERT INTO events(id,event_type,query_text,metadata_json,user_id) VALUES(?,?,?,?,?)`,
+      `INSERT INTO events(id,event_type,product_slug,query_text,metadata_json,user_id) VALUES(?,?,?,?,?,?)`,
     )
       .bind(
         crypto.randomUUID(),
         results.length ? "search" : "search_no_results",
+        results[0]?.slug || null,
         normalizedQuery,
         JSON.stringify({ originalQuery, resultCount: results.length, premiumSearch: premiumEnabled }).slice(
           0,
@@ -3324,6 +3415,12 @@ function mercadoLivrePageData(html) {
   const pixPrice = selectedPixMatch
     ? Number(`${selectedPixMatch[1].replace(/\./g, "")}.${selectedPixMatch[2] || "00"}`)
     : 0;
+  const publicSaleMatch = visibleText.match(
+    /R\$\s*([0-9.]+)(?:,|\s+)([0-9]{2})\s+\d{1,3}%\s*OFF/i,
+  );
+  const publicSalePrice = publicSaleMatch
+    ? Number(`${publicSaleMatch[1].replace(/\./g, "")}.${publicSaleMatch[2]}`)
+    : 0;
   let product = null;
   const visit = (value) => {
     if (!value || product) return;
@@ -3365,6 +3462,7 @@ function mercadoLivrePageData(html) {
     return 0;
   };
   const price = numberFrom(
+    publicSalePrice,
     offers?.price,
     offers?.lowPrice,
     matchNumber(
@@ -3387,6 +3485,10 @@ function mercadoLivrePageData(html) {
     name: String(product?.name || "").trim(),
     description: String(product?.description || "").trim(),
     price,
+    publicSalePrice:
+      Number.isFinite(publicSalePrice) && publicSalePrice > 0
+        ? publicSalePrice
+        : 0,
     pixPrice: Number.isFinite(pixPrice) && pixPrice > 0 ? pixPrice : 0,
     previousPrice: previousPrice > price ? previousPrice : 0,
     pictures: productImages.filter((url) => /^https:\/\//i.test(String(url))),
@@ -3575,9 +3677,18 @@ async function mercadoLivrePriceSnapshot(token, sourceItemId, storedOfferId, sou
     mercadoLivrePublicPageData(sourceUrl),
   ]);
   const values = mercadoLivrePriceValues(item, prices, salePrice, fallback);
-  if (Number(pageData?.pixPrice) > 0)
-    values.currentPriceCents = Math.round(Number(pageData.pixPrice) * 100);
-  return { ...values, offerId, priceKind: Number(pageData?.pixPrice) > 0 ? "pix" : "marketplace" };
+  const publicPagePrice = Number(pageData?.pixPrice || pageData?.publicSalePrice || pageData?.price || 0);
+  if (publicPagePrice > 0) {
+    values.currentPriceCents = Math.round(publicPagePrice * 100);
+    const publicPreviousPrice = Number(pageData?.previousPrice || 0);
+    if (publicPreviousPrice > publicPagePrice)
+      values.previousPriceCents = Math.round(publicPreviousPrice * 100);
+  }
+  return {
+    ...values,
+    offerId,
+    priceKind: Number(pageData?.pixPrice) > 0 ? "pix" : "marketplace",
+  };
 }
 
 async function syncMercadoLivreProductPrice(env, product, token) {
@@ -3710,8 +3821,18 @@ async function adminImportProductLink(req, env, id) {
         original_price: catalogOffer?.original_price ?? catalogOffer?.regular_amount ?? item.original_price ?? item.buy_box_winner?.original_price ?? source.pageData?.previousPrice,
       },
     );
-    if (Number(source.pageData?.pixPrice) > 0)
-      priceValues.currentPriceCents = Math.round(Number(source.pageData.pixPrice) * 100);
+    const publicPagePrice = Number(
+      source.pageData?.pixPrice ||
+        source.pageData?.publicSalePrice ||
+        source.pageData?.price ||
+        0,
+    );
+    if (publicPagePrice > 0) {
+      priceValues.currentPriceCents = Math.round(publicPagePrice * 100);
+      const publicPreviousPrice = Number(source.pageData?.previousPrice || 0);
+      if (publicPreviousPrice > publicPagePrice)
+        priceValues.previousPriceCents = Math.round(publicPreviousPrice * 100);
+    }
     const apiPictures = (Array.isArray(item.pictures) ? item.pictures : []).map((picture) => picture.secure_url || picture.url);
     const pictures = [...new Set([...apiPictures, ...(source.pageData?.pictures || [])])].filter((url) => /^https:\/\//i.test(String(url))).slice(0, 12);
     const specifications = (Array.isArray(item.attributes) ? item.attributes : [])
@@ -3757,7 +3878,10 @@ async function adminAiProductDraft(req, env, id) {
   ).all();
   const categoryList = (categories.results || []).map((item) => `${item.name} (id=${item.id})`).join(", ");
   try {
-    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+    const aiSetting = await aiFeatureSetting(env, "product_draft");
+    if (!aiSetting.isEnabled)
+      return fail(req, env, "AI_FEATURE_DISABLED", "O assistente de cadastro está desativado", 409, id);
+    const result = await env.AI.run(aiSetting.modelId, {
       messages: [
         { role: "system", content: `VocÃª auxilia o cadastro editorial de produtos da SHOPLAB. Gere portuguÃªs brasileiro claro, objetivo e sem exageros. Preserve marca, modelo, capacidade e medidas. Nunca invente especificaÃ§Ãµes, avaliaÃ§Ãµes, preÃ§os, garantias ou benefÃ­cios. Se um dado nÃ£o estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hÃ­fen. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro fÃ­sico, digital para produto digital e affiliate nos demais casos. A descriÃ§Ã£o curta deve ter atÃ© 300 caracteres. imageAlt deve descrever o produto de forma curta.` },
         { role: "user", content: JSON.stringify({ source, current }).slice(0, 16000) },
@@ -3841,13 +3965,15 @@ async function cachedSearchIntent(env, originalQuery, ctx) {
 async function interpretSearchIntent(env, originalQuery) {
   if (!env.AI || !shouldInterpretSearch(originalQuery)) return null;
   try {
+    const aiSetting = await aiFeatureSetting(env, "search_intent");
+    if (!aiSetting.isEnabled) return null;
     const [categories, brands] = await env.DB.batch([
       env.DB.prepare("SELECT name,slug FROM categories WHERE is_active=1 ORDER BY sort_order,name LIMIT 100"),
       env.DB.prepare("SELECT name FROM brands ORDER BY name LIMIT 100"),
     ]);
     const categoryList = (categories.results || []).map((item) => `${item.name}=${item.slug}`).join(", ");
     const brandList = (brands.results || []).map((item) => item.name).join(", ");
-    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+    const result = await env.AI.run(aiSetting.modelId, {
       messages: [
         {
           role: "system",
@@ -6010,6 +6136,117 @@ async function adminPremiumSettings(req, env, id) {
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const row = await env.DB.prepare(`SELECT * FROM premium_settings WHERE id='default'`).first();
   return ok(req, env, { settings: row, effectivePlan: await resolvedPremiumPlan(env) }, id);
+}
+
+async function adminAiSettings(req, env, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  try {
+    await env.DB.prepare("SELECT 1 FROM ai_feature_settings LIMIT 1").first();
+    const freeCreditLimit = await resolvedFreeAiCreditLimit(env);
+    const [settings, usageResults] = await Promise.all([
+      Promise.all(
+        Object.entries(AI_FEATURES).map(async ([featureKey, defaults]) => ({
+          ...(await aiFeatureSetting(env, featureKey)),
+          label: defaults.label,
+        })),
+      ),
+      env.DB.batch([
+        env.DB.prepare("SELECT COUNT(*) total FROM user_profiles"),
+        env.DB.prepare("SELECT COUNT(*) total FROM free_ai_credit_usage"),
+        env.DB.prepare("SELECT COUNT(*) total FROM free_ai_credit_usage WHERE created_at>=datetime('now','start of month')"),
+        env.DB.prepare(`SELECT COUNT(*) total FROM (
+          SELECT user_id FROM free_ai_credit_usage GROUP BY user_id HAVING COUNT(*)>=?
+        )`).bind(freeCreditLimit),
+        env.DB.prepare("SELECT COALESCE(SUM(generations),0) total FROM premium_ai_usage WHERE period_key=strftime('%Y-%m','now')"),
+        env.DB.prepare(`SELECT feature_type featureType,COUNT(*) total
+          FROM free_ai_credit_usage GROUP BY feature_type ORDER BY total DESC`),
+      ]),
+    ]);
+    const usageTotal = (index) => Number(usageResults[index].results?.[0]?.total || 0);
+    const registeredUsers = usageTotal(0);
+    const freeUsed = usageTotal(1);
+    const freeCapacity = registeredUsers * freeCreditLimit;
+    return ok(req, env, {
+      provider: "workers-ai",
+      models: WORKERS_AI_MODELS,
+      settings,
+      usage: {
+        period: premiumPeriodKey(),
+        free: {
+          perUserLimit: freeCreditLimit,
+          registeredUsers,
+          capacity: freeCapacity,
+          used: freeUsed,
+          usedThisMonth: usageTotal(2),
+          remaining: Math.max(0, freeCapacity - freeUsed),
+          exhaustedUsers: freeCreditLimit === 0 ? registeredUsers : usageTotal(3),
+        },
+        premium: { generationsThisMonth: usageTotal(4) },
+        trackedThisMonth: usageTotal(2) + usageTotal(4),
+        byFeature: usageResults[5].results || [],
+      },
+    }, id);
+  } catch (error) {
+    if (/no such table:.*ai_feature_settings/i.test(String(error?.message || error)))
+      return fail(req, env, "AI_SETTINGS_MIGRATION_REQUIRED", "Execute ai-feature-settings-upgrade.sql no banco D1", 503, id);
+    throw error;
+  }
+}
+
+async function updateAdminAiSettings(req, env, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  try {
+    await env.DB.prepare("SELECT 1 FROM ai_feature_settings LIMIT 1").first();
+    await env.DB.prepare("SELECT 1 FROM ai_general_settings LIMIT 1").first();
+  } catch (error) {
+    if (/no such table:.*(?:ai_feature_settings|ai_general_settings)/i.test(String(error?.message || error)))
+      return fail(req, env, "AI_SETTINGS_MIGRATION_REQUIRED", "Execute ai-feature-settings-upgrade.sql no banco D1", 503, id);
+    throw error;
+  }
+  const body = await readJson(req, 30000);
+  const rows = Array.isArray(body.settings) ? body.settings : [];
+  const freeCreditLimit = Number(body.freeCreditLimit);
+  if (!Number.isInteger(freeCreditLimit) || freeCreditLimit < 0 || freeCreditLimit > 10000)
+    return fail(req, env, "VALIDATION_ERROR", "Informe entre 0 e 10.000 créditos gratuitos por usuário", 422, id);
+  if (!rows.length || rows.some((row) => !AI_FEATURES[row?.featureKey]))
+    return fail(req, env, "VALIDATION_ERROR", "Configuração de IA inválida", 422, id);
+  const validModel = (value, optional = false) => {
+    const model = String(value || "").trim();
+    if (!model && optional) return null;
+    return /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(model) && model.length <= 180 ? model : false;
+  };
+  const statements = [];
+  for (const row of rows) {
+    const modelId = validModel(row.modelId);
+    const fallbackModelId = validModel(row.fallbackModelId, true);
+    if (!modelId || fallbackModelId === false)
+      return fail(req, env, "VALIDATION_ERROR", `Modelo inválido em ${AI_FEATURES[row.featureKey].label}`, 422, id);
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO ai_feature_settings(feature_key,provider,model_id,fallback_model_id,is_enabled)
+         VALUES(?,'workers-ai',?,?,?)
+         ON CONFLICT(feature_key) DO UPDATE SET model_id=excluded.model_id,
+           fallback_model_id=excluded.fallback_model_id,is_enabled=excluded.is_enabled,
+           updated_at=CURRENT_TIMESTAMP`,
+      ).bind(row.featureKey, modelId, fallbackModelId, row.isEnabled === false ? 0 : 1),
+    );
+  }
+  await env.DB.batch(statements);
+  await env.DB.prepare(
+    `INSERT INTO ai_general_settings(id,free_credit_limit,updated_at)
+     VALUES('default',?,CURRENT_TIMESTAMP)
+     ON CONFLICT(id) DO UPDATE SET free_credit_limit=excluded.free_credit_limit,updated_at=CURRENT_TIMESTAMP`,
+  ).bind(freeCreditLimit).run();
+  for (const table of ["comparison_analysis_cache", "premium_product_insight_cache"]) {
+    try {
+      await env.DB.prepare(`DELETE FROM ${table}`).run();
+    } catch (error) {
+      if (!/no such table/i.test(String(error?.message || error))) throw error;
+    }
+  }
+  return adminAiSettings(req, env, id);
 }
 
 async function updateAdminPremiumSettings(req, env, id) {

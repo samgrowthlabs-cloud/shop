@@ -12,8 +12,9 @@
 8. Para permitir imagem ou GIF clicável e independente dos temas no destaque direito do cabeçalho, execute uma única vez `header-spotlight-upgrade.sql`. Bancos novos já recebem essa configuração pelo `schema.sql`.
 9. Para a faixa publicitária independente abaixo do menu, execute `header-ad-strips-upgrade.sql`. Se a tabela já existir, execute uma única vez `header-ad-editor-upgrade.sql` para habilitar enquadramento separado de computador/celular, zoom, rotação e animação. Se o editor visual básico já estiver instalado, execute também `header-ad-layers-upgrade.sql` para habilitar fundo, gradiente, textos e imagens em camadas.
 
-10. Para manter preços importados do Mercado Livre atualizados, execute uma única vez `mercadolivre-price-sync-upgrade.sql`.
+10. Para habilitar a consulta manual de preços importados do Mercado Livre, execute uma única vez `mercadolivre-price-sync-upgrade.sql`. Os preços só mudam ao importar o produto ou ao usar o botão de atualização manual no admin.
 11. Para habilitar o editor visual completo dos banners em um banco existente, execute uma única vez `banner-style-editor-upgrade.sql`. Bancos novos já recebem `style_json` pelo `schema.sql`.
+12. Para escolher um modelo de IA diferente para cada função no admin, execute uma única vez `ai-feature-settings-upgrade.sql`.
 
 O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetários são armazenados em centavos.
 
@@ -25,7 +26,7 @@ O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetá
 4. Para imagens: crie um bucket R2 e adicione ao Worker o binding `MEDIA`. O editor de produtos usa esse binding para enviar, servir e remover imagens reais.
 5. Para a busca inteligente: adicione um binding **Workers AI** com o nome exato `AI`. Sem esse binding, ou se a inferência falhar, a busca continua funcionando automaticamente com FTS5, correção e sinônimos.
 
-6. Em **Settings → Triggers → Cron Triggers**, adicione `*/30 * * * *`. O Worker atualizará até 40 produtos do Mercado Livre por execução, começando pelos mais antigos.
+6. Em **Settings → Triggers → Cron Triggers**, adicione `*/30 * * * *` apenas para lembretes e rotinas de conta. Esse agendamento não altera preços de produtos.
 
 ## 3. Variáveis e secrets
 

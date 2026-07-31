@@ -300,3 +300,23 @@ body,body *,body *::before,body *::after{animation:none!important;transition:non
 .header-ad-composer{padding:14px}.header-ad-background-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.header-ad-layer-editor{grid-template-columns:repeat(2,minmax(0,1fr))}
 .header-ad-device-controls{display:grid;gap:10px;padding:12px;border:1px solid #dce7e4;border-radius:9px;background:#fff}
 @media(max-width:980px){#header-ad-modal .banner-modal-card{width:100%;height:calc(100vh - 8px)}.header-ad-workspace{grid-template-columns:1fr}.header-ad-tools{grid-row:2;overflow:visible;border-right:0}.header-ad-canvas-panel{grid-row:1;overflow:visible}.header-ad-faithful-preview{position:static}.header-ad-canvas-panel>#header-ad-layers-list{max-height:220px}#header-ad-form{overflow:auto}.header-ad-preview-toolbar{align-items:stretch;flex-direction:column}.header-ad-device-tabs button{flex:1}}
+.admin-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
+.ai-setting-card{margin:0;min-width:0}
+.ai-setting-card .section-head{align-items:flex-start;gap:16px}
+.ai-setting-card .switch-field{white-space:nowrap}
+.ai-setting-card [data-use-custom]{margin-top:10px;width:max-content}
+.ai-usage-panel{margin-top:18px}
+.ai-usage-panel .section-head p{margin:6px 0 0;color:var(--muted)}
+.ai-usage-stats{margin:18px 0}
+.ai-free-limit-field{cursor:default}
+.ai-free-limit-field input{width:100%;max-width:150px;margin:5px 0 2px;font-size:22px;font-weight:850;color:var(--primary)}
+.ai-usage-progress{display:grid;gap:7px}
+.ai-usage-progress>div{display:flex;justify-content:space-between;gap:16px}
+.ai-usage-progress>i{display:block;height:12px;border-radius:999px;background:#e4eeeb;overflow:hidden}
+.ai-usage-progress>i>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#0b8f80,#21b99e);transition:width .25s ease}
+.ai-usage-progress small,.ai-provider-note{color:var(--muted)}
+.ai-usage-breakdown{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.ai-usage-breakdown>span{display:grid;gap:3px;min-width:150px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:#f8fbfa}
+.ai-usage-breakdown small{color:var(--muted)}
+.ai-provider-note{margin:18px 0 0}
+@media(max-width:800px){.admin-card-grid{grid-template-columns:1fr}.ai-setting-card .section-head{flex-direction:column}.ai-setting-card .switch-field{padding:0}.ai-usage-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
