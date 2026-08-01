@@ -110,10 +110,59 @@ CREATE TABLE IF NOT EXISTS recommendations (
   PRIMARY KEY (product_id, recommended_product_id, strategy)
 );
 
+CREATE TABLE IF NOT EXISTS admin_roles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  description TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT '#0b8f7f',
+  permissions_json TEXT NOT NULL DEFAULT '[]',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS admin_collaborators (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  role TEXT NOT NULL CHECK(role IN ('vice_admin','catalog_editor','pricer','marketing','custom')),
+  role_id TEXT REFERENCES admin_roles(id) ON DELETE SET NULL,
+  permissions_json TEXT NOT NULL DEFAULT '[]',
+  password_salt TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+  last_login_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_collaborators_active ON admin_collaborators(is_active,email);
+
 CREATE TABLE IF NOT EXISTS admin_sessions (
-  id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL,
+  id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, collaborator_id TEXT REFERENCES admin_collaborators(id) ON DELETE CASCADE, expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_collaborator ON admin_sessions(collaborator_id,expires_at);
+
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id TEXT PRIMARY KEY,
+  actor_id TEXT,
+  actor_name TEXT NOT NULL DEFAULT 'Administrador',
+  actor_email TEXT NOT NULL DEFAULT '',
+  actor_role TEXT NOT NULL DEFAULT 'owner',
+  action TEXT NOT NULL,
+  method TEXT NOT NULL,
+  path TEXT NOT NULL,
+  resource_type TEXT,
+  resource_id TEXT,
+  resource_label TEXT,
+  details_json TEXT NOT NULL DEFAULT '{}',
+  request_id TEXT,
+  ip_hash TEXT,
+  user_agent TEXT NOT NULL DEFAULT '',
+  status_code INTEGER NOT NULL DEFAULT 200,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id TEXT PRIMARY KEY, email TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '',

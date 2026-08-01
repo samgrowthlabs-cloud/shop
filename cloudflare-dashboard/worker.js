@@ -3,11 +3,61 @@ const JSON_HEADERS = {
   "x-content-type-options": "nosniff",
 };
 const enc = new TextEncoder();
-const BUILT_IN_ORIGINS = ["https://shoplab.com.br"];
+const BUILT_IN_ORIGINS = [
+  "https://shoplab.com.br",
+  "https://www.shoplab.com.br",
+];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-07-31-admin-ai-free-limit-v2";
+const WORKER_BUILD = "2026-08-01-custom-admin-roles-v1";
+const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
+const ADMIN_PERMISSION_DEFINITIONS = [
+  ["dashboard.view", "Painel", "Ver painel e métricas", true],
+  ["logs.view", "Painel", "Ver logs e atividade recente", true],
+  ["products.view", "Produtos", "Ver produtos e rascunhos", true],
+  ["products.create", "Produtos", "Criar produtos em rascunho", true],
+  ["products.edit", "Produtos", "Editar textos e dados dos produtos", true],
+  ["products.media", "Produtos", "Adicionar, ordenar e excluir imagens", true],
+  ["products.import", "Produtos", "Importar dados por link de produto", true],
+  ["products.ai", "Produtos", "Usar IA no cadastro de produtos", true],
+  ["products.publish", "Produtos", "Publicar e retirar produtos do site", false],
+  ["products.delete", "Produtos", "Excluir produtos definitivamente", true],
+  ["prices.edit", "Preços", "Atualizar preços manualmente", true],
+  ["affiliate_links.manage", "Preços", "Alterar links de afiliado e ofertas", false],
+  ["categories.manage", "Catálogo", "Gerenciar categorias", true],
+  ["brands.manage", "Catálogo", "Gerenciar marcas", true],
+  ["partners.manage", "Catálogo", "Gerenciar lojas parceiras", true],
+  ["promotions.manage", "Marketing", "Gerenciar promoções", true],
+  ["banners.manage", "Marketing", "Gerenciar banners principais", true],
+  ["header_spotlights.manage", "Marketing", "Gerenciar destaques do cabeçalho", true],
+  ["header_ads.manage", "Marketing", "Gerenciar anúncios abaixo do menu", true],
+  ["themes.manage", "Aparência", "Gerenciar temas e identidade visual", true],
+  ["ai.manage", "Inteligência artificial", "Configurar modelos, recursos e créditos de IA", true],
+  ["premium.manage", "SHOPLAB+", "Configurar o SHOPLAB+", true],
+  ["users.view", "Usuários", "Ver usuários e histórico", true],
+  ["users.access", "Usuários", "Bloquear ou liberar acesso de usuários", true],
+  ["users.premium", "Usuários", "Conceder ou retirar prêmios SHOPLAB+", true],
+  ["users.rewards", "Usuários", "Gerenciar recompensas e indicações", true],
+  ["collaborators.manage", "Equipe e segurança", "Criar cargos e administrar colaboradores", false],
+];
+const ADMIN_PERMISSIONS = Object.fromEntries(ADMIN_PERMISSION_DEFINITIONS.map(([value, , label]) => [value, label]));
+const ADMIN_ASSIGNABLE_PERMISSIONS = new Set(ADMIN_PERMISSION_DEFINITIONS.filter(([, , , assignable]) => assignable).map(([value]) => value));
+const ADMIN_ROLE_PERMISSIONS = {
+  vice_admin: [...ADMIN_ASSIGNABLE_PERMISSIONS].filter((permission) => !permission.startsWith("users.")),
+  catalog_editor: ["dashboard.view", "products.view", "products.create", "products.edit", "products.media", "products.import", "products.ai", "categories.manage", "brands.manage", "partners.manage"],
+  pricer: ["products.view", "prices.edit"],
+  marketing: ["dashboard.view", "products.view", "promotions.manage", "banners.manage", "header_spotlights.manage", "header_ads.manage", "themes.manage"],
+  custom: [],
+};
+const ADMIN_ROLE_LABELS = {
+  owner: "Proprietário",
+  vice_admin: "Vice-admin",
+  catalog_editor: "Editor de catálogo",
+  pricer: "Precificador",
+  marketing: "Marketing",
+  custom: "Personalizado",
+};
 const AI_FEATURES = {
   search_intent: { label: "Interpretação da pesquisa", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
   premium_search: { label: "Ordenação da pesquisa SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8" },
@@ -65,7 +115,17 @@ export default {
   async fetch(request, env, ctx) {
     const requestId = crypto.randomUUID();
     try {
-      return await route(request, env, ctx, requestId);
+      const url = new URL(request.url);
+      const shouldAudit = url.pathname.startsWith("/api/v1/admin/") && (request.method !== "GET" || url.pathname === "/api/v1/admin/auth/session");
+      const auditRequest = shouldAudit ? request.clone() : null;
+      const auditActor = shouldAudit && !url.pathname.endsWith("/auth/login") ? await adminActor(request, env).catch(() => null) : null;
+      const response = await route(request, env, ctx, requestId);
+      // Administrative mutations must be present in the audit trail as soon as
+      // the UI receives its success response. Running this in the background
+      // made freshly saved changes appear to have no collaborator log.
+      if (auditRequest && response.ok && url.pathname !== "/api/v1/admin/auth/session")
+        await recordAdminAudit(auditRequest, response.clone(), env, requestId, auditActor);
+      return response;
     } catch (error) {
       const detail = String(error?.message || "unknown");
       console.error(
@@ -152,6 +212,12 @@ export default {
         );
       if (/no such table:.*(?:user_favorites|user_ratings|user_cart|user_view_history)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"USER_LIBRARY_MIGRATION_REQUIRED",message:"Execute user-library-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*admin_collaborators|no such column:.*collaborator_id|no column named collaborator_id/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"ADMIN_COLLABORATORS_MIGRATION_REQUIRED",message:"Execute admin-collaborators-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/ADMIN_COLLABORATORS_SCHEMA_/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"ADMIN_COLLABORATORS_SCHEMA_ERROR",message:"A estrutura de colaboradores no D1 está incompleta. Consulte o detalhe e o requestId.",detail:detail.slice(0,500),requestId}},503);
+      if (new URL(request.url).pathname.startsWith("/api/v1/admin/collaborators"))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"ADMIN_COLLABORATORS_ERROR",message:"Não foi possível acessar os colaboradores.",detail:detail.slice(0,500),requestId}},500);
       if (/no such column:.*user_id/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PERSONALIZATION_MIGRATION_REQUIRED",message:"Execute personalized-recommendations-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*targeting_json/i.test(detail))
@@ -458,8 +524,36 @@ async function route(request, env, ctx, requestId) {
     return logout(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/auth/session")
     return sessionStatus(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/auth/password")
+    return changeAdminCollaboratorPassword(request, env, requestId);
+  if (path.startsWith("/api/v1/admin/")) {
+    const permission = adminPermissionForRequest(request.method, path);
+    const actor = await adminActor(request, env);
+    if (!actor)
+      return fail(request, env, "UNAUTHORIZED", "Sessão administrativa inválida", 401, requestId);
+    if (permission && !actor.permissions.includes("*") && !actor.permissions.includes(permission))
+      return fail(request, env, "FORBIDDEN", "Seu cargo não permite realizar esta ação", 403, requestId);
+  }
+  if (request.method === "GET" && path === "/api/v1/admin/collaborators")
+    return adminCollaborators(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/roles")
+    return adminRoles(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/roles")
+    return saveAdminRole(request, env, null, requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/roles\/[^/]+$/.test(path))
+    return saveAdminRole(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/roles\/[^/]+$/.test(path))
+    return deleteAdminRole(request, env, path.split("/").pop(), requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/collaborators")
+    return createAdminCollaborator(request, env, requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/collaborators\/[^/]+$/.test(path))
+    return updateAdminCollaborator(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/collaborators\/[^/]+$/.test(path))
+    return deleteAdminCollaborator(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/dashboard")
     return adminDashboard(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/logs")
+    return adminLogs(request, env, url, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/premium-settings")
     return adminPremiumSettings(request, env, requestId);
   if (request.method === "PUT" && path === "/api/v1/admin/premium-settings")
@@ -504,6 +598,8 @@ async function route(request, env, ctx, requestId) {
     return adminImportProductLink(request, env, requestId);
   if (request.method === "POST" && /^\/api\/v1\/admin\/products\/[^/]+\/sync-price$/.test(path))
     return adminSyncProductPrice(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/products\/[^/]+\/price$/.test(path))
+    return updateAdminProductPrice(request, env, path.split("/").at(-2), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/products")
     return adminProducts(request, env, url, requestId);
   if (
@@ -2579,7 +2675,25 @@ async function login(req, env, id) {
       403,
       id,
     );
-  if (!(await safeEqual(String(body.password), env.ADMIN_PASSWORD)))
+  const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
+  let collaborator = null;
+  let validCredentials = false;
+  if (email) {
+    await ensureAdminCollaboratorSchema(env);
+    try {
+      collaborator = await env.DB.prepare(
+        `SELECT c.id,c.name,c.email,c.role,c.role_id roleId,c.permissions_json permissionsJson,c.password_salt passwordSalt,c.password_hash passwordHash,
+          r.name customRoleName,r.permissions_json rolePermissionsJson,r.is_active roleIsActive
+         FROM admin_collaborators c LEFT JOIN admin_roles r ON r.id=c.role_id WHERE c.email=? AND c.is_active=1`,
+      ).bind(email).first();
+      validCredentials = Boolean(collaborator) && (!collaborator.roleId || Boolean(collaborator.roleIsActive)) && await verifyAdminPassword(String(body.password), collaborator.passwordSalt, collaborator.passwordHash);
+    } catch (error) {
+      if (!/no such table:.*admin_collaborators/i.test(String(error?.message || error))) throw error;
+    }
+  } else {
+    validCredentials = await safeEqual(String(body.password), env.ADMIN_PASSWORD);
+  }
+  if (!validCredentials)
     return fail(
       req,
       env,
@@ -2592,12 +2706,18 @@ async function login(req, env, id) {
     hash = await sha256(token),
     sessionId = crypto.randomUUID(),
     expires = new Date(Date.now() + 8 * 3600e3).toISOString();
-  await env.DB.prepare(
-    `INSERT INTO admin_sessions(id,token_hash,expires_at) VALUES(?,?,?)`,
-  )
-    .bind(sessionId, hash, expires)
-    .run();
-  const response = ok(req, env, { authenticated: true }, id);
+  try {
+    await env.DB.prepare(
+      `INSERT INTO admin_sessions(id,token_hash,collaborator_id,expires_at) VALUES(?,?,?,?)`,
+    ).bind(sessionId, hash, collaborator?.id || null, expires).run();
+  } catch (error) {
+    if (collaborator || !/no column named collaborator_id/i.test(String(error?.message || error))) throw error;
+    await env.DB.prepare(`INSERT INTO admin_sessions(id,token_hash,expires_at) VALUES(?,?,?)`).bind(sessionId, hash, expires).run();
+  }
+  if (collaborator)
+    await env.DB.prepare(`UPDATE admin_collaborators SET last_login_at=CURRENT_TIMESTAMP WHERE id=?`).bind(collaborator.id).run();
+  const actor = collaborator ? collaboratorAdminActor(collaborator) : ownerAdminActor();
+  const response = ok(req, env, { authenticated: true, actor }, id);
   response.headers.append(
     "set-cookie",
     `shoplab_session=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=28800`,
@@ -2618,9 +2738,31 @@ async function logout(req, env, id) {
   return response;
 }
 async function sessionStatus(req, env, id) {
-  return (await requireAdmin(req, env))
-    ? ok(req, env, { authenticated: true }, id)
+  await ensureAdminCollaboratorSchema(env);
+  const actor = await adminActor(req, env);
+  return actor
+    ? ok(req, env, { authenticated: true, actor }, id)
     : fail(req, env, "UNAUTHORIZED", "Sessão inválida", 401, id);
+}
+async function changeAdminCollaboratorPassword(req, env, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const actor = await adminActor(req, env);
+  if (!actor) return fail(req, env, "UNAUTHORIZED", "Sessão inválida", 401, id);
+  if (actor.role === "owner") return fail(req, env, "OWNER_PASSWORD_MANAGED_BY_SECRET", "A senha do proprietário é alterada no segredo ADMIN_PASSWORD do Worker", 409, id);
+  const body = await readJson(req, 8000), currentPassword = String(body.currentPassword || ""), newPassword = String(body.newPassword || "");
+  if (newPassword.length < 10 || newPassword.length > 200)
+    return fail(req, env, "VALIDATION_ERROR", "A nova senha precisa ter entre 10 e 200 caracteres", 422, id);
+  if (currentPassword === newPassword)
+    return fail(req, env, "VALIDATION_ERROR", "Escolha uma senha diferente da atual", 422, id);
+  const row = await env.DB.prepare(`SELECT password_salt passwordSalt,password_hash passwordHash FROM admin_collaborators WHERE id=? AND is_active=1`).bind(actor.id).first();
+  if (!row || !(await verifyAdminPassword(currentPassword, row.passwordSalt, row.passwordHash)))
+    return fail(req, env, "CURRENT_PASSWORD_INVALID", "A senha atual está incorreta", 422, id);
+  const credentials = await hashAdminPassword(newPassword), tokenHash = await sha256(cookie(req, "shoplab_session"));
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE admin_collaborators SET password_salt=?,password_hash=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(credentials.passwordSalt, credentials.passwordHash, actor.id),
+    env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id=? AND token_hash<>?`).bind(actor.id, tokenHash),
+  ]);
+  return ok(req, env, { changed: true, otherSessionsClosed: true }, id);
 }
 async function createProduct(req, env, id) {
   if (!(await requireAdmin(req, env)))
@@ -2715,9 +2857,23 @@ function productPriceSyncInput(body) {
   return { supplied: Object.prototype.hasOwnProperty.call(body || {}, "priceSource"), source: enabled ? source : null, itemId: enabled ? itemId : null, offerId: enabled ? offerId : null, sourceUrl: enabled ? sourceUrl : null, enabled: enabled ? 1 : 0 };
 }
 
-function normalizeAdminOffers(value, productType, basePrice, comparePrice) {
+function originalProductUrlInput(body) {
+  const supplied = Object.prototype.hasOwnProperty.call(body || {}, "sourceProductUrl");
+  if (!supplied) return { supplied: false, url: null };
+  const value = String(body.sourceProductUrl || "").trim();
+  if (!value) return { supplied: true, url: null };
+  try {
+    const parsed = new URL(value);
+    if (!["http:", "https:"].includes(parsed.protocol)) return { supplied: true, error: "O link original deve usar HTTP ou HTTPS" };
+    return { supplied: true, url: String(parsed).slice(0, 2000) };
+  } catch {
+    return { supplied: true, error: "Informe um link original de produto válido" };
+  }
+}
+
+function normalizeAdminOffers(value, productType, basePrice, comparePrice, requireAffiliate = true) {
   const offers = Array.isArray(value) ? value.slice(0, 20) : [];
-  if (productType === "affiliate" && !offers.length)
+  if (requireAffiliate && productType === "affiliate" && !offers.length)
     return { error: "Produto afiliado precisa de uma URL de afiliado" };
   const normalized = [];
   for (let index = 0; index < offers.length; index += 1) {
@@ -2771,7 +2927,8 @@ function insertOfferStatements(env, productId, offers) {
 }
 
 async function createProductV2(req, env, id) {
-  if (!(await requireAdmin(req, env)))
+  const actor = await adminActor(req, env);
+  if (!actor)
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const body = await readJson(req, 100000),
     validation = validateProduct(body);
@@ -2797,15 +2954,22 @@ async function createProductV2(req, env, id) {
       422,
       id,
     );
+  const owner = actor.role === "owner";
+  if (!owner && Array.isArray(body.offers) && body.offers.some((offer) => offer?.affiliateUrl))
+    return fail(req, env, "OWNER_ONLY_AFFILIATE_LINK", "Somente o administrador principal pode cadastrar links de afiliado", 403, id);
+  const sourceProduct = originalProductUrlInput(body);
+  if (sourceProduct.error)
+    return fail(req, env, "VALIDATION_ERROR", sourceProduct.error, 422, id);
   const priceSync = productPriceSyncInput(body),
     productId = crypto.randomUUID(),
-    status = body.status || "draft",
+    status = owner ? body.status || "draft" : "draft",
     productType = body.productType || "affiliate",
     offerResult = normalizeAdminOffers(
-      body.offers,
+      owner ? body.offers : [],
       productType,
       basePrice,
       comparePrice,
+      owner,
     );
   if (offerResult.error)
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
@@ -2832,7 +2996,7 @@ async function createProductV2(req, env, id) {
       priceSync.source,
       priceSync.itemId,
       priceSync.offerId,
-      priceSync.sourceUrl,
+      sourceProduct.supplied ? sourceProduct.url : priceSync.sourceUrl,
       priceSync.enabled,
       priceSync.enabled,
       priceSync.enabled,
@@ -2859,7 +3023,8 @@ async function createProductV2(req, env, id) {
 }
 
 async function updateProductV2(req, env, productId, id) {
-  if (!(await requireAdmin(req, env)))
+  const actor = await adminActor(req, env);
+  if (!actor)
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const body = await readJson(req, 100000),
     validation = validateProduct(body);
@@ -2885,23 +3050,31 @@ async function updateProductV2(req, env, productId, id) {
       422,
       id,
     );
+  const owner = actor.role === "owner";
+  if (!owner && Array.isArray(body.offers) && body.offers.some((offer) => offer?.affiliateUrl))
+    return fail(req, env, "OWNER_ONLY_AFFILIATE_LINK", "Somente o administrador principal pode cadastrar ou alterar links de afiliado", 403, id);
+  const sourceProduct = originalProductUrlInput(body);
+  if (sourceProduct.error)
+    return fail(req, env, "VALIDATION_ERROR", sourceProduct.error, 422, id);
   const priceSync = productPriceSyncInput(body),
     productType = body.productType || "affiliate",
-    offerResult = normalizeAdminOffers(
+    offerResult = owner ? normalizeAdminOffers(
       body.offers,
       productType,
       basePrice,
       comparePrice,
-    );
+      true,
+    ) : { offers: [] };
   if (offerResult.error)
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
-  const results = await env.DB.batch([
+  const statements = [
     env.DB.prepare(
-      `UPDATE products SET name=?,slug=?,product_type=?,status=?,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE products SET name=?,slug=?,product_type=?,status=CASE WHEN ?=1 THEN ? ELSE status END,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?=1 AND ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(
       String(body.name).trim(),
       body.slug,
       productType,
+      owner ? 1 : 0,
       body.status || "draft",
       body.categoryId || null,
       body.brandId || null,
@@ -2917,16 +3090,19 @@ async function updateProductV2(req, env, productId, id) {
       priceSync.supplied ? 1 : 0,priceSync.source,
       priceSync.supplied ? 1 : 0,priceSync.itemId,
       priceSync.supplied ? 1 : 0,priceSync.offerId,
-      priceSync.supplied ? 1 : 0,priceSync.sourceUrl,
+      sourceProduct.supplied || priceSync.supplied ? 1 : 0,sourceProduct.supplied ? sourceProduct.url : priceSync.sourceUrl,
       priceSync.supplied ? 1 : 0,priceSync.enabled,
       priceSync.supplied ? 1 : 0,priceSync.enabled,
       priceSync.supplied ? 1 : 0,priceSync.enabled,
-      body.status || "draft",
+      owner ? 1 : 0,body.status || "draft",
       productId,
     ),
+  ];
+  if (owner) statements.push(
     env.DB.prepare(`DELETE FROM offers WHERE product_id=?`).bind(productId),
     ...insertOfferStatements(env, productId, offerResult.offers),
-  ]);
+  );
+  const results = await env.DB.batch(statements);
   const result = results[0];
   if (!result.meta.changes)
     return fail(
@@ -2944,7 +3120,8 @@ async function updateProductV2(req, env, productId, id) {
       id: productId,
       updated: true,
       basePriceCents: basePrice,
-      offersSaved: offerResult.offers.length,
+      offersSaved: owner ? offerResult.offers.length : null,
+      affiliateLinksPreserved: !owner,
     },
     id,
   );
@@ -4077,7 +4254,8 @@ async function trendingSearches(req, env, id) {
 }
 
 async function adminProductDetail(req, env, productId, id) {
-  if (!(await requireAdmin(req, env)))
+  const actor = await adminActor(req, env);
+  if (!actor)
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const product = await env.DB.prepare(
     `SELECT id,name,slug,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson,price_source priceSource,price_source_item_id priceSourceItemId,price_source_offer_id priceSourceOfferId,price_source_url priceSourceUrl,price_sync_enabled priceSyncEnabled,price_synced_at priceSyncedAt,price_sync_status priceSyncStatus,price_sync_error priceSyncError FROM products WHERE id=?`,
@@ -4110,8 +4288,12 @@ async function adminProductDetail(req, env, productId, id) {
     env,
     {
       ...product,
+      sourceProductUrl: product.priceSourceUrl || null,
       specificationGroups: parse(product.specificationsJson, []),
-      offers: offers.results || [],
+      offers: actor.role === "owner"
+        ? offers.results || []
+        : (offers.results || []).map(({ affiliateUrl, ...offer }) => ({ ...offer, affiliateManagedByOwner: Boolean(affiliateUrl) })),
+      affiliateLinksOwnerOnly: actor.role !== "owner",
       media: media.results || [],
       partners: partners.results || [],
       brands: brands.results || [],
@@ -4312,8 +4494,11 @@ async function serveMedia(req, env, key) {
 }
 
 async function saveProductOffers(req, env, productId, id) {
-  if (!(await requireAdmin(req, env)))
+  const actor = await adminActor(req, env);
+  if (!actor)
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  if (actor.role !== "owner")
+    return fail(req, env, "OWNER_ONLY_AFFILIATE_LINK", "Somente o administrador principal pode cadastrar ou alterar links de afiliado", 403, id);
   const body = await readJson(req, 100000);
   const product = await env.DB.prepare(
     "SELECT product_type productType,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents FROM products WHERE id=?",
@@ -4789,9 +4974,73 @@ async function redeemManualUserReward(req,env,rewardId,id){
   return ok(req,env,{id:reward.id,status:"redeemed",redeemedAt},id);
 }
 
+async function ensureAdminAuditSchema(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id TEXT PRIMARY KEY,actor_id TEXT,actor_name TEXT NOT NULL DEFAULT 'Administrador',actor_email TEXT NOT NULL DEFAULT '',actor_role TEXT NOT NULL DEFAULT 'owner',
+    action TEXT NOT NULL,method TEXT NOT NULL,path TEXT NOT NULL,resource_type TEXT,resource_id TEXT,resource_label TEXT,
+    details_json TEXT NOT NULL DEFAULT '{}',request_id TEXT,ip_hash TEXT,user_agent TEXT NOT NULL DEFAULT '',status_code INTEGER NOT NULL DEFAULT 200,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(created_at DESC)`).run();
+}
+
+function adminAuditTarget(method, path, body, responseData) {
+  const parts = path.split("/").filter(Boolean), adminIndex = parts.indexOf("admin"), area = parts[adminIndex + 1] || "admin";
+  const candidateId = parts[adminIndex + 2] || null;
+  const id = ["import-link", "product-draft"].includes(candidateId) ? (responseData?.id || null) : (candidateId || responseData?.id || null);
+  const suffix = parts.slice(adminIndex + 3).join("/");
+  const actionAreas = { products: "product", categories: "category", brands: "brand", partners: "partner", collaborators: "collaborator", roles: "role", users: "user", promotions: "promotion", banners: "banner", themes: "theme", "ai-settings": "ai_settings", "premium-settings": "premium_settings" };
+  const actionArea = actionAreas[area] || area.replaceAll("-", "_");
+  let action = `${method.toLowerCase()}_${actionArea}`;
+  if (path.includes("/auth/login")) action = "admin_login";
+  else if (path.includes("/auth/logout")) action = "admin_logout";
+  else if (path.includes("/auth/password")) action = "admin_password_changed";
+  else if (method === "POST") action = `${actionArea}_created`;
+  else if (method === "DELETE") action = `${actionArea}_deleted`;
+  else if (method === "PUT") action = `${actionArea}_updated`;
+  if (suffix === "price" || suffix === "sync-price") action = suffix === "price" ? "product_price_updated" : "product_price_synced";
+  if (suffix === "media" || area === "media") action = method === "DELETE" ? "product_media_deleted" : "product_media_updated";
+  if (suffix === "offers") action = "product_offers_updated";
+  if (suffix === "access") action = "user_access_updated";
+  if (suffix === "premium-access") action = method === "DELETE" ? "user_premium_revoked" : "user_premium_granted";
+  if (suffix.includes("rewards")) action = method === "DELETE" ? "user_reward_removed" : "user_reward_created";
+  const resourceTypes = { products: "product", categories: "category", brands: "brand", partners: "partner", collaborators: "collaborator", roles: "role", users: "user", promotions: "promotion", banners: "banner", themes: "theme", media: "product_media" };
+  const resourceType = resourceTypes[area] || area.replaceAll("-", "_");
+  const resourceLabel = body?.name || body?.title || body?.email || body?.slug || body?.query || null;
+  return { action, resourceType, resourceId: id, resourceLabel };
+}
+
+async function recordAdminAudit(req, response, env, requestId, knownActor = null) {
+  try {
+    await ensureAdminAuditSchema(env);
+    const url = new URL(req.url), contentType = req.headers.get("content-type") || "";
+    let body = {};
+    if (contentType.includes("application/json") && Number(req.headers.get("content-length") || 0) < 150000) body = await req.json().catch(() => ({}));
+    const responseJson = await response.json().catch(() => ({}));
+    let actor = knownActor || await adminActor(req, env);
+    if (!actor && url.pathname.endsWith("/auth/login")) actor = responseJson?.data?.actor || null;
+    if (!actor && !url.pathname.endsWith("/auth/logout")) return;
+    const safeDetails = {};
+    for (const key of ["name", "title", "slug", "email", "status", "action", "currentPriceCents", "previousPriceCents", "role", "roleId", "isActive", "days", "claimExpiresAt"])
+      if (body?.[key] !== undefined) safeDetails[key] = body[key];
+    const target = adminAuditTarget(req.method, url.pathname, body, responseJson?.data);
+    if (!target.resourceLabel && target.action === "admin_password_changed")
+      target.resourceLabel = actor?.email || "Própria conta";
+    const ip = req.headers.get("CF-Connecting-IP") || "unknown";
+    await env.DB.prepare(`INSERT INTO admin_audit_logs(id,actor_id,actor_name,actor_email,actor_role,action,method,path,resource_type,resource_id,resource_label,details_json,request_id,ip_hash,user_agent,status_code)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(), actor?.id || null, actor?.name || "Administrador", actor?.email || "", actor?.roleLabel || actor?.role || "Admin", target.action, req.method, url.pathname, target.resourceType, target.resourceId, target.resourceLabel, JSON.stringify(safeDetails), requestId, await sha256(ip), String(req.headers.get("user-agent") || "").slice(0, 300), response.status).run();
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "admin_audit_failed", requestId, error: String(error?.message || error) }));
+  }
+}
+
 async function adminDashboard(req, env, id) {
-  if (!(await requireAdmin(req, env)))
+  await ensureAdminAuditSchema(env);
+  const actor = await adminActor(req, env);
+  if (!actor)
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const canManageUsers = actor.permissions.includes("*") || actor.permissions.includes("users.view");
+  const canViewLogs = actor.permissions.includes("*") || actor.permissions.includes("logs.view");
   const results = await env.DB.batch([
     env.DB.prepare("SELECT COUNT(*) total FROM products"),
     env.DB.prepare(
@@ -4857,6 +5106,17 @@ async function adminDashboard(req, env, id) {
       GROUP BY query_text ORDER BY total DESC,lastAt DESC LIMIT 10`),
     env.DB.prepare("SELECT COUNT(*) total FROM user_ratings WHERE updated_at>=datetime('now','-7 days')"),
     env.DB.prepare("SELECT COUNT(DISTINCT user_id) total FROM user_cart WHERE quantity>0"),
+    env.DB.prepare(`SELECT l.id,l.actor_id actorId,l.actor_name actorName,l.actor_email actorEmail,l.actor_role actorRole,
+      l.action,l.method,l.path,l.resource_type resourceType,l.resource_id resourceId,
+      COALESCE(l.resource_label,p.name,c.name,b.name,pa.name,r.name) resourceLabel,l.details_json detailsJson,
+      l.request_id requestId,l.status_code statusCode,l.created_at createdAt
+      FROM admin_audit_logs l
+      LEFT JOIN products p ON l.resource_type='product' AND p.id=l.resource_id
+      LEFT JOIN categories c ON l.resource_type='category' AND c.id=l.resource_id
+      LEFT JOIN brands b ON l.resource_type='brand' AND b.id=l.resource_id
+      LEFT JOIN partners pa ON l.resource_type='partner' AND pa.id=l.resource_id
+      LEFT JOIN admin_roles r ON l.resource_type='role' AND r.id=l.resource_id
+      ORDER BY datetime(l.created_at) DESC LIMIT 100`),
   ]);
   const total = (index) => Number(results[index].results?.[0]?.total || 0);
   return ok(
@@ -4897,13 +5157,316 @@ async function adminDashboard(req, env, id) {
       aiGenerationsMonth: total(31),
       eventBreakdown7d: results[32].results || [],
       activity14d: results[33].results || [],
-      recentLogs: results[34].results || [],
+      recentLogs: canViewLogs ? (results[34].results || []).map((row) => canManageUsers ? row : { ...row, displayName: null, email: null }) : [],
       noResultSearches: results[35].results || [],
       ratings7d: total(36),
       cartsWithProducts: total(37),
+      userLogs: canViewLogs ? (results[34].results || []).map((row) => canManageUsers ? row : { ...row, displayName: null, email: null }) : [],
+      collaboratorLogs: canViewLogs ? results[38].results || [] : [],
     },
     id,
   );
+}
+
+async function adminLogs(req, env, url, id) {
+  await ensureAdminAuditSchema(env);
+  const actor = await adminActor(req, env);
+  const scope = url.searchParams.get("scope") === "team" ? "team" : "users";
+  const limit = Math.min(100, Math.max(10, Number(url.searchParams.get("limit")) || 50));
+  const offset = Math.max(0, Math.min(100000, Number(url.searchParams.get("offset")) || 0));
+  const q = String(url.searchParams.get("q") || "").trim().slice(0, 120);
+  const type = String(url.searchParams.get("type") || "").trim().slice(0, 80);
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("from") || "") ? url.searchParams.get("from") : "";
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("to") || "") ? url.searchParams.get("to") : "";
+  const conditions = [], args = [];
+  if (from) { conditions.push(scope === "team" ? "datetime(l.created_at)>=datetime(?)" : "datetime(e.created_at)>=datetime(?)"); args.push(`${from} 00:00:00`); }
+  if (to) { conditions.push(scope === "team" ? "datetime(l.created_at)<datetime(?,'+1 day')" : "datetime(e.created_at)<datetime(?,'+1 day')"); args.push(`${to} 00:00:00`); }
+  if (type) { conditions.push(scope === "team" ? "l.action=?" : "e.event_type=?"); args.push(type); }
+  if (q) {
+    const like = `%${q}%`;
+    conditions.push(scope === "team"
+      ? "(l.actor_name LIKE ? OR l.actor_email LIKE ? OR l.resource_label LIKE ? OR l.action LIKE ? OR p.name LIKE ?)"
+      : "(up.display_name LIKE ? OR up.email LIKE ? OR e.query_text LIKE ? OR e.product_slug LIKE ? OR p.name LIKE ? OR e.event_type LIKE ?)");
+    args.push(...(scope === "team" ? [like, like, like, like, like] : [like, like, like, like, like, like]));
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  if (scope === "team") {
+    const typeRows = await env.DB.prepare(`SELECT DISTINCT action value FROM admin_audit_logs ORDER BY action`).all();
+    const { results } = await env.DB.prepare(`SELECT l.id,l.actor_id actorId,l.actor_name actorName,l.actor_email actorEmail,l.actor_role actorRole,l.action,l.method,l.path,l.resource_type resourceType,l.resource_id resourceId,COALESCE(l.resource_label,p.name) resourceLabel,l.details_json detailsJson,l.request_id requestId,l.status_code statusCode,l.created_at createdAt FROM admin_audit_logs l LEFT JOIN products p ON l.resource_type='product' AND p.id=l.resource_id ${where} ORDER BY datetime(l.created_at) DESC LIMIT ? OFFSET ?`).bind(...args, limit + 1, offset).all();
+    const items = results || [], hasMore = items.length > limit;
+    return ok(req, env, { scope, items: items.slice(0, limit), types: (typeRows.results || []).map(row => row.value), offset, nextOffset: offset + limit, hasMore }, id);
+  }
+  const canSeeIdentity = actor?.permissions.includes("*") || actor?.permissions.includes("users.view");
+  const typeRows = await env.DB.prepare(`SELECT DISTINCT event_type value FROM events ORDER BY event_type`).all();
+  const { results } = await env.DB.prepare(`SELECT e.id,e.event_type eventType,e.product_slug productSlug,e.query_text queryText,e.metadata_json metadataJson,e.created_at createdAt,up.display_name displayName,up.email,p.name productName FROM events e LEFT JOIN user_profiles up ON up.user_id=e.user_id LEFT JOIN products p ON p.slug=e.product_slug ${where} ORDER BY datetime(e.created_at) DESC LIMIT ? OFFSET ?`).bind(...args, limit + 1, offset).all();
+  const items = (results || []).map(row => canSeeIdentity ? row : { ...row, displayName: null, email: null }), hasMore = items.length > limit;
+  return ok(req, env, { scope, items: items.slice(0, limit), types: (typeRows.results || []).map(row => row.value), offset, nextOffset: offset + limit, hasMore }, id);
+}
+
+function normalizedCollaboratorPermissions(role, permissions) {
+  if (!ADMIN_ROLE_PERMISSIONS[role]) return null;
+  if (role !== "custom") return [...ADMIN_ROLE_PERMISSIONS[role]];
+  return [...new Set((Array.isArray(permissions) ? permissions : [])
+    .map((permission) => String(permission))
+    .filter((permission) => ADMIN_ASSIGNABLE_PERMISSIONS.has(permission)))];
+}
+
+function normalizedRolePermissions(permissions) {
+  return [...new Set((Array.isArray(permissions) ? permissions : [])
+    .map((permission) => String(permission))
+    .filter((permission) => ADMIN_ASSIGNABLE_PERMISSIONS.has(permission)))];
+}
+
+function safeJson(value, fallback) {
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+async function ensureAdminCollaboratorSchema(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS admin_roles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      description TEXT NOT NULL DEFAULT '',
+      color TEXT NOT NULL DEFAULT '#0b8f7f',
+      permissions_json TEXT NOT NULL DEFAULT '[]',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  let collaboratorColumns;
+  try {
+    collaboratorColumns = await env.DB.prepare(`PRAGMA table_info(admin_collaborators)`).all();
+  } catch (error) {
+    throw new Error(`ADMIN_COLLABORATORS_SCHEMA_INSPECT_TABLE: ${String(error?.message || error)}`);
+  }
+  if (!(collaboratorColumns.results || []).length) {
+    try {
+      await env.DB.prepare(
+        `CREATE TABLE admin_collaborators (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          role TEXT NOT NULL CHECK(role IN ('vice_admin','catalog_editor','pricer','marketing','custom')),
+          role_id TEXT,
+          permissions_json TEXT NOT NULL DEFAULT '[]',
+          password_salt TEXT NOT NULL,
+          password_hash TEXT NOT NULL,
+          is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+          last_login_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )`,
+      ).run();
+    } catch (error) {
+      if (!/already exists/i.test(String(error?.message || error)))
+        throw new Error(`ADMIN_COLLABORATORS_SCHEMA_CREATE_TABLE: ${String(error?.message || error)}`);
+    }
+  } else {
+    const available = new Set((collaboratorColumns.results || []).map((column) => column.name));
+    if (!available.has("id")) throw new Error("ADMIN_COLLABORATORS_SCHEMA_TABLE_COLUMNS: missing id");
+    const additions = {
+      name: "TEXT NOT NULL DEFAULT ''",
+      email: "TEXT NOT NULL DEFAULT ''",
+      role: "TEXT NOT NULL DEFAULT 'custom'",
+      permissions_json: "TEXT NOT NULL DEFAULT '[]'",
+      password_salt: "TEXT NOT NULL DEFAULT ''",
+      password_hash: "TEXT NOT NULL DEFAULT ''",
+      is_active: "INTEGER NOT NULL DEFAULT 1",
+      last_login_at: "TEXT",
+      created_at: "TEXT",
+      updated_at: "TEXT",
+      role_id: "TEXT",
+    };
+    for (const [column, definition] of Object.entries(additions)) {
+      if (available.has(column)) continue;
+      try {
+        await env.DB.prepare(`ALTER TABLE admin_collaborators ADD COLUMN ${column} ${definition}`).run();
+      } catch (error) {
+        if (!new RegExp(`duplicate column name:.*${column}`, "i").test(String(error?.message || error)))
+          throw new Error(`ADMIN_COLLABORATORS_SCHEMA_ADD_${column.toUpperCase()}: ${String(error?.message || error)}`);
+      }
+    }
+    await env.DB.prepare(
+      `UPDATE admin_collaborators
+       SET created_at=COALESCE(created_at,CURRENT_TIMESTAMP),updated_at=COALESCE(updated_at,CURRENT_TIMESTAMP)`,
+    ).run();
+  }
+
+  let sessionColumns;
+  try {
+    sessionColumns = await env.DB.prepare(`PRAGMA table_info(admin_sessions)`).all();
+  } catch (error) {
+    throw new Error(`ADMIN_COLLABORATORS_SCHEMA_INSPECT_SESSIONS: ${String(error?.message || error)}`);
+  }
+  if (!(sessionColumns.results || []).length)
+    throw new Error("ADMIN_COLLABORATORS_SCHEMA_SESSIONS_TABLE: admin_sessions ausente");
+  if (!(sessionColumns.results || []).some((column) => column.name === "collaborator_id")) {
+    try {
+      await env.DB.prepare(`ALTER TABLE admin_sessions ADD COLUMN collaborator_id TEXT`).run();
+    } catch (error) {
+      if (!/duplicate column name:.*collaborator_id/i.test(String(error?.message || error)))
+        throw new Error(`ADMIN_COLLABORATORS_SCHEMA_ADD_SESSION_COLUMN: ${String(error?.message || error)}`);
+    }
+  }
+}
+
+async function adminRoles(req, env, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const { results } = await env.DB.prepare(
+    `SELECT r.id,r.name,r.description,r.color,r.permissions_json permissionsJson,r.is_active isActive,
+      r.created_at createdAt,r.updated_at updatedAt,COUNT(c.id) memberCount
+     FROM admin_roles r LEFT JOIN admin_collaborators c ON c.role_id=r.id AND c.is_active=1
+     GROUP BY r.id ORDER BY r.name COLLATE NOCASE`,
+  ).all();
+  return ok(req, env, (results || []).map((row) => ({ ...row, permissions: normalizedRolePermissions(safeJson(row.permissionsJson, [])), isActive: Boolean(row.isActive) })), id);
+}
+
+async function saveAdminRole(req, env, roleId, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const body = await readJson(req, 16000);
+  const name = String(body.name || "").trim().slice(0, 60);
+  const description = String(body.description || "").trim().slice(0, 240);
+  const color = /^#[0-9a-f]{6}$/i.test(String(body.color || "")) ? String(body.color) : "#0b8f7f";
+  const permissions = normalizedRolePermissions(body.permissions);
+  if (name.length < 2) return fail(req, env, "VALIDATION_ERROR", "Dê ao cargo um nome com pelo menos 2 caracteres", 422, id);
+  const targetId = roleId || crypto.randomUUID();
+  try {
+    if (roleId) {
+      const result = await env.DB.prepare(
+        `UPDATE admin_roles SET name=?,description=?,color=?,permissions_json=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      ).bind(name, description, color, JSON.stringify(permissions), body.isActive === false ? 0 : 1, targetId).run();
+      if (!result.meta.changes) return fail(req, env, "ROLE_NOT_FOUND", "Cargo não encontrado", 404, id);
+      await env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id IN (SELECT id FROM admin_collaborators WHERE role_id=?)`).bind(targetId).run();
+    } else {
+      await env.DB.prepare(
+        `INSERT INTO admin_roles(id,name,description,color,permissions_json,is_active) VALUES(?,?,?,?,?,?)`,
+      ).bind(targetId, name, description, color, JSON.stringify(permissions), body.isActive === false ? 0 : 1).run();
+    }
+    return ok(req, env, { id: targetId, saved: true }, id);
+  } catch (error) {
+    if (/unique constraint failed:.*admin_roles.name/i.test(String(error?.message || error)))
+      return fail(req, env, "ROLE_NAME_EXISTS", "Já existe um cargo com este nome", 409, id);
+    throw error;
+  }
+}
+
+async function deleteAdminRole(req, env, roleId, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const assigned = await env.DB.prepare(`SELECT COUNT(*) total FROM admin_collaborators WHERE role_id=? AND is_active=1`).bind(roleId).first();
+  if (Number(assigned?.total || 0)) return fail(req, env, "ROLE_IN_USE", "Mude o cargo dos colaboradores antes de excluir este cargo", 409, id);
+  const result = await env.DB.prepare(`DELETE FROM admin_roles WHERE id=?`).bind(roleId).run();
+  if (!result.meta.changes) return fail(req, env, "ROLE_NOT_FOUND", "Cargo não encontrado", 404, id);
+  return ok(req, env, { deleted: true }, id);
+}
+
+async function adminCollaborators(req, env, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const { results } = await env.DB.prepare(
+    `SELECT c.id,c.name,c.email,c.role,c.role_id roleId,c.permissions_json permissionsJson,c.is_active isActive,c.last_login_at lastLoginAt,c.created_at createdAt,c.updated_at updatedAt,
+      r.name customRoleName,r.color roleColor,r.permissions_json rolePermissionsJson,r.is_active roleIsActive
+     FROM admin_collaborators c LEFT JOIN admin_roles r ON r.id=c.role_id ORDER BY c.is_active DESC,c.name COLLATE NOCASE`,
+  ).all();
+  const customRoles = await adminRoleRows(env);
+  return ok(req, env, {
+    roles: [...Object.entries(ADMIN_ROLE_LABELS).filter(([key]) => !["owner", "custom"].includes(key)).map(([value, label]) => ({ value, label, permissions: ADMIN_ROLE_PERMISSIONS[value], builtIn: true })), ...customRoles.map((role) => ({ value: `role:${role.id}`, roleId: role.id, label: role.name, permissions: role.permissions, color: role.color }))],
+    customRoles,
+    permissions: ADMIN_PERMISSION_DEFINITIONS.map(([value, group, label, assignable]) => ({ value, group, label, assignable, lockedReason: assignable ? null : "Somente o proprietário" })),
+    items: (results || []).map((row) => ({ ...row, permissions: collaboratorPermissions(row), roleLabel: row.customRoleName || ADMIN_ROLE_LABELS[row.role] || row.role, isActive: Boolean(row.isActive) })),
+  }, id);
+}
+
+async function adminRoleRows(env) {
+  const { results } = await env.DB.prepare(`SELECT id,name,description,color,permissions_json permissionsJson,is_active isActive FROM admin_roles ORDER BY name COLLATE NOCASE`).all();
+  return (results || []).map((row) => ({ ...row, permissions: normalizedRolePermissions(safeJson(row.permissionsJson, [])), isActive: Boolean(row.isActive) }));
+}
+
+async function createAdminCollaborator(req, env, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const body = await readJson(req, 12000);
+  const name = String(body.name || "").trim().slice(0, 100);
+  const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
+  const password = String(body.password || "");
+  const roleId = String(body.roleId || "").slice(0, 100) || null;
+  const role = roleId ? "custom" : String(body.role || "");
+  const selectedRole = roleId ? await env.DB.prepare(`SELECT permissions_json permissionsJson FROM admin_roles WHERE id=? AND is_active=1`).bind(roleId).first() : null;
+  const permissions = roleId ? (selectedRole ? normalizedRolePermissions(safeJson(selectedRole.permissionsJson, [])) : null) : normalizedCollaboratorPermissions(role, body.permissions);
+  if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 10 || !permissions)
+    return fail(req, env, "VALIDATION_ERROR", "Informe nome, e-mail válido, cargo e uma senha com pelo menos 10 caracteres", 422, id);
+  const credentials = await hashAdminPassword(password);
+  try {
+    const collaboratorId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO admin_collaborators(id,name,email,role,role_id,permissions_json,password_salt,password_hash,is_active)
+       VALUES(?,?,?,?,?,?,?,?,?)`,
+    ).bind(collaboratorId, name, email, role, roleId, JSON.stringify(permissions), credentials.passwordSalt, credentials.passwordHash, body.isActive === false ? 0 : 1).run();
+    return ok(req, env, { id: collaboratorId, created: true }, id);
+  } catch (error) {
+    if (/unique constraint failed:.*admin_collaborators.email/i.test(String(error?.message || error)))
+      return fail(req, env, "COLLABORATOR_EMAIL_EXISTS", "Já existe um colaborador com este e-mail", 409, id);
+    throw error;
+  }
+}
+
+async function updateAdminCollaborator(req, env, collaboratorId, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const current = await env.DB.prepare(`SELECT id FROM admin_collaborators WHERE id=?`).bind(String(collaboratorId).slice(0, 100)).first();
+  if (!current) return fail(req, env, "COLLABORATOR_NOT_FOUND", "Colaborador não encontrado", 404, id);
+  const body = await readJson(req, 12000);
+  const name = String(body.name || "").trim().slice(0, 100);
+  const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
+  const roleId = String(body.roleId || "").slice(0, 100) || null;
+  const role = roleId ? "custom" : String(body.role || "");
+  const password = String(body.password || "");
+  const selectedRole = roleId ? await env.DB.prepare(`SELECT permissions_json permissionsJson FROM admin_roles WHERE id=? AND is_active=1`).bind(roleId).first() : null;
+  const permissions = roleId ? (selectedRole ? normalizedRolePermissions(safeJson(selectedRole.permissionsJson, [])) : null) : normalizedCollaboratorPermissions(role, body.permissions);
+  if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || (password && password.length < 10) || !permissions)
+    return fail(req, env, "VALIDATION_ERROR", "Revise nome, e-mail, cargo e senha", 422, id);
+  const statements = [];
+  if (password) {
+    const credentials = await hashAdminPassword(password);
+    statements.push(env.DB.prepare(
+      `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,password_salt=?,password_hash=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    ).bind(name, email, role, roleId, JSON.stringify(permissions), credentials.passwordSalt, credentials.passwordHash, body.isActive === false ? 0 : 1, collaboratorId));
+  } else {
+    statements.push(env.DB.prepare(
+      `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    ).bind(name, email, role, roleId, JSON.stringify(permissions), body.isActive === false ? 0 : 1, collaboratorId));
+  }
+  statements.push(env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id=?`).bind(collaboratorId));
+  try {
+    await env.DB.batch(statements);
+    return ok(req, env, { id: collaboratorId, updated: true }, id);
+  } catch (error) {
+    if (/unique constraint failed:.*admin_collaborators.email/i.test(String(error?.message || error)))
+      return fail(req, env, "COLLABORATOR_EMAIL_EXISTS", "Já existe um colaborador com este e-mail", 409, id);
+    throw error;
+  }
+}
+
+async function deleteAdminCollaborator(req, env, collaboratorId, id) {
+  await ensureAdminCollaboratorSchema(env);
+  const result = await env.DB.batch([
+    env.DB.prepare(`UPDATE admin_collaborators SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(String(collaboratorId).slice(0, 100)),
+    env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id=?`).bind(String(collaboratorId).slice(0, 100)),
+  ]);
+  if (!result[0].meta.changes) return fail(req, env, "COLLABORATOR_NOT_FOUND", "Colaborador não encontrado", 404, id);
+  return ok(req, env, { id: collaboratorId, deactivated: true }, id);
+}
+
+async function updateAdminProductPrice(req, env, productId, id) {
+  const body = await readJson(req, 4000);
+  const currentPriceCents = Number(body.currentPriceCents);
+  const previousPriceCents = body.previousPriceCents == null || body.previousPriceCents === "" ? null : Number(body.previousPriceCents);
+  if (!Number.isInteger(currentPriceCents) || currentPriceCents < 1 || currentPriceCents > 1000000000 || (previousPriceCents != null && (!Number.isInteger(previousPriceCents) || previousPriceCents < currentPriceCents || previousPriceCents > 1000000000)))
+    return fail(req, env, "VALIDATION_ERROR", "Informe um preço atual válido e um preço anterior igual ou maior", 422, id);
+  const product = await env.DB.prepare(`SELECT id FROM products WHERE id=?`).bind(String(productId).slice(0, 100)).first();
+  if (!product) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, id);
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE products SET base_price_cents=?,compare_at_price_cents=?,price_synced_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(currentPriceCents, previousPriceCents, productId),
+    env.DB.prepare(`UPDATE offers SET current_price_cents=?,previous_price_cents=?,updated_at=CURRENT_TIMESTAMP WHERE product_id=? AND is_primary=1`).bind(currentPriceCents, previousPriceCents, productId),
+  ]);
+  return ok(req, env, { id: productId, currentPriceCents, previousPriceCents, updated: true }, id);
 }
 
 async function adminProducts(req, env, url, id) {
@@ -4922,7 +5485,7 @@ async function adminProducts(req, env, url, id) {
     args.push(status);
   }
   const { results } = await env.DB.prepare(
-    `SELECT p.id,p.name,p.slug,p.product_type productType,p.status,p.editorial_score editorialScore,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE ${where} ORDER BY p.updated_at DESC LIMIT 100`,
+    `SELECT p.id,p.name,p.slug,p.product_type productType,p.status,p.editorial_score editorialScore,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) previousPrice FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE ${where} ORDER BY p.updated_at DESC LIMIT 100`,
   )
     .bind(...args)
     .all();
@@ -5907,15 +6470,92 @@ async function deleteTheme(req, env, themeId, id) {
   return ok(req, env, { deleted: true }, id);
 }
 
-async function requireAdmin(req, env) {
+function ownerAdminActor() {
+  return { id: "owner", name: "Proprietário", email: "", role: "owner", roleLabel: ADMIN_ROLE_LABELS.owner, permissions: ["*"] };
+}
+
+function collaboratorPermissions(row) {
+  if (!row) return [];
+  if (row.roleId) return row.roleIsActive === 0 ? [] : normalizedRolePermissions(safeJson(row.rolePermissionsJson, []));
+  const base = ADMIN_ROLE_PERMISSIONS[row.role] || [];
+  if (row.role !== "custom") return [...base];
+  try {
+    const selected = JSON.parse(row.permissionsJson || "[]");
+    return [...new Set((Array.isArray(selected) ? selected : []).filter((permission) => ADMIN_PERMISSIONS[permission] && permission !== "collaborators.manage"))];
+  } catch { return []; }
+}
+
+function collaboratorAdminActor(row) {
+  return {
+    // Queries made from an admin session also contain the session id. Always
+    // expose the collaborator id as the actor id so account operations target
+    // the collaborator record, not admin_sessions.
+    id: row.collaboratorActorId || row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    roleId: row.roleId || null,
+    roleLabel: row.customRoleName || ADMIN_ROLE_LABELS[row.role] || row.role,
+    permissions: collaboratorPermissions(row),
+  };
+}
+
+async function adminActor(req, env) {
   const token = cookie(req, "shoplab_session");
-  if (!token) return false;
-  const row = await env.DB.prepare(
-    `SELECT id FROM admin_sessions WHERE token_hash=? AND expires_at>CURRENT_TIMESTAMP`,
-  )
-    .bind(await sha256(token))
-    .first();
-  return Boolean(row);
+  if (!token) return null;
+  const tokenHash = await sha256(token);
+  try {
+    const row = await env.DB.prepare(
+      `SELECT s.id sessionId,s.collaborator_id collaboratorId,c.id collaboratorActorId,c.id collaboratorFound,c.name,c.email,c.role,c.role_id roleId,c.permissions_json permissionsJson,c.is_active isActive,
+        r.name customRoleName,r.permissions_json rolePermissionsJson,r.is_active roleIsActive
+       FROM admin_sessions s LEFT JOIN admin_collaborators c ON c.id=s.collaborator_id LEFT JOIN admin_roles r ON r.id=c.role_id
+       WHERE s.token_hash=? AND s.expires_at>CURRENT_TIMESTAMP`,
+    ).bind(tokenHash).first();
+    if (!row) return null;
+    if (!row.collaboratorId) return ownerAdminActor();
+    if (!row.collaboratorFound || !row.isActive || (row.roleId && !row.roleIsActive)) return null;
+    return collaboratorAdminActor(row);
+  } catch (error) {
+    if (!/(?:no such table:.*admin_collaborators|no such column:.*(?:collaborator_id|c\.))/i.test(String(error?.message || error))) throw error;
+    const legacy = await env.DB.prepare(
+      `SELECT id FROM admin_sessions WHERE token_hash=? AND expires_at>CURRENT_TIMESTAMP`,
+    ).bind(tokenHash).first();
+    return legacy ? ownerAdminActor() : null;
+  }
+}
+
+async function requireAdmin(req, env) {
+  return Boolean(await adminActor(req, env));
+}
+
+function adminPermissionForRequest(method, path) {
+  if (path.startsWith("/api/v1/admin/collaborators") || path.startsWith("/api/v1/admin/roles")) return "collaborators.manage";
+  if (path.includes("referral-rewards") || path.includes("gift-card-types") || path.includes("/rewards")) return "users.rewards";
+  if (/\/users\/[^/]+\/access$/.test(path)) return "users.access";
+  if (/\/users\/[^/]+\/premium-access$/.test(path)) return "users.premium";
+  if (path.startsWith("/api/v1/admin/users")) return "users.view";
+  if (path === "/api/v1/admin/dashboard") return "dashboard.view";
+  if (path === "/api/v1/admin/logs") return "logs.view";
+  if (path.includes("premium-settings")) return "premium.manage";
+  if (path.includes("ai-settings")) return "ai.manage";
+  if (path.includes("/ai/product-draft")) return "products.ai";
+  if (/\/products\/[^/]+\/(?:sync-price|price)$/.test(path)) return "prices.edit";
+  if (/\/products\/[^/]+\/offers$/.test(path)) return "affiliate_links.manage";
+  if (path.includes("/media/") || /\/products\/[^/]+\/media$/.test(path)) return "products.media";
+  if (path.includes("products/import-link")) return "products.import";
+  if (path === "/api/v1/admin/products" && method === "POST") return "products.create";
+  if (path.startsWith("/api/v1/admin/products/") && method === "DELETE") return "products.delete";
+  if (path.startsWith("/api/v1/admin/products/") && method === "PUT") return "products.edit";
+  if (path.startsWith("/api/v1/admin/products")) return method === "GET" ? "products.view" : "products.edit";
+  if (path.includes("/categories")) return method === "GET" ? "products.view" : "categories.manage";
+  if (path.includes("/brands")) return method === "GET" ? "products.view" : "brands.manage";
+  if (path.includes("/partners")) return method === "GET" ? "products.view" : "partners.manage";
+  if (path.includes("/promotions")) return "promotions.manage";
+  if (path.includes("/header-spotlights")) return "header_spotlights.manage";
+  if (path.includes("/header-ads")) return "header_ads.manage";
+  if (path.includes("/banners")) return "banners.manage";
+  if (path.includes("/themes")) return "themes.manage";
+  return "dashboard.view";
 }
 
 function referralCookie(req) {
@@ -7577,6 +8217,28 @@ function cookie(req, name) {
 async function sha256(value) {
   const digest = await crypto.subtle.digest("SHA-256", enc.encode(value));
   return bytesToHex(new Uint8Array(digest));
+}
+
+async function deriveAdminPassword(password, saltHex) {
+  const salt = Uint8Array.from(String(saltHex).match(/.{1,2}/g) || [], (part) => parseInt(part, 16));
+  const material = await crypto.subtle.importKey("raw", enc.encode(String(password)), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: ADMIN_PASSWORD_PBKDF2_ITERATIONS },
+    material,
+    256,
+  );
+  return bytesToHex(new Uint8Array(bits));
+}
+
+async function hashAdminPassword(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const passwordSalt = bytesToHex(salt);
+  return { passwordSalt, passwordHash: await deriveAdminPassword(password, passwordSalt) };
+}
+
+async function verifyAdminPassword(password, passwordSalt, passwordHash) {
+  if (!passwordSalt || !passwordHash) return false;
+  return safeEqual(await deriveAdminPassword(password, passwordSalt), String(passwordHash));
 }
 
 async function giftCardCryptoKey(env){

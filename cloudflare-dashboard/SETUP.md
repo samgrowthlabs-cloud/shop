@@ -15,6 +15,7 @@
 10. Para habilitar a consulta manual de preços importados do Mercado Livre, execute uma única vez `mercadolivre-price-sync-upgrade.sql`. Os preços só mudam ao importar o produto ou ao usar o botão de atualização manual no admin.
 11. Para habilitar o editor visual completo dos banners em um banco existente, execute uma única vez `banner-style-editor-upgrade.sql`. Bancos novos já recebem `style_json` pelo `schema.sql`.
 12. Para escolher um modelo de IA diferente para cada função no admin, execute uma única vez `ai-feature-settings-upgrade.sql`.
+13. Para criar contas administrativas com cargos e permissões, execute uma única vez `admin-collaborators-upgrade.sql`.
 
 O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetários são armazenados em centavos.
 
