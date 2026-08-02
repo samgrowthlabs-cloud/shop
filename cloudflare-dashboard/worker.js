@@ -149,7 +149,7 @@ export default {
                 "Execute product-pricing-upgrade.sql no banco D1 e publique novamente.",
               requestId,
             },
-          },
+          },z 
           503,
         );
       if (/no such table:.*(?:banners|seasonal_themes)/i.test(detail))

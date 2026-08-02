@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SHOPLAB">
+  <rect width="512" height="512" rx="112" fill="#078a7d"/>
+  <circle cx="256" cy="256" r="174" fill="#fff"/>
+  <path d="M144 174h58l31 157h145c30 0 50-23 50-50H248" fill="none" stroke="#10211e" stroke-width="35" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="261" cy="379" r="25" fill="#10211e"/>
+  <circle cx="367" cy="379" r="25" fill="#10211e"/>
+  <path d="M280 219h65l-12 58h-43z" fill="#078a7d"/>
+  <path d="M293 219l20-32 20 32" fill="none" stroke="#078a7d" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "SHOPLAB — seu auxílio comprador",
+  "short_name": "SHOPLAB",
+  "description": "Compare produtos, preços e escolhas antes de comprar.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/index.html?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#f7f8f6",
+  "theme_color": "#078a7d",
+  "categories": ["shopping", "lifestyle", "utilities"],
+  "icons": [
+    {"src":"/assets/img/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"},
+    {"src":"/assets/img/pwa-maskable.svg","sizes":"any","type":"image/svg+xml","purpose":"maskable"}
+  ],
+  "shortcuts": [
+    {"name":"Pesquisar","short_name":"Buscar","url":"/busca.html","icons":[{"src":"/assets/img/favicon.svg","sizes":"any","type":"image/svg+xml"}]},
+    {"name":"Ofertas","short_name":"Ofertas","url":"/promocoes.html","icons":[{"src":"/assets/img/favicon.svg","sizes":"any","type":"image/svg+xml"}]},
+    {"name":"Minha lista","short_name":"Lista","url":"/conta.html?aba=lista","icons":[{"src":"/assets/img/favicon.svg","sizes":"any","type":"image/svg+xml"}]}
+  ]
+}

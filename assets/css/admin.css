@@ -334,3 +334,117 @@ body,body *,body *::before,body *::after{animation:none!important;transition:non
 .admin-actor{display:grid;gap:2px;margin:14px 0 20px;padding:11px 12px;border-radius:10px;background:#edf7f4;color:#143b34}.admin-actor small{color:#56726c;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
 .price-modal-card{width:min(560px,calc(100% - 24px))}
 .password-modal-card{width:min(520px,calc(100vw - 28px))}.password-modal-card form{margin-top:18px}.password-modal-card .collaborator-form-actions{margin-top:6px}
+
+/* Tema escuro do painel: contraste confortável e previews de conteúdo preservados. */
+.admin-theme-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:94px}
+.admin-theme-toggle>span:first-child{font-size:17px;line-height:1}
+body>.admin-theme-toggle{position:fixed;top:18px;right:18px;z-index:10;background:#fff}
+html[data-admin-theme="dark"]{
+  --bg:#0b1110;--surface:#121a18;--surface-soft:#17211f;--surface-elevated:#1b2724;
+  --text:#edf5f2;--muted:#9cafaa;--border:#2a3935;--line:#2a3935;
+  --accent:#42c7b2;--accent-hover:#62d7c4;--primary:#42c7b2;--teal:#55d3bf;
+  --shadow:0 18px 48px rgba(0,0,0,.3)
+}
+html[data-admin-theme="dark"] body{background:#0b1110!important;color:#edf5f2}
+html[data-admin-theme="dark"] .admin-shell{background:#0b1110}
+html[data-admin-theme="dark"] .sidebar{background:#0e1614!important;border-color:#24332f}
+html[data-admin-theme="dark"] .sidebar>.logo{color:#f5fbf9}
+html[data-admin-theme="dark"] .sidebar a{color:#a9bab5}
+html[data-admin-theme="dark"] .sidebar a:hover,
+html[data-admin-theme="dark"] .sidebar a.active{background:#19302b;color:#72ddca}
+html[data-admin-theme="dark"] .nav-group>span{color:#71847f}
+html[data-admin-theme="dark"] .admin-site-link{border-color:#263630;color:#62d7c4!important}
+html[data-admin-theme="dark"] .admin-actor{background:#162722;color:#e7f4f0}
+html[data-admin-theme="dark"] .admin-actor small{color:#91aaa3}
+html[data-admin-theme="dark"] .admin-top{border-color:#293834}
+html[data-admin-theme="dark"] .admin-card,
+html[data-admin-theme="dark"] .stat,
+html[data-admin-theme="dark"] .toolbar,
+html[data-admin-theme="dark"] .table-wrap,
+html[data-admin-theme="dark"] .modal-card,
+html[data-admin-theme="dark"] .login-box,
+html[data-admin-theme="dark"] .offer-editor,
+html[data-admin-theme="dark"] .role-chip-card,
+html[data-admin-theme="dark"] .ai-product-preview,
+html[data-admin-theme="dark"] .coupon-box,
+html[data-admin-theme="dark"] .header-ad-tools,
+html[data-admin-theme="dark"] .header-ad-faithful-preview,
+html[data-admin-theme="dark"] .header-ad-canvas-panel>#header-ad-layers-list{background:#121a18!important;border-color:#2a3935!important;color:#edf5f2}
+html[data-admin-theme="dark"] .admin-card,
+html[data-admin-theme="dark"] .stat{box-shadow:0 1px 0 rgba(255,255,255,.02),0 14px 34px rgba(0,0,0,.16)!important}
+html[data-admin-theme="dark"] .modal{background:rgba(2,7,6,.78);backdrop-filter:blur(5px)}
+html[data-admin-theme="dark"] .modal-head{background:#121a18!important;border-color:#2a3935}
+html[data-admin-theme="dark"] .header-ad-workspace{background:#0d1413}
+html[data-admin-theme="dark"] .header-ad-tools{border-color:#2a3935}
+html[data-admin-theme="dark"] table{background:#121a18!important;color:#e7f1ee}
+html[data-admin-theme="dark"] th{background:#18221f!important;color:#9eb0ab;border-color:#293834}
+html[data-admin-theme="dark"] td{border-color:#24332f}
+html[data-admin-theme="dark"] tbody tr:hover{background:#17221f}
+html[data-admin-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+html[data-admin-theme="dark"] select,
+html[data-admin-theme="dark"] textarea,
+html[data-admin-theme="dark"] .money-input{background:#0e1614!important;border-color:#344640!important;color:#edf5f2!important}
+html[data-admin-theme="dark"] input::placeholder,
+html[data-admin-theme="dark"] textarea::placeholder{color:#71837e}
+html[data-admin-theme="dark"] input:focus,
+html[data-admin-theme="dark"] select:focus,
+html[data-admin-theme="dark"] textarea:focus{border-color:#42c7b2!important;outline-color:rgba(66,199,178,.23)!important}
+html[data-admin-theme="dark"] input[type="date"],
+html[data-admin-theme="dark"] input[type="datetime-local"],
+html[data-admin-theme="dark"] input[type="time"]{color-scheme:dark}
+html[data-admin-theme="dark"] .form-field>label,
+html[data-admin-theme="dark"] .media-fields label{color:#dce9e5}
+html[data-admin-theme="dark"] .form-field>small,
+html[data-admin-theme="dark"] .muted,
+html[data-admin-theme="dark"] .empty,
+html[data-admin-theme="dark"] .admin-loading{color:#94a7a1!important}
+html[data-admin-theme="dark"] .btn.ghost,
+html[data-admin-theme="dark"] .icon-btn{background:#16201e!important;border-color:#34443f!important;color:#e7f1ee!important}
+html[data-admin-theme="dark"] .btn.ghost:hover,
+html[data-admin-theme="dark"] .icon-btn:hover{background:#1d302c!important;border-color:#42c7b2!important;color:#72ddca!important}
+html[data-admin-theme="dark"] .btn.primary{background:#28a993!important;border-color:#28a993!important;color:#041a16!important}
+html[data-admin-theme="dark"] .danger{color:#ff9299!important;border-color:#714247!important}
+html[data-admin-theme="dark"] .switch-field>label,
+html[data-admin-theme="dark"] .permission-option,
+html[data-admin-theme="dark"] #product-options label,
+html[data-admin-theme="dark"] .target-category-options label,
+html[data-admin-theme="dark"] #collaborator-permissions-grid label,
+html[data-admin-theme="dark"] .specification-field-row,
+html[data-admin-theme="dark"] .header-ad-layer-editor,
+html[data-admin-theme="dark"] .header-ad-device-controls{background:#16201e!important;border-color:#2d3e39!important;color:#e7f1ee}
+html[data-admin-theme="dark"] .switch-field>label:has(input:checked),
+html[data-admin-theme="dark"] .permission-option:has(input:checked),
+html[data-admin-theme="dark"] #product-options label:has(input:checked),
+html[data-admin-theme="dark"] .target-category-options label:has(input:checked){background:#17332d!important;border-color:#3eaa98!important}
+html[data-admin-theme="dark"] .promo-help,
+html[data-admin-theme="dark"] .ai-admin-assistant,
+html[data-admin-theme="dark"] .comparison-spec-editor,
+html[data-admin-theme="dark"] .collaborator-permissions,
+html[data-admin-theme="dark"] .banner-preview-section,
+html[data-admin-theme="dark"] .header-ad-composer{background:#111e1b!important;border-color:#315048!important;color:#dcebe7}
+html[data-admin-theme="dark"] .admin-message.error{background:#3b2024;color:#ffb4b8}
+html[data-admin-theme="dark"] .admin-message.success{background:#15382e;color:#8be2c9}
+html[data-admin-theme="dark"] .status.published,
+html[data-admin-theme="dark"] .status.active{background:#173b31;color:#8be2ca}
+html[data-admin-theme="dark"] .status.draft{background:#3c321c;color:#f1ca72}
+html[data-admin-theme="dark"] .tabs{border-color:#2a3935}
+html[data-admin-theme="dark"] .tabs button{color:#a8bab5}
+html[data-admin-theme="dark"] .tabs button.active{color:#62d7c4;border-color:#42c7b2}
+html[data-admin-theme="dark"] .bar,
+html[data-admin-theme="dark"] .ai-usage-progress>i{background:#25342f}
+html[data-admin-theme="dark"] .dashboard-log-tabs,
+html[data-admin-theme="dark"] .header-ad-device-tabs{background:#192522}
+html[data-admin-theme="dark"] .dashboard-log-tabs button.active{background:#263833;color:#72ddca}
+html[data-admin-theme="dark"] .dashboard-log-row{border-color:#263630}
+html[data-admin-theme="dark"] .dashboard-log-icon{background:#20332e;color:#72ddca}
+html[data-admin-theme="dark"] .editor-submit{background:rgba(11,17,16,.92);border-color:#2a3935}
+html[data-admin-theme="dark"] .header-ad-tools>.btn[type=submit]{box-shadow:0 -12px 24px rgba(14,22,20,.95)}
+html[data-admin-theme="dark"] .media-card,
+html[data-admin-theme="dark"] .pending-media article{background:#121a18}
+html[data-admin-theme="dark"] .media-image,
+html[data-admin-theme="dark"] .media-grid .preview-image,
+html[data-admin-theme="dark"] .media-grid article>img{background:#e9efed}
+html[data-admin-theme="dark"] .banner-preview-section .home-banner,
+html[data-admin-theme="dark"] .header-ad-preview-canvas,
+html[data-admin-theme="dark"] .header-ad-admin-preview{color-scheme:light}
+@media(max-width:800px){.admin-theme-toggle{min-width:42px;padding-inline:11px}.admin-theme-toggle>span:last-child{display:none}body>.admin-theme-toggle{top:12px;right:12px}}
