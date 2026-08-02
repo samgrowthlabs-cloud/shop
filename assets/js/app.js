@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260802-product-dock-10';import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js?v=20260726-plus-related-5';
+import'./favicon.js?v=20260802-mobile-audit-28';import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js?v=20260726-plus-related-5';
 import'./search-ui.js?v=20260721-trash-clear-1';
 import'./public-media.js?v=20260802-mobile-swipe-3';
 import{bindComparisonUI,comparisonPage}from'./compare.js?v=20260729-free-ai-credits-1';
