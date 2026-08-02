@@ -4752,3 +4752,37 @@ body[data-page="product"] .detail-main-image img{
     transform:translateY(-50%) rotate(-135deg)!important;
   }
 }
+/* Refinamento mobile app: toque, estabilidade e renderizacao progressiva. */
+@media(max-width:760px){
+  html{scroll-padding-top:132px}
+  body{overflow-x:clip;-webkit-tap-highlight-color:transparent}
+  main{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
+  a,button,[role="button"],summary{touch-action:manipulation}
+  .product-card[data-card-url]{cursor:pointer;user-select:none;-webkit-user-select:none}
+  .product-card[data-card-url]:active{transform:scale(.985)}
+  .product-card img{-webkit-user-drag:none;user-select:none}
+  .mobile-deferred-section{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 540px;
+  }
+  .pwa-bottom-nav{
+    z-index:120!important;
+    min-height:calc(64px + env(safe-area-inset-bottom))!important;
+    border-top:1px solid rgba(8,73,64,.12)!important;
+    background:rgba(255,255,255,.94)!important;
+    box-shadow:0 -8px 24px rgba(17,51,45,.08)!important;
+    backdrop-filter:blur(18px)!important;
+    -webkit-backdrop-filter:blur(18px)!important;
+  }
+  .pwa-bottom-nav a{min-height:52px!important}
+  .pwa-install-card{bottom:calc(72px + env(safe-area-inset-bottom))!important}
+  .search input[type="search"]{font-size:16px!important}
+  body[data-page="product"] .detail-main-image,
+  body[data-page="product"] .detail-main-image img{touch-action:pan-y pinch-zoom}
+  body[data-page="product"] .page-title{overflow-wrap:anywhere}
+  body[data-page="product"] .detail .offer,
+  body[data-page="product"] .user-product-actions{scroll-margin-top:145px}
+}
+@media(max-width:760px) and (prefers-reduced-motion:no-preference){
+  .product-card[data-card-url]{transition:transform .14s ease,box-shadow .18s ease}
+}

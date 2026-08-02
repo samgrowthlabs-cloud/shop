@@ -71,7 +71,16 @@ function installMobileNavigation(){
   }
 }
 
-let installEvent=null;
+let installEvent=null,installPromptArmed=false;
+function armInstallPrompt(){
+  if(installPromptArmed)return;installPromptArmed=true;
+  const reveal=()=>{showInstallPrompt();cleanup()};
+  const cleanup=()=>{removeEventListener('pointerdown',reveal);removeEventListener('keydown',reveal);removeEventListener('scroll',reveal)};
+  addEventListener('pointerdown',reveal,{once:true,passive:true});
+  addEventListener('keydown',reveal,{once:true});
+  addEventListener('scroll',reveal,{once:true,passive:true});
+  setTimeout(reveal,12000);
+}
 function showInstallPrompt(){
   if(!installEvent||document.querySelector('.pwa-install-card')||matchMedia('(display-mode:standalone)').matches)return;
   const dismissed=Number(localStorage.getItem('shoplab-install-dismissed')||0);if(Date.now()-dismissed<604800000)return;
@@ -84,5 +93,5 @@ function showInstallPrompt(){
 
 ensureHead();
 if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?v=20260802-mobile-suite-cache-5').then(registration=>registration.update()).catch(()=>{}));
-window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installEvent=event;showInstallPrompt()});
+window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installEvent=event;armInstallPrompt()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installMobileNavigation,{once:true});else installMobileNavigation();

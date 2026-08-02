@@ -106,6 +106,52 @@ function iosInstallHelp(){
   document.body.append(card);
 }
 
+
+function enhanceProductCards(){
+  if(document.documentElement.dataset.mobileCardNavigation==='1')return;
+  document.documentElement.dataset.mobileCardNavigation='1';
+  document.addEventListener('click',event=>{
+    const card=event.target.closest?.('.product-card[data-card-url]');
+    if(!card||event.target.closest('a,button,input,select,textarea,label'))return;
+    location.href=card.dataset.cardUrl;
+  });
+  document.addEventListener('keydown',event=>{
+    if(event.key!=='Enter'&&event.key!==' ')return;
+    const card=event.target.closest?.('.product-card[data-card-url]');
+    if(!card||event.target.closest('a,button,input,select,textarea,label'))return;
+    event.preventDefault();location.href=card.dataset.cardUrl;
+  });
+  document.querySelectorAll('.product-card img').forEach(image=>{image.draggable=false});
+}
+
+function prioritizeMobileContent(){
+  const images=[...document.querySelectorAll('main img,.home-banner img,.product-card img')];
+  images.forEach(image=>{
+    const rect=image.getBoundingClientRect();
+    if(rect.top<innerHeight*1.25&&rect.bottom>-80){
+      image.loading='eager';
+      image.fetchPriority=rect.top<innerHeight?'high':'auto';
+    }else if(!image.hasAttribute('loading'))image.loading='lazy';
+    image.decoding='async';
+  });
+  document.querySelectorAll('main .home-section,main .product-related-section,main>section').forEach((section,index)=>{
+    if(index>1)section.classList.add('mobile-deferred-section');
+  });
+}
+
+function deferIosInstallHelp(){
+  let shown=false;
+  const show=()=>{if(shown)return;shown=true;iosInstallHelp();cleanup()};
+  const cleanup=()=>{
+    removeEventListener('pointerdown',show);
+    removeEventListener('keydown',show);
+    removeEventListener('scroll',show);
+  };
+  addEventListener('pointerdown',show,{once:true,passive:true});
+  addEventListener('keydown',show,{once:true});
+  addEventListener('scroll',show,{once:true,passive:true});
+  setTimeout(show,12000);
+}
 function keyboardAwareness(){
   if(!visualViewport)return;
   const sync=()=>{
@@ -123,6 +169,8 @@ function watchDynamicContent(){
     queued=false;
     enhanceSearch();
     enhanceRails();
+    enhanceProductCards();
+    prioritizeMobileContent();
     productDock();
   };
   const schedule=()=>{if(!queued){queued=true;requestAnimationFrame(enhance)}};
@@ -136,7 +184,9 @@ function init(){
   enhanceSearch();
   restoreScrollPosition();
   keyboardAwareness();
-  iosInstallHelp();
+  enhanceProductCards();
+  prioritizeMobileContent();
+  deferIosInstallHelp();
   watchDynamicContent();
 }
 
