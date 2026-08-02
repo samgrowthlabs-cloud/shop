@@ -1,6 +1,6 @@
-import'./favicon.js?v=20260802-mobile-search-keyboard-7';import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js?v=20260726-plus-related-5';
+import'./favicon.js?v=20260802-product-dock-10';import{getProducts,getTrendingProducts,getCategories,getPromotions,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js?v=20260726-plus-related-5';
 import'./search-ui.js?v=20260721-trash-clear-1';
-import'./public-media.js?v=20260729-remove-installments-2';
+import'./public-media.js?v=20260802-mobile-swipe-3';
 import{bindComparisonUI,comparisonPage}from'./compare.js?v=20260729-free-ai-credits-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260727-lista-2';
@@ -128,9 +128,10 @@ async function init(){
   const app=$('#app'),renderPage=()=>page==='home'?home():page==='product'?detail():page==='compare'?comparisonPage():['catalog','search','promotions','new','category','brand','author'].includes(page)?listing():institutional();
   applySiteTheme(siteConfig.theme);
   warmHeaderMedia(siteConfig);
-  app.innerHTML=header()+'<div class="page-content-pending" aria-hidden="true"></div>';
+  const loadingShell=page==='home'?`<div class="mobile-home-skeleton"><div class="mobile-skeleton-categories">${'<i></i>'.repeat(5)}</div><div class="mobile-skeleton-banner"></div><span class="mobile-skeleton-heading"></span><div class="mobile-skeleton-cards">${'<article><i></i><b></b><span></span><strong></strong></article>'.repeat(3)}</div></div>`:page==='product'?`<div class="product-page-skeleton simple"><div class="product-skeleton-status"><i></i><span>Carregando produto</span></div><div class="product-skeleton-title"><i></i><i></i></div><div class="product-skeleton-simple-grid"><section class="product-skeleton-visual"><i></i></section><section class="product-skeleton-panel"><div class="product-skeleton-lines"><i></i><i></i></div><aside><small></small><strong></strong><span></span><button></button></aside></section></div></div>`:'';
+app.innerHTML=header()+`<div class="page-content-pending" aria-hidden="true">${loadingShell}</div>`;
   try{
-    const configPromise=getSiteConfig().catch(()=>siteConfig),contentPromise=Promise.resolve(renderPage());
+    const configPromise=getSiteConfig().catch(()=>siteConfig),contentPromise=page==='home'?Promise.resolve(null):Promise.resolve(renderPage());
     const [freshConfig,initialBody]=await Promise.all([configPromise,contentPromise]);
     siteConfig=freshConfig||siteConfig;
     applySiteTheme(siteConfig.theme);
@@ -154,13 +155,13 @@ home = async function () {
   const [products, trending, campaigns, personalized, categories] = await Promise.all([getProducts(), getTrendingProducts(10), getPromotions(),authSession()?getPersonalizedRecommendations().catch(()=>[]):Promise.resolve([]),getCategories()]);
   const featured = (trending.length ? trending : products).slice(0,10);
   const productsBySlug=new Map(products.map(product=>[product.slug,product]));
-  const continueViewing=viewedProducts().sort((a,b)=>Number(b.viewedAt)-Number(a.viewedAt)).map(item=>productsBySlug.get(item.slug)).filter(Boolean).slice(0,4);
-  const shoplabPicks = products.filter(product=>Number(product.isFeatured)).slice(0,4);
+  const continueViewing=viewedProducts().sort((a,b)=>Number(b.viewedAt)-Number(a.viewedAt)).map(item=>productsBySlug.get(item.slug)).filter(Boolean).slice(0,10);
+  const shoplabPicks = products.filter(product=>Number(product.isFeatured)).slice(0,10);
   const campaignDeals=campaigns.flatMap(campaign=>campaign.products||[]).filter((product,index,list)=>list.findIndex(item=>item.id===product.id)===index);
-  const now=Date.now(),endingSoon=campaignDeals.filter(product=>product.promotionEndsAt&&Date.parse(product.promotionEndsAt)>now).sort((a,b)=>Date.parse(a.promotionEndsAt)-Date.parse(b.promotionEndsAt)).slice(0,4),endingIds=new Set(endingSoon.map(product=>product.id));
+  const now=Date.now(),endingSoon=campaignDeals.filter(product=>product.promotionEndsAt&&Date.parse(product.promotionEndsAt)>now).sort((a,b)=>Date.parse(a.promotionEndsAt)-Date.parse(b.promotionEndsAt)).slice(0,10),endingIds=new Set(endingSoon.map(product=>product.id));
   const remainingCampaignDeals=campaignDeals.filter(product=>!endingIds.has(product.id));
   const regularDeals=products.filter(product=>product.discount>0&&!endingIds.has(product.id));
-  const deals=(remainingCampaignDeals.length?remainingCampaignDeals:regularDeals).slice(0,4);
+  const deals=(remainingCampaignDeals.length?remainingCampaignDeals:regularDeals).slice(0,10);
 
   return `<main id="conteudo">${mobileHomeCategories(categories)}${homeBanner()}${homeCategoryStrip(categories)}
     <section class="home-section soft"><div class="container">
@@ -173,19 +174,19 @@ home = async function () {
     </div></section>`:''}
     ${continueViewing.length?`<section class="home-section continue-viewing-section"><div class="container">
       <div class="simple-head"><div><span class="eyebrow">SEU HISTÓRICO</span><h2>Continue de onde parou</h2><p>Produtos que você visualizou recentemente neste dispositivo.</p></div><button class="clear-viewed-products" type="button" data-clear-viewed>Limpar histórico</button></div>
-      <div class="products">${continueViewing.map(card).join('')}</div>
+      ${homeProductRail(continueViewing)}
     </div></section>`:''}
     ${shoplabPicks.length?`<section class="home-section shoplab-picks"><div class="container">
       <div class="simple-head"><div><span class="eyebrow">CURADORIA SHOPLAB</span><h2>Escolhas SHOPLAB</h2><p>Produtos selecionados por qualidade, utilidade e custo-benefício.</p></div><a href="produtos.html">Ver catálogo →</a></div>
-      <div class="products">${shoplabPicks.map(card).join('')}</div>
+      ${homeProductRail(shoplabPicks)}
     </div></section>`:''}
     ${endingSoon.length?`<section class="home-section soft ending-soon-section"><div class="container">
       <div class="simple-head"><div><span class="eyebrow">ÚLTIMA CHANCE</span><h2>Ofertas terminando em breve</h2><p>Campanhas ativas ordenadas pelo prazo de encerramento.</p></div><a href="promocoes.html">Ver promoções →</a></div>
-      <div class="products">${endingSoon.map(card).join('')}</div>
+      ${homeProductRail(endingSoon)}
     </div></section>`:''}
     ${deals.length?`<section class="home-section"><div class="container">
       <div class="simple-head"><div><span class="eyebrow">PREÇOS MELHORES</span><h2>Ofertas em destaque</h2></div><a href="promocoes.html">Ver ofertas →</a></div>
-      <div class="products">${deals.map(card).join('')}</div>
+      ${homeProductRail(deals)}
     </div></section>`:''}
   </main>`;
 };

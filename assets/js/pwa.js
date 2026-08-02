@@ -83,6 +83,6 @@ function showInstallPrompt(){
 }
 
 ensureHead();
-if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?v=20260801-pwa-cache-clean-4').then(registration=>registration.update()).catch(()=>{}));
+if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?v=20260802-mobile-suite-cache-5').then(registration=>registration.update()).catch(()=>{}));
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installEvent=event;showInstallPrompt()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installMobileNavigation,{once:true});else installMobileNavigation();

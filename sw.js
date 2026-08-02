@@ -1,5 +1,5 @@
-const VERSION='shoplab-pwa-v2';
-const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg'];
+const VERSION='shoplab-pwa-v3';
+const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
