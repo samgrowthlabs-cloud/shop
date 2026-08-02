@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260801-static-mobile-nav-6';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
+import'./favicon.js?v=20260802-mobile-search-keyboard-7';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
 import'./search-ui.js?v=20260726-mobile-search-1';
 import{syncAccountLibrary,setCart}from'./user-library.js?v=20260727-lista-1';
 import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260726-mobile-header-4';

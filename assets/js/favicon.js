@@ -1,4 +1,4 @@
-import'./pwa.js?v=20260801-static-mobile-nav-6';
+import'./pwa.js?v=20260802-mobile-search-keyboard-7';
 const faviconUrl=new URL('../img/favicon.svg?v=20260721-cart-lab-1',import.meta.url).href;
 const current=[...document.querySelectorAll('link[rel~="icon"]')];
 const icon=current[0]||document.createElement('link');

@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260801-static-mobile-nav-6';import{currentUser,userApi}from'./auth.js';
+import'./favicon.js?v=20260802-mobile-search-keyboard-7';import{currentUser,userApi}from'./auth.js';
 
 const $=selector=>document.querySelector(selector);
 const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});

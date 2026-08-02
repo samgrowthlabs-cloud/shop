@@ -34,12 +34,14 @@ function focusHeaderSearch(){
   const input=document.querySelector('.mobile-home-search input, .header .search input, input[type="search"]');
   if(!input)return false;
   const search=input.closest('form')||input;
-  search.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'});
-  requestAnimationFrame(()=>{
-    input.focus({preventScroll:true});
-    const end=input.value.length;input.setSelectionRange?.(end,end);
-  });
-  return true;
+  input.focus({preventScroll:true});
+  const end=input.value.length;
+  try{input.setSelectionRange(end,end)}catch{}
+  requestAnimationFrame(()=>search.scrollIntoView({
+    behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',
+    block:'start'
+  }));
+  return document.activeElement===input;
 }
 
 function installMobileNavigation(){
