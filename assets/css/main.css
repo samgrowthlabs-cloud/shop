@@ -4817,3 +4817,60 @@ body[data-page="product"] .detail-main-image img{
   .catalog .product-card h3,.listing-section .product-card h3{font-size:12px!important;line-height:1.3!important}
   .catalog .product-card .current-price,.listing-section .product-card .current-price{font-size:17px!important}
 }
+/* Camada de experiencia mobile semelhante a aplicativo. */
+@view-transition{navigation:auto}
+::view-transition-old(root){animation:shoplab-page-out .14s ease both}
+::view-transition-new(root){animation:shoplab-page-in .2s ease both}
+@keyframes shoplab-page-out{to{opacity:.72;transform:translateX(-5px)}}
+@keyframes shoplab-page-in{from{opacity:.72;transform:translateX(7px)}}
+@media(max-width:760px){
+  .header .mobile-home-header-top{
+    max-height:62px;overflow:hidden;opacity:1;
+    transition:max-height .22s ease,opacity .16s ease,padding .22s ease,margin .22s ease;
+  }
+  .header.is-app-compact .mobile-home-header{
+    min-height:76px!important;padding-top:max(5px,env(safe-area-inset-top))!important;
+  }
+  .header.is-app-compact .mobile-home-header-top{max-height:0;opacity:0;margin:0!important;padding:0!important;pointer-events:none}
+  .header.is-app-compact .mobile-home-search{margin-top:0!important}
+  .header.is-app-compact .search input{height:48px!important}
+  .mobile-app-toast{
+    position:fixed;right:16px;bottom:calc(78px + env(safe-area-inset-bottom));left:16px;z-index:180;
+    display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;
+    border:1px solid rgba(8,124,112,.18);border-radius:14px;background:rgba(20,40,36,.94);color:#fff;
+    box-shadow:0 14px 38px rgba(9,37,32,.24);font-size:13px;font-weight:750;text-align:center;
+    opacity:0;visibility:hidden;transform:translateY(14px);transition:opacity .18s ease,transform .18s ease,visibility .18s;
+    backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);
+  }
+  .mobile-app-toast.is-visible{opacity:1;visibility:visible;transform:none}
+  .mobile-app-toast[data-type="success"],.mobile-app-toast[data-type="online"]{background:rgba(5,112,99,.96)}
+  .mobile-app-toast[data-type="offline"]{background:rgba(51,61,58,.96)}
+  html.is-standalone-app body{overscroll-behavior-y:none}
+  html.is-standalone-app .header{padding-top:env(safe-area-inset-top)}
+  .pwa-bottom-nav a:focus-visible,.btn:focus-visible,button:focus-visible,input:focus-visible{
+    outline:3px solid rgba(8,138,125,.28)!important;outline-offset:2px!important;
+  }
+}
+@media(max-width:760px) and (prefers-reduced-motion:reduce){
+  .header .mobile-home-header-top,.mobile-app-toast{transition:none!important}
+}
+/* Correcao iPhone: sem espaco reservado e busca compacta perfeitamente centrada. */
+@media(max-width:760px){
+  .mobile-deferred-section{content-visibility:visible!important;contain:none!important;contain-intrinsic-size:0!important}
+  .header.is-app-compact .mobile-home-header{min-height:68px!important;padding-bottom:8px!important}
+  .header.is-app-compact .mobile-home-search{position:relative!important;display:block!important;width:100%!important;height:48px!important;min-height:48px!important;padding:0!important}
+  .header.is-app-compact .mobile-home-search>input{display:block!important;width:100%!important;height:48px!important;min-height:48px!important;padding-right:58px!important}
+  .header.is-app-compact .mobile-home-search>button[type="submit"]{position:absolute!important;top:50%!important;right:3px!important;bottom:auto!important;width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important;margin:0!important;padding:0!important;transform:translateY(-50%)!important;display:grid!important;place-items:center!important;line-height:0!important}
+  .header.is-app-compact .mobile-home-search>button[type="submit"] img,.header.is-app-compact .mobile-home-search>button[type="submit"] svg{position:static!important;display:block!important;width:21px!important;height:21px!important;margin:auto!important;transform:none!important}
+}
+/* Remove a metade vazia herdada do cabeçalho mobile aberto. */
+@media(max-width:760px){
+  html body .header.is-app-compact .mobile-home-header{
+    height:68px!important;
+    min-height:68px!important;
+    max-height:68px!important;
+    padding-top:8px!important;
+    padding-bottom:8px!important;
+    overflow:visible!important;
+  }
+}

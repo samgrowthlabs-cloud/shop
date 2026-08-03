@@ -7,6 +7,8 @@
   "dir": "ltr",
   "start_url": "/index.html?source=pwa",
   "scope": "/",
+  "launch_handler": {"client_mode":"navigate-existing"},
+  "handle_links": "preferred",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait-primary",

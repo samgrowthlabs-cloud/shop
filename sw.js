@@ -1,4 +1,4 @@
-const VERSION='shoplab-pwa-v3';
+const VERSION='shoplab-pwa-v4';
 const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{
@@ -15,10 +15,15 @@ self.addEventListener('fetch',event=>{
   const url=new URL(request.url);
   if(url.origin!==location.origin||url.pathname.startsWith('/api/'))return;
   if(request.mode==='navigate'){
-    event.respondWith(fetch(request).then(async response=>{
-      if(response.ok){const copy=response.clone();const cache=await caches.open(VERSION);await cache.put(request,copy)}
-      return response;
-    }).catch(()=>caches.match(request).then(cached=>cached||caches.match('/offline.html'))));
+    event.respondWith((async()=>{
+      const cached=await caches.match(request);
+      const network=fetch(request).then(async response=>{
+        if(response.ok){const copy=response.clone();const cache=await caches.open(VERSION);await cache.put(request,copy)}
+        return response;
+      });
+      try{return await Promise.race([network,new Promise((_,reject)=>setTimeout(()=>reject(new Error('network-timeout')),2500))])}
+      catch{return cached||caches.match('/offline.html')}
+    })());
     return;
   }
   if(!/\.(?:css|js|svg|png|webp|jpg|jpeg|gif|woff2?)(?:$|\?)/i.test(url.pathname+url.search))return;

@@ -125,16 +125,15 @@ function enhanceProductCards(){
 }
 
 function prioritizeMobileContent(){
-  const images=[...document.querySelectorAll('main img,.home-banner img,.product-card img')];
-  images.forEach(image=>{
-    const rect=image.getBoundingClientRect();
-    if(rect.top<innerHeight*1.25&&rect.bottom>-80){
-      image.loading='eager';
-      image.fetchPriority=rect.top<innerHeight?'high':'auto';
-    }else if(!image.hasAttribute('loading'))image.loading='lazy';
+  const images=[...document.querySelectorAll('main img:not([data-mobile-priority]),.home-banner img:not([data-mobile-priority]),.product-card img:not([data-mobile-priority])')];
+  const viewport=innerHeight,measurements=images.map(image=>({image,rect:image.getBoundingClientRect()}));
+  measurements.forEach(({image,rect})=>{
+    image.dataset.mobilePriority='1';
+    if(rect.top<viewport*1.25&&rect.bottom>-80){image.loading='eager';image.fetchPriority=rect.top<viewport?'high':'auto'}
+    else if(!image.hasAttribute('loading'))image.loading='lazy';
     image.decoding='async';
   });
-  document.querySelectorAll('main .home-section,main .product-related-section,main>section').forEach((section,index)=>{
+  document.querySelectorAll('main .home-section:not(.mobile-deferred-section),main .product-related-section:not(.mobile-deferred-section),main>section:not(.mobile-deferred-section)').forEach((section,index)=>{
     if(index>1)section.classList.add('mobile-deferred-section');
   });
 }
@@ -151,6 +150,42 @@ function deferIosInstallHelp(){
   addEventListener('keydown',show,{once:true});
   addEventListener('scroll',show,{once:true,passive:true});
   setTimeout(show,12000);
+}
+
+function appToast(message,type='info'){
+  let toast=document.querySelector('.mobile-app-toast');
+  if(!toast){toast=document.createElement('div');toast.className='mobile-app-toast';toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');document.body.append(toast)}
+  toast.textContent=message;toast.dataset.type=type;toast.classList.add('is-visible');
+  clearTimeout(appToast.timer);appToast.timer=setTimeout(()=>toast.classList.remove('is-visible'),2600);
+}
+
+function compactHeaderOnScroll(){
+  let last=scrollY,frame=0;
+  const sync=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{const header=document.querySelector('.header');if(!header)return;const current=scrollY,compact=current>88;header.classList.toggle('is-app-compact',compact);header.classList.toggle('is-scrolling-up',current<last-4);last=current})};
+  addEventListener('scroll',sync,{passive:true});
+  new MutationObserver(sync).observe(document.body,{childList:true,subtree:true});
+  sync();
+}
+
+function appFeedback(){
+  document.addEventListener('click',event=>{
+    const interactive=event.target.closest?.('button,.btn,.product-card,[data-pwa-nav]');
+    if(interactive&&navigator.vibrate)navigator.vibrate(8);
+    const active=event.target.closest?.('.pwa-bottom-nav a.active');
+    if(active&&active.href.split('#')[0]===location.href.split('#')[0]){event.preventDefault();scrollTo({top:0,behavior:reduced()?'auto':'smooth'})}
+  },{passive:false});
+  addEventListener('offline',()=>appToast('Você está offline. Exibindo o conteúdo salvo.','offline'));
+  addEventListener('online',()=>appToast('Conexão restaurada.','online'));
+  if(!navigator.onLine)setTimeout(()=>appToast('Você está offline. Exibindo o conteúdo salvo.','offline'),500);
+  addEventListener('shoplab:library-change',event=>{
+    const messages={favorites:'Produto curtido',cart:'Lista atualizada',ratings:'Avaliação salva'};
+    if(messages[event.detail?.type])appToast(messages[event.detail.type],'success');
+  });
+}
+
+function markStandaloneMode(){
+  const standalone=matchMedia('(display-mode:standalone)').matches||navigator.standalone===true;
+  document.documentElement.classList.toggle('is-standalone-app',standalone);
 }
 function keyboardAwareness(){
   if(!visualViewport)return;
@@ -183,6 +218,9 @@ function init(){
   document.documentElement.classList.add('mobile-app-ui');
   enhanceSearch();
   restoreScrollPosition();
+  markStandaloneMode();
+  compactHeaderOnScroll();
+  appFeedback();
   keyboardAwareness();
   enhanceProductCards();
   prioritizeMobileContent();
