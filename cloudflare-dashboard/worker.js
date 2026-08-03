@@ -476,7 +476,7 @@ async function route(request, env, ctx, requestId) {
     return publicRatingSummaries(request, env, url, requestId);
   if (request.method === "GET" && path.startsWith("/go/"))
     return redirectOffer(request, env, path, ctx);
-  if (request.method === "GET" && path.startsWith("/media/"))
+  if ((request.method === "GET" || request.method === "HEAD") && path.startsWith("/media/"))
     return serveMedia(request, env, decodeURIComponent(path.slice(7)), ctx);
   if (request.method === "POST" && path === "/api/v1/events")
     return recordEvent(request, env, ctx, requestId);
@@ -4470,13 +4470,14 @@ async function updateProductMedia(req, env, mediaId, id) {
 
 async function serveMedia(req, env, key, ctx) {
   if (!env.MEDIA) return new Response("Not found", { status: 404 });
+  const isHead = req.method === "HEAD";
   const url = new URL(req.url);
   const requestedWidth = Number(url.searchParams.get("w") || 0);
   const allowedWidths = [160, 320, 640, 960, 1280];
   const width = allowedWidths.includes(requestedWidth) ? requestedWidth : 0;
   const requestedQuality = Number(url.searchParams.get("q") || 78);
   const quality = Math.min(90, Math.max(55, Number.isFinite(requestedQuality) ? requestedQuality : 78));
-  const wantsTransform = Boolean(width && env.IMAGES);
+  const wantsTransform = Boolean(width && env.IMAGES && !isHead);
   const cache = caches.default;
 
   if (wantsTransform) {
@@ -4524,7 +4525,8 @@ async function serveMedia(req, env, key, ctx) {
 
   headers.set("etag", object.httpEtag);
   headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
-  return new Response(object.body, { status: 200, headers });
+  if (width) headers.set("x-shoplab-image-width", String(width));
+  return new Response(isHead ? null : object.body, { status: 200, headers });
 }
 
 async function saveProductOffers(req, env, productId, id) {
