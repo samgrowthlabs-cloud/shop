@@ -10,7 +10,7 @@ const read = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) |
 const write = items => localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, 3)));
 const mediaUrl = product => {
   const media = product.media?.find(item => item.isPrimary) || product.media?.[0];
-  return media?.storageKey ? `${C.API_BASE_URL}/media/${encodeURIComponent(media.storageKey)}` : media?.externalUrl || '';
+  return media?.storageKey ? `${C.API_BASE_URL}/media/${encodeURIComponent(media.storageKey)}?w=320&q=78` : media?.externalUrl || '';
 };
 const specificationMap = product => {
   const map = new Map();

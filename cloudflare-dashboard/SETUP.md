@@ -25,6 +25,7 @@ O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetá
 2. Abra o editor, substitua o código pelo conteúdo de `worker.js` e publique.
 3. Settings → Bindings → Add → D1 Database. Use exatamente o nome `DB` e selecione o banco criado.
 4. Para imagens: crie um bucket R2 e adicione ao Worker o binding `MEDIA`. O editor de produtos usa esse binding para enviar, servir e remover imagens reais.
+5. Para entregar imagens responsivas e leves: em **Settings → Bindings → Add → Images**, crie o binding com o nome exato `IMAGES`. Sem ele, a rota de mídia continua entregando a imagem original automaticamente.
 5. Para a busca inteligente: adicione um binding **Workers AI** com o nome exato `AI`. Sem esse binding, ou se a inferência falhar, a busca continua funcionando automaticamente com FTS5, correção e sinônimos.
 
 6. Em **Settings → Triggers → Cron Triggers**, adicione `*/30 * * * *` apenas para lembretes e rotinas de conta. Esse agendamento não altera preços de produtos.

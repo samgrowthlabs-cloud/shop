@@ -1,4 +1,4 @@
-import'./admin-theme.js';import'./favicon.js';import{SHOPLAB_CONFIG as C}from'./config.js';
+import'./admin-theme.js';import'./favicon.js';import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],page=document.body.dataset.adminPage;
 let adminSession=null;
 const can=permission=>Boolean(adminSession?.actor?.permissions?.includes('*')||adminSession?.actor?.permissions?.includes(permission));

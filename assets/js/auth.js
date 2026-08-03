@@ -1,4 +1,4 @@
-import{SHOPLAB_CONFIG as C}from'./config.js';
+import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 const KEY='shoplab:user-session',REFERRAL_KEY='shoplab:referral-attribution',headers=()=>({'apikey':C.SUPABASE_PUBLISHABLE_KEY,'content-type':'application/json'});
 const redirectValues=new URLSearchParams(location.hash.slice(1));
 if(!/\/redefinir-senha\.html$/i.test(location.pathname)&&(redirectValues.get('type')==='recovery'||redirectValues.has('error_code')||redirectValues.has('error_description'))){const target=new URL('redefinir-senha.html',location.href);target.hash=location.hash;location.replace(target.href)}

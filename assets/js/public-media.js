@@ -1,9 +1,9 @@
-import{SHOPLAB_CONFIG as C}from'./config.js';
+import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 import{session,userApi}from'./auth.js';
 
 const cache=new Map();
 async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=fetch(`${C.API_BASE_URL}/api/v1/products/${encodeURIComponent(slug)}?mediaVersion=2`,{cache:'default'}).then(r=>r.ok?r.json():null).then(j=>j?.data||null).catch(()=>null);cache.set(slug,promise);return promise}
-const url=m=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}`:m?.externalUrl||'';
+const url=(m,width=0)=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}${width?`?w=${width}&q=78`:''}`:m?.externalUrl||'';
 const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
 async function cardMedia(card){
@@ -15,14 +15,14 @@ async function cardMedia(card){
   const primary=items.find(item=>item.isPrimary)||items[0],currentImage=link.querySelector('img'),currentUrl=currentImage?.src||'';
   if(!currentImage&&primary){
     link.querySelector('.product-symbol')?.remove();
-    link.insertAdjacentHTML('beforeend',`<img class="product-image-primary" src="${safe(url(primary))}" alt="${safe(primary.altText||data.name||'Produto')}" loading="lazy" decoding="async">`);
+    link.insertAdjacentHTML('beforeend',`<img class="product-image-primary" src="${safe(url(primary,320))}" alt="${safe(primary.altText||data.name||'Produto')}" loading="lazy" decoding="async">`);
   }else if(currentImage){
     currentImage.classList.add('product-image-primary');
   }
   const mainUrl=primary?new URL(url(primary),location.href).href:currentUrl;
   const alternate=items.find(item=>item.isHover&&new URL(url(item),location.href).href!==mainUrl)||items.find(item=>new URL(url(item),location.href).href!==mainUrl);
   if(alternate){
-    link.insertAdjacentHTML('beforeend',`<img class="product-image-alternate" src="${safe(url(alternate))}" alt="${safe(alternate.altText||`${data.name||'Produto'} em outro ângulo`)}" loading="lazy" decoding="async">`);
+    link.insertAdjacentHTML('beforeend',`<img class="product-image-alternate" src="${safe(url(alternate,320))}" alt="${safe(alternate.altText||`${data.name||'Produto'} em outro ângulo`)}" loading="lazy" decoding="async">`);
     card.classList.add('has-alternate-image');
   }
   card.dataset.mediaSwapReady='1';
@@ -177,8 +177,10 @@ async function detailMedia(){
   const box=document.querySelector('.detail-media');if(!box||box.dataset.mediaReady)return;box.dataset.mediaReady='1';
   const slug=new URLSearchParams(location.search).get('slug'),insightPromise=slug&&session()?userApi(`products/${encodeURIComponent(slug)}/plus-insight`).catch(()=>null):null,data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data,insightPromise);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
   const main=items.find(x=>x.isPrimary)||items[0],mainIndex=items.indexOf(main),visible=items.slice(0,4);
-  const thumbs=visible.map((item,index)=>{const remaining=items.length-3,isMore=items.length>4&&index===3;return `<button type="button" class="${item.id===main.id?'active':''} ${isMore?'more-images':''}" data-index="${index}" aria-label="${isMore?`Ver mais ${remaining} imagens`:`Ver imagem ${index+1}`}"><img src="${url(item)}" alt="" loading="lazy">${isMore?`<span>+${remaining}</span>`:''}</button>`}).join('');
-  box.innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${url(main)}" alt="${safe(main.altText||data.name||'Produto')}" style="display:block;width:100%;height:100%;max-width:100%;max-height:100%;padding:24px;object-fit:contain;object-position:center;transform:none"><span class="detail-image-magnifier" aria-hidden="true"></span></button>${items.length>1?`<div class="detail-thumbs">${thumbs}</div>`:''}`;
+  const responsiveImage=(item)=>({src:url(item,960),srcset:[320,640,960,1280].map(width=>`${url(item,width)} ${width}w`).join(', ')});
+  const mainSource=responsiveImage(main);
+  const thumbs=visible.map((item,index)=>{const remaining=items.length-3,isMore=items.length>4&&index===3;return `<button type="button" class="${item.id===main.id?'active':''} ${isMore?'more-images':''}" data-index="${index}" aria-label="${isMore?`Ver mais ${remaining} imagens`:`Ver imagem ${index+1}`}"><img src="${url(item,160)}" alt="" width="72" height="72" loading="lazy" decoding="async">${isMore?`<span>+${remaining}</span>`:''}</button>`}).join('');
+  box.innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${mainSource.src}" srcset="${mainSource.srcset}" sizes="(max-width:760px) calc(100vw - 44px), (max-width:1200px) 56vw, 720px" alt="${safe(main.altText||data.name||'Produto')}" fetchpriority="high" decoding="async" style="display:block;width:100%;height:100%;max-width:100%;max-height:100%;padding:24px;object-fit:contain;object-position:center;transform:none"><span class="detail-image-magnifier" aria-hidden="true"></span></button>${items.length>1?`<div class="detail-thumbs">${thumbs}</div>`:''}`;
   const mainButton=box.querySelector('.detail-main-image'),mainImage=mainButton.querySelector('img'),magnifier=mainButton.querySelector('.detail-image-magnifier'),syncMagnifier=()=>{magnifier.style.backgroundImage=`url("${String(mainImage.currentSrc||mainImage.src).replaceAll('"','%22')}")`};
   syncMagnifier();
   mainImage.addEventListener('load',syncMagnifier);
@@ -187,7 +189,7 @@ async function detailMedia(){
     mainButton.addEventListener('pointermove',event=>{const rect=mainButton.getBoundingClientRect(),styles=getComputedStyle(mainImage),paddingX=parseFloat(styles.paddingLeft||0)+parseFloat(styles.paddingRight||0),paddingY=parseFloat(styles.paddingTop||0)+parseFloat(styles.paddingBottom||0),availableWidth=Math.max(1,rect.width-paddingX),availableHeight=Math.max(1,rect.height-paddingY),ratio=(mainImage.naturalWidth||1)/(mainImage.naturalHeight||1),renderedWidth=Math.min(availableWidth,availableHeight*ratio),renderedHeight=renderedWidth/ratio,imageLeft=(rect.width-renderedWidth)/2,imageTop=(rect.height-renderedHeight)/2,x=event.clientX-rect.left,y=event.clientY-rect.top;if(x<imageLeft||x>imageLeft+renderedWidth||y<imageTop||y>imageTop+renderedHeight){mainButton.classList.remove('is-magnifying');return}const lens=156,zoom=2.15,lensX=Math.max(lens/2+8,Math.min(rect.width-lens/2-8,x)),lensY=Math.max(lens/2+8,Math.min(rect.height-lens/2-8,y)),sourceX=x-imageLeft,sourceY=y-imageTop;mainButton.style.setProperty('--magnifier-x',`${lensX}px`);mainButton.style.setProperty('--magnifier-y',`${lensY}px`);magnifier.style.backgroundSize=`${renderedWidth*zoom}px ${renderedHeight*zoom}px`;magnifier.style.backgroundPosition=`${lens/2-sourceX*zoom}px ${lens/2-sourceY*zoom}px`;mainButton.classList.add('is-magnifying')});
     mainButton.addEventListener('pointerleave',()=>mainButton.classList.remove('is-magnifying'));
   }
-  const showMain=index=>{index=(index+items.length)%items.length;const item=items[index];mainImage.src=url(item);mainImage.alt=item.altText||data.name||'Produto';mainButton.dataset.index=String(index);mainButton.classList.remove('is-magnifying');box.querySelectorAll('.detail-thumbs button').forEach(thumb=>thumb.classList.toggle('active',Number(thumb.dataset.index)===index));};
+  const showMain=index=>{index=(index+items.length)%items.length;const item=items[index],source=responsiveImage(item);mainImage.src=source.src;mainImage.srcset=source.srcset;mainImage.alt=item.altText||data.name||'Produto';mainButton.dataset.index=String(index);mainButton.classList.remove('is-magnifying');box.querySelectorAll('.detail-thumbs button').forEach(thumb=>thumb.classList.toggle('active',Number(thumb.dataset.index)===index));};
   let swipeStartX=null,swiped=false;
   if(matchMedia('(hover:none),(pointer:coarse)').matches){
     mainButton.style.touchAction='pan-y pinch-zoom';

@@ -149,7 +149,7 @@ export default {
                 "Execute product-pricing-upgrade.sql no banco D1 e publique novamente.",
               requestId,
             },
-          },z 
+          },
           503,
         );
       if (/no such table:.*(?:banners|seasonal_themes)/i.test(detail))
@@ -477,7 +477,7 @@ async function route(request, env, ctx, requestId) {
   if (request.method === "GET" && path.startsWith("/go/"))
     return redirectOffer(request, env, path, ctx);
   if (request.method === "GET" && path.startsWith("/media/"))
-    return serveMedia(request, env, decodeURIComponent(path.slice(7)));
+    return serveMedia(request, env, decodeURIComponent(path.slice(7)), ctx);
   if (request.method === "POST" && path === "/api/v1/events")
     return recordEvent(request, env, ctx, requestId);
   if (path === "/api/v1/user/profile" && request.method === "GET")
@@ -4468,28 +4468,62 @@ async function updateProductMedia(req, env, mediaId, id) {
   return ok(req, env, { id: mediaId, isPrimary, isHover }, id);
 }
 
-async function serveMedia(req, env, key) {
+async function serveMedia(req, env, key, ctx) {
   if (!env.MEDIA) return new Response("Not found", { status: 404 });
-  const object = await env.MEDIA.get(key, {
+  const url = new URL(req.url);
+  const requestedWidth = Number(url.searchParams.get("w") || 0);
+  const allowedWidths = [160, 320, 640, 960, 1280];
+  const width = allowedWidths.includes(requestedWidth) ? requestedWidth : 0;
+  const requestedQuality = Number(url.searchParams.get("q") || 78);
+  const quality = Math.min(90, Math.max(55, Number.isFinite(requestedQuality) ? requestedQuality : 78));
+  const wantsTransform = Boolean(width && env.IMAGES);
+  const cache = caches.default;
+
+  if (wantsTransform) {
+    const cached = await cache.match(req);
+    if (cached) return cached;
+  }
+
+  const object = await env.MEDIA.get(key, wantsTransform ? {} : {
     onlyIf: req.headers,
     range: req.headers,
   });
   if (!object) return new Response("Not found", { status: 404 });
   const headers = new Headers();
   object.writeHttpMetadata(headers);
-  headers.set("etag", object.httpEtag);
   headers.set("access-control-allow-origin", "*");
 
   if (!("body" in object)) {
-    const cacheValidatorMatched =
-      req.headers.has("if-none-match") ||
-      req.headers.has("if-modified-since");
-    return new Response(null, {
-      status: cacheValidatorMatched ? 304 : 412,
-      headers,
-    });
+    const cacheValidatorMatched = req.headers.has("if-none-match") || req.headers.has("if-modified-since");
+    return new Response(null, { status: cacheValidatorMatched ? 304 : 412, headers });
   }
 
+  if (wantsTransform) {
+    try {
+      const transformed = (await env.IMAGES.input(object.body)
+        .transform({ width })
+        .output({ format: "image/webp", quality })).response();
+      const transformedHeaders = new Headers(transformed.headers);
+      transformedHeaders.set("access-control-allow-origin", "*");
+      transformedHeaders.set("cache-control", "public, max-age=31536000, immutable");
+      transformedHeaders.set("x-shoplab-image-width", String(width));
+      const response = new Response(transformed.body, { status: 200, headers: transformedHeaders });
+      if (ctx) ctx.waitUntil(cache.put(req, response.clone()));
+      return response;
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "media_transform_failed", key, width, error: String(error?.message || error) }));
+      const fallback = await env.MEDIA.get(key);
+      if (!fallback || !("body" in fallback)) return new Response("Not found", { status: 404 });
+      const fallbackHeaders = new Headers();
+      fallback.writeHttpMetadata(fallbackHeaders);
+      fallbackHeaders.set("access-control-allow-origin", "*");
+      fallbackHeaders.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
+      return new Response(fallback.body, { status: 200, headers: fallbackHeaders });
+    }
+  }
+
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
   return new Response(object.body, { status: 200, headers });
 }
 
