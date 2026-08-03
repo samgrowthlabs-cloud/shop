@@ -1836,7 +1836,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     if (!freeAccess.allowed)
       return ok(req, env, { premium: false, premiumRequired: true, freeCreditsExhausted: true, freeCredits: freeAccess, plan: premium.plan }, id);
   }
-  const version = await sha256(`premium-product-insight-v2|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
+  const version = await sha256(`premium-product-insight-v3|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
   const cached = await env.DB.prepare(
     `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
   ).bind(version, user.id).first();
@@ -1881,11 +1881,18 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
       type: "object",
       additionalProperties: false,
       properties: {
-        conclusion: { type: "array", minItems: 3, maxItems: 4, items: { type: "string" } },
-        bestFor: { type: "array", minItems: 2, maxItems: 3, items: { type: "string" } },
-        howItHelps: { type: "array", minItems: 2, maxItems: 3, items: { type: "string" } },
+        conclusion: { type: "array", minItems: 4, maxItems: 6, items: { type: "string" } },
+        bestFor: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
+        howItHelps: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
+        strengths: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
+        limitations: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } },
+        decisionFactors: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
+        priceAssessment: { type: "string" },
+        verdict: { type: "string" },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+        checkBeforeBuying: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } },
       },
-      required: ["conclusion", "bestFor", "howItHelps"],
+      required: ["conclusion", "bestFor", "howItHelps", "strengths", "limitations", "decisionFactors", "priceAssessment", "verdict", "confidence", "checkBeforeBuying"],
     };
     const aiSetting = insightAiSetting;
     if (!aiSetting.isEnabled) throw new Error("AI_PRODUCT_INSIGHT_DISABLED");
@@ -1910,7 +1917,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
         id: String(env.AI_GATEWAY_ID || "default"),
         skipCache: false,
         cacheTtl: 2592000,
-        cacheKey: `premium-product-insight-v2:${version}`,
+        cacheKey: `premium-product-insight-v3:${version}`,
         collectLog: true,
         metadata: { feature: "premium-product-insight", productSlug: product.slug },
       },
@@ -5978,7 +5985,8 @@ async function saveBanner(req, env, bannerId, id, creating) {
       catch(error){return fail(req,env,"INVALID_OVERLAY_FILE",error.message,422,id)}
     }
     if(!storageKey)continue;
-    overlayLayers.push({id:layerId,storageKey,x:clamp(raw.x,0,100,50),y:clamp(raw.y,0,100,50),width:clamp(raw.width,3,100,24),scale:clamp(raw.scale,10,500,100),rotation:clamp(raw.rotation,-180,180,0),opacity:clamp(raw.opacity,0,100,100),device:["both","desktop","mobile"].includes(String(raw.device))?String(raw.device):"both",zIndex:clamp(raw.zIndex,1,50,10)});
+    const base={x:clamp(raw.x,0,100,50),y:clamp(raw.y,0,100,50),width:clamp(raw.width,3,100,24),scale:clamp(raw.scale,10,500,100),rotation:clamp(raw.rotation,-180,180,0)};
+    overlayLayers.push({id:layerId,storageKey,...base,desktop:{x:clamp(raw.desktop?.x,0,100,base.x),y:clamp(raw.desktop?.y,0,100,base.y),width:clamp(raw.desktop?.width,3,100,base.width),scale:clamp(raw.desktop?.scale,10,500,base.scale),rotation:clamp(raw.desktop?.rotation,-180,180,base.rotation)},mobile:{x:clamp(raw.mobile?.x,0,100,base.x),y:clamp(raw.mobile?.y,0,100,base.y),width:clamp(raw.mobile?.width,3,100,base.width),scale:clamp(raw.mobile?.scale,10,500,base.scale),rotation:clamp(raw.mobile?.rotation,-180,180,base.rotation)},opacity:clamp(raw.opacity,0,100,100),device:["both","desktop","mobile"].includes(String(raw.device))?String(raw.device):"both",zIndex:clamp(raw.zIndex,1,50,10)});
   }
   const bannerStyle={
       backgroundColor:/^#[0-9a-f]{6}$/i.test(String(form.get("backgroundColor")||""))?String(form.get("backgroundColor")):"#102a25",
@@ -5993,6 +6001,10 @@ async function saveBanner(req, env, bannerId, id, creating) {
       eyebrowColor:/^#[0-9a-f]{6}$/i.test(String(form.get("eyebrowColor")||""))?String(form.get("eyebrowColor")):"#7fe0cf",
       titleColor:/^#[0-9a-f]{6}$/i.test(String(form.get("titleColor")||""))?String(form.get("titleColor")):"#ffffff",
       messageColor:/^#[0-9a-f]{6}$/i.test(String(form.get("messageColor")||""))?String(form.get("messageColor")):"#d8e5e1",
+      animationPreset:["cinematic","reveal","impact","float","none"].includes(String(form.get("animationPreset")))?String(form.get("animationPreset")):"cinematic",
+      animationDuration:clamp(form.get("animationDuration"),400,4000,1100),
+      animationIntensity:clamp(form.get("animationIntensity"),10,100,55),
+      animationLoop:String(form.get("animationLoop"))==="true",
       overlays:overlayLayers,
       desktop:{copyX:clamp(form.get("desktopCopyX"),5,95,28),copyY:clamp(form.get("desktopCopyY"),5,95,50),copyWidth:clamp(form.get("desktopCopyWidth"),20,90,48),titleSize:clamp(form.get("desktopTitleSize"),18,80,43),messageSize:clamp(form.get("desktopMessageSize"),10,32,14),textAlign:["left","center","right"].includes(String(form.get("desktopTextAlign")))?String(form.get("desktopTextAlign")):"left",layers:{eyebrow:{x:clamp(form.get("desktopEyebrowX"),-500,500,0),y:clamp(form.get("desktopEyebrowY"),-500,500,0),scale:clamp(form.get("desktopEyebrowScale"),25,300,100)},title:{x:clamp(form.get("desktopTitleX"),-500,500,0),y:clamp(form.get("desktopTitleY"),-500,500,0),scale:clamp(form.get("desktopTitleScale"),25,300,100)},message:{x:clamp(form.get("desktopMessageX"),-500,500,0),y:clamp(form.get("desktopMessageY"),-500,500,0),scale:clamp(form.get("desktopMessageScale"),25,300,100)}}},
       mobile:{copyX:clamp(form.get("mobileCopyX"),5,95,38),copyY:clamp(form.get("mobileCopyY"),5,95,38),copyWidth:clamp(form.get("mobileCopyWidth"),35,96,76),titleSize:clamp(form.get("mobileTitleSize"),18,54,29),messageSize:clamp(form.get("mobileMessageSize"),10,26,14),textAlign:["left","center","right"].includes(String(form.get("mobileTextAlign")))?String(form.get("mobileTextAlign")):"left",layers:{eyebrow:{x:clamp(form.get("mobileEyebrowX"),-500,500,0),y:clamp(form.get("mobileEyebrowY"),-500,500,0),scale:clamp(form.get("mobileEyebrowScale"),25,300,100)},title:{x:clamp(form.get("mobileTitleX"),-500,500,0),y:clamp(form.get("mobileTitleY"),-500,500,0),scale:clamp(form.get("mobileTitleScale"),25,300,100)},message:{x:clamp(form.get("mobileMessageX"),-500,500,0),y:clamp(form.get("mobileMessageY"),-500,500,0),scale:clamp(form.get("mobileMessageScale"),25,300,100)}}},

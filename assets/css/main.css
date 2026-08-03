@@ -4874,3 +4874,16 @@ body[data-page="product"] .detail-main-image img{
     overflow:visible!important;
   }
 }
+/* Camadas de banner com composição independente por dispositivo. */
+@media(max-width:760px){body[data-page="home"] .home-banner-slide[data-banner-custom] .home-banner-overlay{left:var(--overlay-mobile-x,var(--overlay-x,50%))!important;top:var(--overlay-mobile-y,var(--overlay-y,50%))!important;width:var(--overlay-mobile-width,var(--overlay-width,24%))!important;transform:translate(-50%,-50%) scale(var(--overlay-mobile-scale,var(--overlay-scale,1))) rotate(var(--overlay-mobile-rotation,var(--overlay-rotation,0deg)))!important}}
+body[data-page="home"] .home-banner-slide.banner-animation-cinematic.is-active picture{animation:public-banner-cinematic var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both}
+body[data-page="home"] .home-banner-slide.banner-animation-reveal.is-active .home-banner-copy{animation:public-banner-reveal var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both}
+body[data-page="home"] .home-banner-slide.banner-animation-impact.is-active .home-banner-copy{animation:public-banner-impact var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both}
+body[data-page="home"] .home-banner-slide.banner-animation-float.is-active picture{animation:public-banner-float calc(var(--banner-animation-duration,1100ms)*2) ease-in-out infinite alternate}
+body[data-page="home"] .home-banner-slide.banner-animation-none.is-active picture,body[data-page="home"] .home-banner-slide.banner-animation-none.is-active .home-banner-copy{animation:none!important;transition:none!important}
+@keyframes public-banner-cinematic{from{filter:brightness(.76);transform:scale(var(--banner-animation-zoom,1.05))}to{filter:brightness(1);transform:scale(1)}}
+@keyframes public-banner-reveal{from{opacity:0;clip-path:inset(0 100% 0 0)}to{opacity:1;clip-path:inset(0)}}
+@keyframes public-banner-impact{from{opacity:0;transform:translate(-50%,-50%) scale(.9)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes public-banner-float{from{transform:translateY(0) scale(1)}to{transform:translateY(calc(var(--banner-animation-float,6px)*-1)) scale(1.015)}}
+@media(prefers-reduced-motion:reduce){body[data-page="home"] [class*="banner-animation-"] picture,body[data-page="home"] [class*="banner-animation-"] .home-banner-copy{animation:none!important}}
+.product-card .badge:empty{display:none!important}

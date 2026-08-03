@@ -448,3 +448,152 @@ html[data-admin-theme="dark"] .banner-preview-section .home-banner,
 html[data-admin-theme="dark"] .header-ad-preview-canvas,
 html[data-admin-theme="dark"] .header-ad-admin-preview{color-scheme:light}
 @media(max-width:800px){.admin-theme-toggle{min-width:42px;padding-inline:11px}.admin-theme-toggle>span:last-child{display:none}body>.admin-theme-toggle{top:12px;right:12px}}
+
+/* Banner Studio 2026: editor visual para administradores e colaboradores. */
+#banner-modal{padding:0;background:rgba(5,18,16,.72);backdrop-filter:blur(10px)}
+#banner-modal .banner-modal-card{display:flex;width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;border:0;border-radius:0;background:#eef3f2;box-shadow:none}
+#banner-modal .modal-head{position:fixed;z-index:40;top:0;right:0;left:0;height:68px;padding:0 22px;border-bottom:1px solid #d5e1de;background:rgba(255,255,255,.97);box-shadow:0 3px 18px rgba(15,42,36,.08);backdrop-filter:blur(16px)}
+#banner-modal .modal-head h2:before{content:'BANNER STUDIO';display:block;color:#088476;font-size:10px;font-weight:950;letter-spacing:.16em}
+#banner-modal .modal-head h2{font-size:21px;line-height:1.1}
+#banner-modal .modal-head .icon-btn{width:42px;height:42px;border-radius:12px}
+#banner-modal #banner-form{display:grid;width:100%;height:100%;padding:84px 18px 18px;grid-template-columns:390px minmax(0,1fr);gap:16px;overflow:hidden}
+#banner-modal .banner-editor-fields{position:relative;display:grid;align-content:start;gap:13px;height:100%;padding:68px 14px 82px;border:1px solid #d4e1de;border-radius:18px;background:#fff;box-shadow:0 12px 34px rgba(20,51,44,.08);overflow:auto;scrollbar-width:thin}
+#banner-modal .banner-studio-tabs{position:absolute;z-index:5;top:0;right:0;left:0;display:grid;height:54px;padding:7px;grid-template-columns:repeat(4,1fr);gap:5px;border-bottom:1px solid #e0e9e7;background:#fff}
+#banner-modal .banner-studio-tabs button{border:0;border-radius:9px;background:transparent;color:#657470;font:800 11px/1.1 inherit;cursor:pointer}
+#banner-modal .banner-studio-tabs button.active{background:#e5f6f2;color:#05796d;box-shadow:inset 0 0 0 1px #bfe4dc}
+#banner-modal .banner-editor-fields>[hidden]{display:none!important}
+#banner-modal .banner-editor-fields>.form-field{margin:0}
+#banner-modal .banner-editor-fields>.form-field.full{grid-column:auto}
+#banner-modal .banner-editor-fields>button[type=submit]{position:absolute;z-index:6;right:14px;bottom:13px;left:14px;width:auto;min-height:48px;border-radius:12px;box-shadow:0 10px 24px rgba(5,126,112,.22)}
+#banner-modal .banner-preview-section{position:relative;display:grid;height:100%;min-height:0;padding:70px 16px 16px;border:1px solid #cfddda;border-radius:18px;background:linear-gradient(145deg,#e9f0ee,#f7faf9 55%,#e6efed);overflow:auto;isolation:isolate}
+#banner-modal .banner-preview-section>.banner-preview-head{position:absolute;z-index:4;top:18px;left:20px;display:grid;gap:2px}
+#banner-modal .banner-preview-section>.banner-preview-head b{font-size:16px}
+#banner-modal .banner-preview-section>.banner-preview-head span{color:#71807d;font-size:11px}
+#banner-modal .banner-studio-toolbar{position:absolute;z-index:5;top:12px;right:16px;display:flex;align-items:center;gap:9px;padding:5px;border:1px solid #cadbd7;border-radius:13px;background:rgba(255,255,255,.94);box-shadow:0 6px 18px rgba(20,54,47,.08)}
+#banner-modal .banner-device-switch{display:flex;gap:4px}
+#banner-modal .banner-device-switch button{height:36px;padding:0 13px;border:0;border-radius:9px;background:transparent;color:#60716d;font-weight:850;cursor:pointer}
+#banner-modal .banner-device-switch button.active{background:#087f72;color:#fff;box-shadow:0 5px 13px rgba(8,127,114,.22)}
+#banner-modal #banner-canvas-size{padding:0 5px;color:#687873;font:750 10px/1 ui-monospace,monospace}
+#banner-modal #banner-fit-canvas{min-height:34px;padding:0 10px}
+#banner-modal .banner-preview-devices{display:grid;min-height:520px;place-items:center;padding:70px 270px 110px 24px}
+#banner-modal .banner-preview-device{display:none!important;width:100%;max-width:none}
+#banner-modal .banner-preview-section:not([data-device="mobile"]) .banner-preview-device.desktop{display:grid!important}
+#banner-modal .banner-preview-section[data-device="mobile"] .banner-preview-device.phone{display:grid!important;width:390px}
+#banner-modal .banner-preview-device>span{justify-self:start;margin-bottom:8px;padding:5px 9px;border-radius:7px;background:#dfeae7;color:#4e625d;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+#banner-modal .banner-preview-device.desktop .home-banner{width:1320px;height:360px}
+#banner-modal .banner-preview-device.phone .home-banner{width:390px;height:250px}
+#banner-modal .banner-canvas-tools{position:absolute;z-index:8;right:16px;bottom:16px;width:248px;max-height:340px;grid-template-columns:1fr;padding:13px;border-color:#c7dad6;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 16px 34px rgba(16,46,40,.16);overflow:auto;backdrop-filter:blur(14px)}
+#banner-modal .banner-canvas-tools>*{grid-column:1/-1}
+#banner-modal .banner-canvas-actions{display:grid;grid-template-columns:1fr 1fr}
+#banner-modal .banner-canvas-actions .banner-add-layer{grid-column:1/-1;width:100%}
+#banner-modal .banner-overlay-options{grid-template-columns:1fr}
+#banner-modal .banner-layers-panel{position:absolute;z-index:7;top:76px;right:16px;width:248px;max-height:calc(100% - 450px);box-shadow:0 12px 28px rgba(17,48,41,.11);overflow:auto}
+#banner-modal .banner-position-editor,#banner-modal .banner-style-editor{display:grid;gap:12px;padding:14px;border:1px solid #d7e3e0;border-radius:14px;background:#fbfdfc}
+#banner-modal .banner-position-columns,#banner-modal .banner-copy-controls{grid-template-columns:1fr}
+#banner-modal .banner-position-editor fieldset,#banner-modal .banner-style-editor fieldset{padding:11px;border:1px solid #d9e4e2;border-radius:11px;background:#fff}
+#banner-modal .banner-style-colors{grid-template-columns:repeat(3,1fr)}
+#banner-modal .banner-animation-editor{display:grid;gap:15px;padding:4px}
+#banner-modal .banner-animation-editor header{display:grid;gap:4px;padding:5px}
+#banner-modal .banner-animation-editor header span{color:#087f72;font-size:10px;font-weight:950;letter-spacing:.12em;text-transform:uppercase}
+#banner-modal .banner-animation-editor header strong{font-size:19px}
+#banner-modal .banner-animation-editor header small{color:#687a76;line-height:1.45}
+#banner-modal .banner-animation-presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#banner-modal .banner-animation-presets label{position:relative;cursor:pointer}
+#banner-modal .banner-animation-presets input{position:absolute;opacity:0}
+#banner-modal .banner-animation-presets span{display:grid;min-height:76px;padding:12px;border:1px solid #d3e0dd;border-radius:12px;background:#fff;font-size:12px;font-weight:900;transition:.18s}
+#banner-modal .banner-animation-presets small{margin-top:5px;color:#74827f;font-size:10px;font-weight:600;line-height:1.35}
+#banner-modal .banner-animation-presets input:checked+span{border-color:#078679;background:#e7f7f3;color:#056f65;box-shadow:0 0 0 2px rgba(7,134,121,.1)}
+#banner-modal .banner-animation-editor>label:not(.banner-loop-switch){display:grid;grid-template-columns:1fr auto;gap:8px;color:#40534e;font-size:12px;font-weight:850}
+#banner-modal .banner-animation-editor input[type=range]{grid-column:1/-1;width:100%}
+#banner-modal .banner-loop-switch{padding:12px;border-radius:11px;background:#eef6f4;font-size:12px;font-weight:800}
+#banner-modal .is-preview-animated.banner-animation-cinematic [data-banner-layer="image"]{animation:studio-cinematic var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both}
+#banner-modal .is-preview-animated.banner-animation-reveal .home-banner-copy{animation:studio-reveal var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both}
+#banner-modal .is-preview-animated.banner-animation-impact .home-banner-copy{animation:studio-impact var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both}
+#banner-modal .is-preview-animated.banner-animation-float [data-banner-layer="image"]{animation:studio-float calc(var(--banner-animation-duration,1100ms)*2) ease-in-out infinite alternate}
+@keyframes studio-cinematic{from{filter:brightness(.72);transform:scale(calc(var(--preview-scale,1)*1.08))}to{filter:brightness(1);transform:scale(var(--preview-scale,1))}}
+@keyframes studio-reveal{from{opacity:0;clip-path:inset(0 100% 0 0)}to{opacity:1;clip-path:inset(0)}}
+@keyframes studio-impact{from{opacity:0;transform:translate(-50%,-50%) scale(.88)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes studio-float{from{filter:brightness(.96);transform:scale(var(--preview-scale,1)) translateY(0)}to{filter:brightness(1.04);transform:scale(var(--preview-scale,1)) translateY(-6px)}}
+@media(max-width:1100px){#banner-modal #banner-form{grid-template-columns:340px minmax(700px,1fr);overflow:auto}#banner-modal .banner-preview-section{min-width:700px}#banner-modal .banner-preview-devices{padding-right:245px}}
+@media(prefers-reduced-motion:reduce){#banner-modal .is-preview-animated *{animation:none!important}}
+/* Correções estruturais do Banner Studio: painel único, sem overflow e animações visíveis. */
+#banner-modal{align-items:stretch!important;overflow:hidden!important;padding:0!important}
+#banner-modal .banner-modal-card{padding:0!important;overflow:hidden!important}
+#banner-modal .modal-head{margin:0!important;overflow:visible}
+#banner-modal .modal-head h2{margin:0!important;overflow:visible;line-height:1.2}
+#banner-modal #banner-form{overflow:hidden!important}
+#banner-modal .banner-editor-fields{grid-template-columns:minmax(0,1fr)!important;grid-auto-flow:row!important;overflow-x:hidden!important;overscroll-behavior:contain}
+#banner-modal .banner-editor-fields>*{min-width:0!important;max-width:100%!important;grid-column:1!important}
+#banner-modal .banner-position-editor,#banner-modal .banner-style-editor,#banner-modal .banner-animation-editor{width:100%!important;min-width:0!important;grid-template-columns:minmax(0,1fr)!important;overflow:hidden!important}
+#banner-modal .banner-position-columns,#banner-modal .banner-style-colors,#banner-modal .banner-style-ranges,#banner-modal .banner-copy-controls{width:100%!important;min-width:0!important;grid-template-columns:minmax(0,1fr)!important}
+#banner-modal .banner-position-columns fieldset,#banner-modal .banner-copy-controls fieldset,#banner-modal .banner-style-editor label{min-width:0!important;max-width:100%!important}
+#banner-modal .banner-position-editor input[type="range"],#banner-modal .banner-style-editor input[type="range"]{width:100%!important;min-width:0!important}
+#banner-modal .banner-preview-section{overflow:hidden!important}
+#banner-modal .banner-preview-devices{overflow:hidden!important}
+#banner-modal .banner-preview-device>div{max-width:100%;overflow:hidden}
+#banner-modal .is-preview-animated.banner-animation-cinematic [data-banner-layer="image"]{animation:studio-cinematic-visible var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both!important}
+#banner-modal .is-preview-animated.banner-animation-reveal .home-banner-copy{animation:studio-reveal-visible var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both!important}
+#banner-modal .is-preview-animated.banner-animation-impact .home-banner-copy{animation:studio-impact-visible var(--banner-animation-duration,1100ms) cubic-bezier(.22,1,.36,1) both!important}
+#banner-modal .is-preview-animated.banner-animation-float [data-banner-layer="image"]{animation:studio-float-visible calc(var(--banner-animation-duration,1100ms)*1.7) ease-in-out infinite alternate!important}
+@keyframes studio-cinematic-visible{0%{opacity:.4;filter:brightness(.55) saturate(.7) blur(3px)}100%{opacity:var(--banner-image-opacity,1);filter:brightness(1) saturate(1) blur(0)}}
+@keyframes studio-reveal-visible{0%{opacity:0;filter:blur(8px);clip-path:inset(0 100% 0 0)}100%{opacity:1;filter:blur(0);clip-path:inset(0)}}
+@keyframes studio-impact-visible{0%{opacity:0;filter:blur(5px) brightness(1.45)}55%{opacity:1;filter:blur(0) brightness(1.12)}100%{opacity:1;filter:brightness(1)}}
+@keyframes studio-float-visible{0%{opacity:.82;filter:brightness(.88) saturate(.9)}100%{opacity:var(--banner-image-opacity,1);filter:brightness(1.08) saturate(1.08)}}
+@media(prefers-reduced-motion:reduce){#banner-modal .is-preview-animated.banner-animation-cinematic [data-banner-layer="image"],#banner-modal .is-preview-animated.banner-animation-reveal .home-banner-copy,#banner-modal .is-preview-animated.banner-animation-impact .home-banner-copy,#banner-modal .is-preview-animated.banner-animation-float [data-banner-layer="image"]{animation-duration:700ms!important;animation-iteration-count:1!important}}
+/* Banner Studio v3: canvas e inspetor sem sobreposição. */
+#banner-modal #banner-form{grid-template-columns:360px minmax(0,1fr)!important;min-width:0!important}
+#banner-modal .banner-preview-section{display:grid!important;grid-template-columns:minmax(0,1fr) 270px!important;grid-template-rows:48px minmax(0,1fr) auto!important;gap:12px!important;padding:14px!important;overflow:hidden!important}
+#banner-modal .banner-preview-section>.banner-preview-head{position:static!important;grid-column:1!important;grid-row:1!important;align-self:center!important;padding-left:6px}
+#banner-modal .banner-studio-toolbar{position:static!important;grid-column:2!important;grid-row:1!important;align-self:center!important;justify-self:stretch!important;min-width:0!important;box-shadow:none!important}
+#banner-modal .banner-device-switch{flex:1;min-width:0}
+#banner-modal .banner-device-switch button{flex:1;min-width:0;padding:0 8px!important;white-space:nowrap}
+#banner-modal #banner-canvas-size{display:none!important}
+#banner-modal .banner-canvas-zoom{display:grid;min-width:76px;grid-template-columns:auto auto;align-items:center;gap:2px 6px;color:#60716d;font-size:9px;font-weight:850}
+#banner-modal .banner-canvas-zoom input{grid-column:1/-1;width:76px;height:12px}
+#banner-modal .banner-canvas-zoom output{justify-self:end;color:#087f72}
+#banner-modal .banner-preview-devices{grid-column:1!important;grid-row:2/4!important;display:grid!important;min-width:0!important;min-height:0!important;height:100%!important;padding:18px!important;border:1px solid #d9e5e2;border-radius:14px;background:repeating-conic-gradient(#f8fbfa 0 25%,#f1f6f4 0 50%) 0/24px 24px!important;overflow:auto!important;place-items:center!important;overscroll-behavior:contain}
+#banner-modal .banner-preview-device{min-width:0!important;max-width:none!important}
+#banner-modal .banner-preview-device>div{max-width:none!important;overflow:visible!important}
+#banner-modal .banner-preview-device.desktop{width:1320px!important}
+#banner-modal .banner-preview-device.phone{width:390px!important}
+#banner-modal .banner-layers-panel{position:static!important;grid-column:2!important;grid-row:2!important;width:auto!important;max-height:none!important;min-height:0!important;overflow:auto!important;box-shadow:none!important}
+#banner-modal .banner-canvas-tools{position:static!important;grid-column:2!important;grid-row:3!important;width:auto!important;max-height:330px!important;padding:12px!important;overflow:auto!important;box-shadow:none!important}
+#banner-modal .banner-canvas-tools label{grid-template-columns:auto minmax(0,1fr) auto!important}
+#banner-modal .banner-canvas-tools input[type="range"]{width:100%!important;min-width:0!important}
+#banner-modal .banner-overlay-options{overflow:visible!important}
+#banner-modal .banner-animation-presets{grid-template-columns:minmax(0,1fr)!important}
+#banner-modal #banner-form[data-editor-device="desktop"] .banner-position-columns>fieldset:nth-child(2),#banner-modal #banner-form[data-editor-device="desktop"] .banner-copy-controls>fieldset:nth-child(2){display:none!important}
+#banner-modal #banner-form[data-editor-device="mobile"] .banner-position-columns>fieldset:nth-child(1),#banner-modal #banner-form[data-editor-device="mobile"] .banner-copy-controls>fieldset:nth-child(1){display:none!important}
+#banner-modal .is-preview-animated.banner-animation-cinematic [data-banner-layer="image"]{animation:studio-safe-cinematic var(--banner-animation-duration,1100ms) ease both!important}
+#banner-modal .is-preview-animated.banner-animation-reveal .home-banner-copy{animation:studio-safe-reveal var(--banner-animation-duration,1100ms) ease both!important}
+#banner-modal .is-preview-animated.banner-animation-impact .home-banner-copy{animation:studio-safe-impact var(--banner-animation-duration,1100ms) ease both!important}
+#banner-modal .is-preview-animated.banner-animation-float .home-banner-shade{animation:studio-safe-float calc(var(--banner-animation-duration,1100ms)*1.8) ease-in-out infinite alternate!important}
+@keyframes studio-safe-cinematic{0%{opacity:.3;filter:brightness(.5) blur(4px)}100%{opacity:var(--banner-image-opacity,1);filter:none}}
+@keyframes studio-safe-reveal{0%{opacity:0;filter:blur(10px)}100%{opacity:1;filter:none}}
+@keyframes studio-safe-impact{0%{opacity:0;filter:brightness(1.8) blur(3px)}45%{opacity:1;filter:brightness(1.15)}100%{filter:none}}
+@keyframes studio-safe-float{0%{opacity:calc(var(--banner-overlay-opacity,1)*.62)}100%{opacity:var(--banner-overlay-opacity,1)}}
+@media(max-width:1180px){#banner-modal #banner-form{grid-template-columns:330px minmax(0,1fr)!important;overflow:hidden!important}#banner-modal .banner-preview-section{min-width:0!important;grid-template-columns:minmax(0,1fr) 240px!important}#banner-modal .banner-preview-devices{padding:10px!important}}
+/* Encaixe físico do canvas: a área ocupada acompanha a escala visual. */
+#banner-modal .banner-preview-devices{place-items:center!important;justify-content:safe center!important;align-content:center!important}
+#banner-modal .banner-preview-device.desktop,#banner-modal .banner-preview-device.phone{width:max-content!important;min-width:0!important;margin:auto!important}
+#banner-modal .banner-preview-device.desktop #banner-preview-desktop,#banner-modal .banner-preview-device.phone #banner-preview-mobile{overflow:visible!important;max-width:none!important}
+#banner-modal .banner-preview-device .home-banner{flex:none!important}
+/* Banner Studio v4: 100% = canvas inteiro visivel; zoom maior usa rolagem segura. */
+#banner-modal .banner-studio-toolbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-auto-rows:auto!important;gap:5px 8px!important}
+#banner-modal .banner-device-switch{grid-column:1/-1!important}
+#banner-modal .banner-canvas-zoom{grid-column:1!important;width:100%!important;min-width:0!important}
+#banner-modal .banner-canvas-zoom input{width:100%!important;min-width:0!important}
+#banner-modal #banner-fit-canvas{grid-column:2!important;grid-row:2!important;align-self:end!important}
+#banner-modal .banner-preview-devices{justify-content:safe center!important;align-content:safe center!important}
+#banner-modal .banner-preview-device{flex:none!important}
+#banner-modal .banner-preview-device>div{flex:none!important}
+
+/* Banner Studio v5: a barra ocupa uma linha real e nunca invade o cabecalho. */
+#banner-modal .banner-preview-section{grid-template-rows:86px minmax(0,1fr) auto!important}
+#banner-modal .banner-studio-toolbar{align-self:start!important;max-height:82px!important;overflow:hidden!important}
+#banner-modal .banner-preview-section>.banner-preview-head{align-self:start!important;padding-top:8px!important}
+#banner-modal .banner-canvas-zoom{display:flex!important;align-items:center!important;gap:6px!important}
+#banner-modal .banner-canvas-zoom input{flex:1!important;width:72px!important}
+/* Espaco final para os controles de zoom completos. */
+#banner-modal .banner-preview-section{grid-template-rows:106px minmax(0,1fr) auto!important}
+#banner-modal .banner-studio-toolbar{max-height:102px!important}
