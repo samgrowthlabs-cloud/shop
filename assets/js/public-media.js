@@ -2,7 +2,7 @@ import{SHOPLAB_CONFIG as C}from'./config.js';
 import{session,userApi}from'./auth.js';
 
 const cache=new Map();
-async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=fetch(`${C.API_BASE_URL}/api/v1/products/${encodeURIComponent(slug)}?mediaVersion=2`,{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>j?.data||null).catch(()=>null);cache.set(slug,promise);return promise}
+async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=fetch(`${C.API_BASE_URL}/api/v1/products/${encodeURIComponent(slug)}?mediaVersion=2`,{cache:'default'}).then(r=>r.ok?r.json():null).then(j=>j?.data||null).catch(()=>null);cache.set(slug,promise);return promise}
 const url=m=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}`:m?.externalUrl||'';
 const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
@@ -223,8 +223,30 @@ document.addEventListener('click',async event=>{
   button.disabled=false;button.innerHTML=original;
 },true);
 
-const mediaObserver='IntersectionObserver'in window?new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting)return;mediaObserver.unobserve(entry.target);cardMedia(entry.target)}),{rootMargin:'240px'}):null;
-function queueCardMedia(card){if(card.dataset.mediaObserved)return;card.dataset.mediaObserved='1';if(mediaObserver)mediaObserver.observe(card);else cardMedia(card)}
-function scan(){document.querySelectorAll('.product-card').forEach(queueCardMedia);detailMedia()}
-new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
-document.readyState==='loading'?document.addEventListener('DOMContentLoaded',scan):scan();
+/* Midia alternativa sob demanda: evita uma requisicao de produto para cada card no carregamento. */
+document.addEventListener('pointerover',event=>{
+  if(matchMedia('(hover:none),(pointer:coarse)').matches)return;
+  const card=event.target.closest?.('.product-card');
+  if(card)cardMedia(card);
+},{passive:true});
+document.addEventListener('click',async event=>{
+  const media=event.target.closest?.('.product-card .product-media');
+  if(!media||!matchMedia('(hover:none),(pointer:coarse)').matches)return;
+  const card=media.closest('.product-card');
+  if(card.dataset.mediaSwapReady||card.dataset.mediaSwapLoading)return;
+  event.preventDefault();event.stopImmediatePropagation();
+  await cardMedia(card);
+  if(card.classList.contains('has-alternate-image'))card.classList.add('show-alternate-image');
+  else location.href=media.href;
+},true);
+let detailScanQueued=false;
+const detailObserver=new MutationObserver(()=>{
+  if(detailScanQueued)return;detailScanQueued=true;
+  requestAnimationFrame(()=>{
+    detailScanQueued=false;
+    if(!document.querySelector('.detail'))return;
+    detailMedia();detailObserver.disconnect();
+  });
+});
+function scan(){if(document.querySelector('.detail'))detailMedia();else detailObserver.observe(document.documentElement,{childList:true,subtree:true})}
+document.readyState==='loading'?document.addEventListener('DOMContentLoaded',scan,{once:true}):scan();
