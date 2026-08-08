@@ -1,4 +1,4 @@
-import'./mobile-enhancements.js?v=20260803-media-domain-38';import'./pwa.js?v=20260803-media-domain-38';
+import'./mobile-enhancements.js?v=20260808-mobile-compact-2';import'./pwa.js?v=20260803-media-domain-38';
 const faviconUrl=new URL('../img/favicon.svg?v=20260721-cart-lab-1',import.meta.url).href;
 const current=[...document.querySelectorAll('link[rel~="icon"]')];
 const icon=current[0]||document.createElement('link');
