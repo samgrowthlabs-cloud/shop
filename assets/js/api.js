@@ -37,6 +37,7 @@ export const searchProductsWithMeta=async({q='',categorySlug='',sort=''}={})=>{
   }finally{clearTimeout(timer)}
 };
 export const getPromotions=async()=>C.USE_MOCK_DATA?[{id:'mock',name:'Ofertas em destaque',slug:'ofertas',description:'Produtos com preços reduzidos.',couponCode:'',startsAt:new Date().toISOString(),endsAt:new Date(Date.now()+86400000).toISOString(),products:(await getProducts()).filter(product=>product.discount>0)}]:request('/api/v1/promotions');
+export const getCollection=slug=>request(`/api/v1/collections/${encodeURIComponent(slug)}`);
 export const getRecommendations=async slug=>{if(C.USE_MOCK_DATA)return(await getProducts()).filter(p=>p.slug!==slug).slice(0,4);const products=await request(`/api/v1/products/${encodeURIComponent(slug)}/related?audience=${userAuthorization().authorization?'member':'guest'}&v=5`);return withActivePromotions(products).catch(()=>products)};
 export const getProductOffers=async slug=>(await getProductBySlug(slug))?.offers||[];
 export const getComparisonAnalysis=slugs=>request('/api/v1/comparisons/analyze',{method:'POST',body:{slugs},timeout:90000});

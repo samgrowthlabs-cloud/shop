@@ -24,8 +24,7 @@ export function setPremiumBrand(active){
 }
 
 function warmHeaderMedia(config){
-  const wide=matchMedia('(min-width:761px)').matches;
-  const urls=[config?.theme?.logoUrl,config?.theme?.headerMediaUrl,wide?(config?.headerSpotlights||[])[0]?.mediaUrl:null].filter(Boolean);
+  const urls=[config?.theme?.logoUrl,config?.theme?.headerMediaUrl,(config?.headerSpotlights||[])[0]?.mediaUrl].filter(Boolean);
   const loaded=[...document.head.querySelectorAll('link[data-header-preload]')].map(link=>link.href);
   for(const url of new Set(urls)){
     const absolute=new URL(url,location.href).href;
@@ -47,6 +46,7 @@ export function applySiteTheme(theme){
     '--season-header-bg':theme.headerBackground,
     '--season-header-background':headerBackground,
     '--season-header-text':theme.headerTextColor,
+    '--season-header-hover':theme.headerHoverColor||theme.accentColor,
     '--season-header-image':mediaUrl?`url("${mediaUrl}")`:'none',
     '--season-header-image-opacity':String(Math.min(1,Math.max(0,Number(theme.headerMediaOpacity)||0))),
     '--season-header-image-position':theme.headerMediaPosition||'center',
@@ -58,6 +58,14 @@ export function applySiteTheme(theme){
     '--accent-hover':`color-mix(in srgb,${theme.accentColor} 82%,#000)`,
     '--text':theme.pageTextColor,
     '--muted':theme.mutedTextColor,
+    '--season-price':theme.priceColor||theme.accentColor,
+    '--season-old-price':theme.oldPriceColor||theme.mutedTextColor,
+    '--season-footer-bg':theme.footerBackground||'#eef3f1',
+    '--season-footer-text':theme.footerTextColor||theme.pageTextColor,
+    '--season-footer-link':theme.footerLinkColor||theme.mutedTextColor,
+    '--season-footer-hover':theme.footerHoverColor||theme.accentColor,
+    '--season-card-hover-bg':theme.cardHoverBackground||'#ffffff',
+    '--season-card-hover-border':theme.cardHoverBorderColor||theme.accentColor,
     '--bg':`color-mix(in srgb,${theme.accentColor} 4%,#fff)`,
     '--surface':'#fff','--surface-soft':`color-mix(in srgb,${theme.accentColor} 8%,#fff)`,
     '--surface-elevated':`color-mix(in srgb,${theme.accentColor} 5%,#fff)`,
@@ -84,15 +92,13 @@ function headerSpotlight(config){
   item.className='header-highlight has-media';
   item.href=spotlight.linkUrl||'promocoes.html';
   item.title=spotlight.altText||spotlight.name||'Destaque SHOPLAB';
-  const mediaQuery=matchMedia('(min-width:761px)'),source=esc(spotlight.mediaUrl);
+  const source=esc(spotlight.mediaUrl);
   const control=(value,min,max,fallback)=>{const number=Number(value);return Math.min(max,Math.max(min,Number.isFinite(number)?number:fallback))};
   item.style.setProperty('--spotlight-x',`${control(spotlight.imagePositionX,0,100,50)}%`);
   item.style.setProperty('--spotlight-y',`${control(spotlight.imagePositionY,0,100,50)}%`);
   item.style.setProperty('--spotlight-scale',String(control(spotlight.imageScale,10,400,100)/100));
-  item.innerHTML=`<img ${mediaQuery.matches?`src="${source}" `:''}data-src="${source}" alt="${esc(item.title)}" width="560" height="92" decoding="async" fetchpriority="high">`;
+  item.innerHTML=`<img src="${source}" data-src="${source}" alt="${esc(item.title)}" width="560" height="92" decoding="async" fetchpriority="high">`;
   row.append(item);
-  const syncMedia=()=>{const image=item.querySelector('img');if(mediaQuery.matches&&!image.getAttribute('src'))image.src=image.dataset.src;else if(!mediaQuery.matches)image.removeAttribute('src')};
-  mediaQuery.addEventListener?.('change',syncMedia);
 }
 
 function paintHeader(config){if(!config)return;warmHeaderMedia(config);applySiteTheme(config.theme);themeLogo(config.theme);headerSpotlight(config);setPremiumBrand(cachedPremiumBrand())}

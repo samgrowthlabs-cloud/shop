@@ -1,0 +1,9 @@
+ALTER TABLE seasonal_themes ADD COLUMN price_color TEXT NOT NULL DEFAULT '#087c70';
+ALTER TABLE seasonal_themes ADD COLUMN old_price_color TEXT NOT NULL DEFAULT '#687773';
+ALTER TABLE seasonal_themes ADD COLUMN header_hover_color TEXT NOT NULL DEFAULT '#0a7c71';
+ALTER TABLE seasonal_themes ADD COLUMN footer_background TEXT NOT NULL DEFAULT '#eef3f1';
+ALTER TABLE seasonal_themes ADD COLUMN footer_text_color TEXT NOT NULL DEFAULT '#233330';
+ALTER TABLE seasonal_themes ADD COLUMN footer_link_color TEXT NOT NULL DEFAULT '#687773';
+ALTER TABLE seasonal_themes ADD COLUMN footer_hover_color TEXT NOT NULL DEFAULT '#0a7c71';
+ALTER TABLE seasonal_themes ADD COLUMN card_hover_background TEXT NOT NULL DEFAULT '#ffffff';
+ALTER TABLE seasonal_themes ADD COLUMN card_hover_border_color TEXT NOT NULL DEFAULT '#0a7c71';
