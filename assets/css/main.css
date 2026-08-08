@@ -5144,3 +5144,5 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
   object-position:center!important;
   transform:none!important;
 }
+.comparison-progress{display:grid;gap:7px;max-width:780px;margin-top:16px}.comparison-progress>i{display:block;height:10px;overflow:hidden;border-radius:999px;background:#dfeeea}.comparison-progress>i>span{display:block;width:45%;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#35bfa8);animation:comparison-progress-bar 1.7s ease-in-out infinite}.comparison-progress>small{display:flex;justify-content:space-between;gap:12px;color:var(--muted)}.comparison-progress>small b{color:var(--accent)}@keyframes comparison-progress-bar{0%{transform:translateX(-110%)}100%{transform:translateX(245%)}}
+.comparison-score-unavailable{display:grid;gap:5px;margin:14px 0;padding:14px;border:1px dashed #b9cbc6;border-radius:10px;background:#f7faf9;color:var(--muted)}.comparison-score-unavailable strong{color:var(--text)}.comparison-score-unavailable span{font-size:12px;line-height:1.45}
