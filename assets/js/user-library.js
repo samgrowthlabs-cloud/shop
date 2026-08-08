@@ -173,17 +173,6 @@ export async function syncAccountLibrary() {
 export async function bindLibraryUI() {
   const slug = new URLSearchParams(location.search).get("slug");
   const local = localLibrary();
-  document.querySelectorAll(".product-card").forEach((card) => {
-    if (card.querySelector("[data-like-product]")) return;
-    const item = new URL(card.dataset.cardUrl || "", location.href).searchParams.get(
-      "slug",
-    );
-    if (item)
-      card.insertAdjacentHTML(
-        "afterbegin",
-        `<button class="card-like" type="button" data-like-product="${item}" aria-label="Curtir produto">♡</button>`,
-      );
-  });
   document.querySelectorAll("[data-like-product]").forEach((button) => {
     const item = button.dataset.likeProduct;
     const active = local.favorites.includes(item);

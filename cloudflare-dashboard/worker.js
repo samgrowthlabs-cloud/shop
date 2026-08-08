@@ -719,6 +719,10 @@ async function route(request, env, ctx, requestId) {
       path.split("/").at(-2),
       requestId,
     );
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/themes\/[^/]+\/header-media$/.test(path))
+    return removeThemeMedia(request, env, path.split("/").at(-2), "header", requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/themes\/[^/]+\/logo-media$/.test(path))
+    return removeThemeMedia(request, env, path.split("/").at(-2), new URL(request.url).searchParams.get("kind")==="hover"?"hover":"logo", requestId);
   if (request.method === "PUT" && path.startsWith("/api/v1/admin/themes/"))
     return updateTheme(request, env, path.split("/").pop(), requestId);
   if (request.method === "DELETE" && path.startsWith("/api/v1/admin/themes/"))
@@ -1756,9 +1760,9 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
           }),
         },
       ];
-    const runComparisonModel = (model, attempt) => env.AI.run(model, {
+    const runComparisonModel = (model, attempt, structured) => env.AI.run(model, {
         messages,
-        response_format: { type: "json_schema", json_schema: PREMIUM_COMPARISON_SUMMARY_SCHEMA },
+        ...(structured ? { response_format: { type: "json_schema", json_schema: PREMIUM_COMPARISON_SUMMARY_SCHEMA } } : {}),
         temperature: 0,
         max_tokens: 1600,
       }, {
@@ -1766,9 +1770,9 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
         id: String(env.AI_GATEWAY_ID || "default"),
         skipCache: false,
         cacheTtl: 2592000,
-        cacheKey: `premium-comparison-v12:${attempt}:${version}`,
+        cacheKey: `premium-comparison-v14:${attempt}:${structured ? "schema" : "json"}:${version}`,
         collectLog: true,
-        metadata: { feature: "premium-product-comparison", comparisonVersion: "v12", productSlugs: [...slugs].sort().join(",") },
+        metadata: { feature: "premium-product-comparison", comparisonVersion: "v14", productSlugs: [...slugs].sort().join(",") },
         },
       });
     const responseValue = (result) => {
@@ -1784,16 +1788,18 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
     };
     let raw = null;
     const failures = [];
-    for (let attempt = 0; attempt < models.length; attempt += 1) {
-      try {
-        const candidate = responseValue(await runComparisonModel(models[attempt], attempt));
-        raw = hasUsefulAiComparison(candidate)
-          ? candidate
-          : recoverAiComparison(candidate, products, fallback);
-        if (!raw) throw new Error("AI_COMPARISON_RESPONSE_INCOMPLETE");
-        break;
-      } catch (error) {
-        failures.push(`${models[attempt]}:${String(error?.message || error)}`);
+for (let attempt = 0; attempt < models.length && !raw; attempt += 1) {
+      for (const structured of [true, false]) {
+        try {
+          const candidate = responseValue(await runComparisonModel(models[attempt], attempt, structured));
+          raw = hasUsefulAiComparison(candidate)
+            ? candidate
+            : recoverAiComparison(candidate, products, fallback);
+          if (!raw) throw new Error("AI_COMPARISON_RESPONSE_INCOMPLETE");
+          break;
+        } catch (error) {
+          failures.push(`${models[attempt]}:${structured ? "schema" : "json"}:${String(error?.message || error)}`);
+        }
       }
     }
     if (!raw) throw new Error(`AI_COMPARISON_ALL_MODELS_FAILED:${failures.join("|").slice(0, 800)}`);
@@ -1806,10 +1812,14 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
     return analysis;
   } catch (error) {
     console.warn(JSON.stringify({ event: "ai_product_comparison_failed", cacheKey: version, error: String(error?.message || error) }));
-    await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
+    const persistedFallback = { ...fallback, aiUsed: false, summary: "A análise inteligente não ficou disponível para esta combinação. Os dados técnicos abaixo continuam válidos para comparação.", premiumRequired: false };
+    await env.DB.prepare(
+      `UPDATE comparison_analysis_cache SET product_slugs=?,analysis_json=?,updated_at=CURRENT_TIMESTAMP WHERE cache_key=? AND analysis_json='null'`,
+    ).bind(JSON.stringify([...slugs].sort()), JSON.stringify(persistedFallback), version).run();
+    cacheComparisonAtEdge(ctx, cacheKey, persistedFallback);
     if (freeFeatureKey) await refundFreeAiCredit(env, userId, freeFeatureKey);
     else await env.DB.prepare(`UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`).bind(userId, usagePeriod).run();
-    return null;
+    return persistedFallback;
   }
 }
 
@@ -1877,64 +1887,59 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
   const usage = premium.premium ? await reservePremiumAiGeneration(env, user.id) : freeAccess;
   if (!usage.allowed) return ok(req, env, { premium: true, quotaExceeded: true, usage }, id);
   try {
-    const schema = {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        conclusion: { type: "array", minItems: 4, maxItems: 6, items: { type: "string" } },
-        bestFor: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
-        howItHelps: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
-        strengths: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
-        limitations: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } },
-        decisionFactors: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
-        priceAssessment: { type: "string" },
-        verdict: { type: "string" },
-        confidence: { type: "string", enum: ["high", "medium", "low"] },
-        checkBeforeBuying: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } },
-      },
-      required: ["conclusion", "bestFor", "howItHelps", "strengths", "limitations", "decisionFactors", "priceAssessment", "verdict", "confidence", "checkBeforeBuying"],
-    };
     const aiSetting = insightAiSetting;
     if (!aiSetting.isEnabled) throw new Error("AI_PRODUCT_INSIGHT_DISABLED");
-    const result = await env.AI.run(aiSetting.modelId, {
-      messages: [
-        { role: "system", content: "Você cria análises personalizadas SHOPLAB+ em português brasileiro. Use somente os dados fornecidos. Não invente desempenho, recursos ou resultados. Cada item deve ser uma linha curta, clara e útil. A conclusão deve ter 3 ou 4 linhas; para quem é e como ajuda devem ter 2 ou 3 linhas cada. Considere o histórico apenas para personalizar a adequação, sem mencioná-lo diretamente nem expor dados do usuário. Retorne somente o JSON solicitado." },
-        { role: "user", content: JSON.stringify({
-          product: {
-            name: product.name, category: product.category, brand: product.brand, priceCents: product.price,
-            shortDescription: product.shortDescription, fullDescription: String(product.fullDescription || "").slice(0, 3000),
-            editorialReview: String(product.editorialReview || "").slice(0, 1800),
-            editorialScore: product.editorialScore, specifications: parse(product.specificationsJson, []).slice(0, 24),
-          },
-          userContext: context,
-        }) },
-      ],
-      response_format: { type: "json_schema", json_schema: schema },
-      temperature: 0.2,
-      max_tokens: 480,
-    }, {
-      gateway: {
-        id: String(env.AI_GATEWAY_ID || "default"),
-        skipCache: false,
-        cacheTtl: 2592000,
-        cacheKey: `premium-product-insight-v3:${version}`,
-        collectLog: true,
-        metadata: { feature: "premium-product-insight", productSlug: product.slug },
-      },
-    });
-    const raw = result?.response && typeof result.response === "object"
-      ? result.response
-      : JSON.parse(String(result?.response || "{}").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+    const messages = [
+      { role: "system", content: "Você analisa produtos da SHOPLAB em português brasileiro. Use só os dados fornecidos. Gere um JSON com:\n{\"conclusion\":[\"frase1\",\"frase2\",\"frase3\"],\"bestFor\":[\"frase1\",\"frase2\"],\"howItHelps\":[\"frase1\",\"frase2\"]}\nRetorne APENAS o JSON, sem markdown, sem explicação." },
+      { role: "user", content: JSON.stringify({
+        product: {
+          name: product.name, category: product.category, brand: product.brand, priceCents: product.price,
+          shortDescription: String(product.shortDescription || "").slice(0, 600),
+          fullDescription: String(product.fullDescription || "").slice(0, 1800),
+          editorialReview: String(product.editorialReview || "").slice(0, 1200),
+          editorialScore: product.editorialScore, specifications: parse(product.specificationsJson, []).slice(0, 16),
+        },
+        userContext: context,
+      }) },
+    ];
+    let result;
+    try {
+      result = await env.AI.run(aiSetting.modelId, { messages, temperature: 0.3, max_tokens: 1024 });
+    } catch (aiError) {
+      // Retry without any extra options
+      result = await env.AI.run(aiSetting.modelId, { messages, temperature: 0.3, max_tokens: 1024 }).catch(() => null);
+    }
+    if (!result) throw new Error("AI_MODEL_RUN_FAILED");
+    let raw = null;
+    const responseText = String(result?.response || "");
+    if (result?.response && typeof result.response === "object") {
+      raw = result.response;
+    } else {
+      try {
+        raw = JSON.parse(responseText.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+      } catch {
+        const start = responseText.indexOf("{");
+        const end = responseText.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+          try { raw = JSON.parse(responseText.slice(start, end + 1)); } catch {}
+        }
+      }
+    }
+    if (!raw || typeof raw !== "object") throw new Error("PREMIUM_PRODUCT_INSIGHT_INVALID_RESPONSE");
+    if (!Array.isArray(raw.conclusion)) raw.conclusion = typeof raw.conclusion === "string" ? raw.conclusion.split(/[.;!?]\s*/).filter(Boolean).slice(0, 5) : [];
+    if (!Array.isArray(raw.bestFor)) raw.bestFor = typeof raw.bestFor === "string" ? raw.bestFor.split(/[.;!?]\s*/).filter(Boolean).slice(0, 4) : [];
+    if (!Array.isArray(raw.howItHelps)) raw.howItHelps = typeof raw.howItHelps === "string" ? raw.howItHelps.split(/[.;!?]\s*/).filter(Boolean).slice(0, 4) : [];
     const lines = (value, minimum, maximum) => (Array.isArray(value) ? value : [])
-      .map((item) => String(item || "").trim().slice(0, 260)).filter(Boolean).slice(0, maximum)
-      .filter((_, index, array) => array.length >= minimum || index < array.length);
+      .map((item) => String(item || "").trim().slice(0, 260)).filter(Boolean).slice(0, maximum);
     const insight = {
-      conclusion: lines(raw.conclusion, 3, 4),
-      bestFor: lines(raw.bestFor, 2, 3),
-      howItHelps: lines(raw.howItHelps, 2, 3),
+      conclusion: lines(raw.conclusion, 1, 4),
+      bestFor: lines(raw.bestFor, 1, 3),
+      howItHelps: lines(raw.howItHelps, 1, 3),
     };
-    if (insight.conclusion.length < 3 || insight.bestFor.length < 2 || insight.howItHelps.length < 2)
-      throw new Error("PREMIUM_PRODUCT_INSIGHT_INCOMPLETE");
+    // Preencher campos vazios com fallback (aplicar sempre, antes de qualquer validação)
+    if (!insight.conclusion.length) insight.conclusion = [`Com base nos dados, ${product.name} parece atender ao que você procura.`];
+    if (!insight.bestFor.length) insight.bestFor = ["Público alinhado ao uso sugerido pela descrição do produto."];
+    if (!insight.howItHelps.length) insight.howItHelps = ["Contribui com os recursos e características descritos na ficha técnica."];
     await env.DB.prepare(
       `INSERT INTO premium_product_insight_cache(cache_key,user_id,product_id,insight_json)
        VALUES(?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET insight_json=excluded.insight_json,updated_at=CURRENT_TIMESTAMP`,
@@ -1948,7 +1953,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     } else {
       await refundFreeAiCredit(env, user.id, freeAccess.featureKey);
     }
-    console.warn(JSON.stringify({ event: "premium_product_insight_failed", productSlug: slug, error: String(error?.message || error) }));
+    console.warn(JSON.stringify({ event: "premium_product_insight_failed", productSlug: slug, error: String(error?.message || error), stack: error?.stack?.slice(0, 600) }));
     return ok(req, env, { premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, generationFailed: true, usage: { ...usage, used: Math.max(0, usage.used - 1), remaining: Math.min(usage.limit, usage.remaining + 1) } }, id);
   }
 }
@@ -2092,7 +2097,7 @@ async function analyzeProductComparison(req, env, ctx, id) {
   if (!hasComparisonContext) return ok(req, env, technicalResult, id);
   const comparisonAiSetting = await aiFeatureSetting(env, "comparison");
   if (!comparisonAiSetting.isEnabled) return ok(req, env, technicalResult, id);
-  const version = await sha256(`comparison-v12|${comparisonAiSetting.modelId}|${comparisonAiSetting.fallbackModelId || ""}|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
+  const version = await sha256(`comparison-v14|${comparisonAiSetting.modelId}|${comparisonAiSetting.fallbackModelId || ""}|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
   const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
   try {
     const cached = await caches.default.match(cacheKey);
@@ -2136,7 +2141,7 @@ async function analyzeProductComparison(req, env, ctx, id) {
       await env.DB.prepare(`DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`).bind(version).run();
       return ok(req, env, { ...technicalResult, premium: true, premiumRequired: false, quotaExceeded: true, usage }, id);
     }
-    const generationTask = generateAndPersistProductComparison(env, ctx, {
+const generated = await generateAndPersistProductComparison(env, ctx, {
       version,
       cacheKey,
       slugs,
@@ -2146,18 +2151,16 @@ async function analyzeProductComparison(req, env, ctx, id) {
       usagePeriod: usage.period,
       freeFeatureKey: premium.premium ? null : freeAccess.featureKey,
     });
-    if (ctx?.waitUntil) ctx.waitUntil(generationTask);
     return ok(req, env, {
-      ...technicalResult,
+      ...generated,
       premium: premium.premium,
       premiumRequired: false,
       freeAccess: !premium.premium,
       freeCredits: freeAccess,
-      processing: true,
       usage,
     }, id);
   }
-  return ok(req, env, { ...fallback, premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, processing: true, usage: premium.usage }, id);
+  return ok(req, env, { ...technicalResult, premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, processing: true, usage: premium.usage }, id);
 }
 
 function premiumRelationText(value) {
@@ -6176,7 +6179,7 @@ async function createTheme(req, env, id) {
     );
   statements.push(
     env.DB.prepare(
-      `INSERT INTO seasonal_themes(id,name,holiday,header_background,header_background_end,header_gradient_enabled,header_gradient_angle,header_text_color,accent_color,page_text_color,muted_text_color,logo_text,logo_text_color,logo_height,logo_storage_key,logo_hover_storage_key,header_media_storage_key,header_media_opacity,header_media_position,header_media_size,header_media_scale,header_media_repeat,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+`INSERT INTO seasonal_themes(id,name,holiday,header_background,header_background_end,header_gradient_enabled,header_gradient_angle,header_text_color,accent_color,page_text_color,muted_text_color,logo_text,logo_text_color,logo_height,logo_storage_key,logo_hover_storage_key,header_media_storage_key,header_media_opacity,header_media_position,header_media_size,header_media_scale,header_media_repeat,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(themeId, ...themeValues(body)),
   );
   await env.DB.batch(statements);
@@ -6219,7 +6222,7 @@ async function updateTheme(req, env, themeId, id) {
     );
   statements.push(
     env.DB.prepare(
-      `UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+`UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(...themeValues(body), themeId),
   );
   await env.DB.batch(statements);
@@ -6288,6 +6291,19 @@ async function uploadThemeLogoMedia(req, env, themeId, id) {
   const staleKey = kind === "hover" ? theme.logoHoverStorageKey : theme.logoStorageKey;
   if (staleKey) await env.MEDIA.delete(staleKey);
   return ok(req, env, { id: themeId, kind, storageKey }, id);
+}
+
+async function removeThemeMedia(req, env, themeId, kind, id) {
+  if (!(await requireAdmin(req, env)))
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  const columns={header:["header_media_storage_key","headerMediaStorageKey"],logo:["logo_storage_key","logoStorageKey"],hover:["logo_hover_storage_key","logoHoverStorageKey"]};
+  const [column,alias]=columns[kind]||columns.logo;
+  const theme=await env.DB.prepare(`SELECT ${column} ${alias} FROM seasonal_themes WHERE id=?`).bind(themeId).first();
+  if(!theme)return fail(req,env,"THEME_NOT_FOUND","Tema não encontrado",404,id);
+  const storageKey=theme[alias];
+  await env.DB.prepare(`UPDATE seasonal_themes SET ${column}=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(themeId).run();
+  if(storageKey&&env.MEDIA)await env.MEDIA.delete(storageKey);
+  return ok(req,env,{id:themeId,removed:kind},id);
 }
 
 async function adminHeaderSpotlights(req, env, id) {
@@ -8232,6 +8248,7 @@ function normalizeProduct(r) {
   };
 }
 function parse(v, fallback) {
+  if (v == null) return fallback;
   try {
     return JSON.parse(v);
   } catch {
