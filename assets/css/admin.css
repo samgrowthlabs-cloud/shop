@@ -141,6 +141,10 @@ body,body *,body *::before,body *::after{animation:none!important;transition:non
   text-align:var(--banner-text-align,left)!important;
   transform:translate(-50%,-50%)!important;
 }
+
+#collection-products{display:grid;gap:8px;max-height:360px;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+#collection-products .check-filter{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:9px;background:var(--surface-2)}
+#collection-products .check-filter span{display:grid;gap:2px}#collection-products .check-filter small{color:var(--muted)}
 .banner-preview-section .home-banner-copy small{color:var(--banner-eyebrow-color)!important}
 .banner-preview-section .home-banner-copy strong{color:var(--banner-title-color)!important;font-size:var(--banner-title-size)!important}
 .banner-preview-section .home-banner-copy>span{color:var(--banner-message-color)!important;font-size:var(--banner-message-size)!important}

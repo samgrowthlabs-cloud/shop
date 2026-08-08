@@ -103,6 +103,18 @@ CREATE TABLE IF NOT EXISTS promotion_products (
   PRIMARY KEY (promotion_id, product_id)
 );
 
+CREATE TABLE IF NOT EXISTS product_collections (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '', is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS product_collection_items (
+  collection_id TEXT NOT NULL REFERENCES product_collections(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(collection_id,product_id)
+);
+
 CREATE TABLE IF NOT EXISTS recommendations (
   product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   recommended_product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -215,6 +227,9 @@ CREATE TABLE IF NOT EXISTS seasonal_themes (
   header_text_color TEXT NOT NULL DEFAULT '#233330',
   accent_color TEXT NOT NULL DEFAULT '#0a7c71', page_text_color TEXT NOT NULL DEFAULT '#233330',
   muted_text_color TEXT NOT NULL DEFAULT '#687773', logo_text TEXT NOT NULL DEFAULT 'SHOPLAB', logo_text_color TEXT NOT NULL DEFAULT '#0a7c71', logo_height INTEGER NOT NULL DEFAULT 36,
+  price_color TEXT NOT NULL DEFAULT '#087c70', old_price_color TEXT NOT NULL DEFAULT '#687773',
+  header_hover_color TEXT NOT NULL DEFAULT '#0a7c71', footer_background TEXT NOT NULL DEFAULT '#eef3f1', footer_text_color TEXT NOT NULL DEFAULT '#233330',
+  footer_link_color TEXT NOT NULL DEFAULT '#687773', footer_hover_color TEXT NOT NULL DEFAULT '#0a7c71', card_hover_background TEXT NOT NULL DEFAULT '#ffffff', card_hover_border_color TEXT NOT NULL DEFAULT '#0a7c71',
   logo_storage_key TEXT, logo_hover_storage_key TEXT, header_media_storage_key TEXT,
   header_media_opacity REAL NOT NULL DEFAULT 0.35, header_media_position TEXT NOT NULL DEFAULT 'center', header_media_size TEXT NOT NULL DEFAULT 'cover',
   header_media_scale INTEGER NOT NULL DEFAULT 100, header_media_repeat INTEGER NOT NULL DEFAULT 0 CHECK (header_media_repeat IN (0,1)),

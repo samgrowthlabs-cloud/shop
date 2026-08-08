@@ -431,6 +431,8 @@ async function route(request, env, ctx, requestId) {
     return attributedShareRedirect(request, env, path.split("/").pop());
   if (request.method === "GET" && path === "/api/v1/promotions")
     return publicPromotions(request, env, requestId);
+  if (request.method === "GET" && /^\/api\/v1\/collections\/[^/]+$/.test(path))
+    return publicCollection(request, env, decodeURIComponent(path.split("/").pop()), requestId);
   if (request.method === "GET" && /^\/api\/v1\/promotions\/[^/]+$/.test(path))
     return publicPromotionDetail(
       request,
@@ -626,6 +628,14 @@ async function route(request, env, ctx, requestId) {
     return saveProductOffers(request, env, path.split("/").at(-2), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/promotions")
     return adminPromotions(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/collections")
+    return adminCollections(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/collections")
+    return saveCollection(request, env, null, requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/collections\/[^/]+$/.test(path))
+    return saveCollection(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/collections\/[^/]+$/.test(path))
+    return deleteCollection(request, env, path.split("/").pop(), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/promotions")
     return createPromotion(request, env, requestId);
   if (request.method === "PUT" && path.startsWith("/api/v1/admin/promotions/"))
@@ -750,7 +760,7 @@ async function publicSiteConfig(req, env, id) {
       `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
     ),
     env.DB.prepare(
-      `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
+      `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,price_color priceColor,old_price_color oldPriceColor,header_hover_color headerHoverColor,footer_background footerBackground,footer_text_color footerTextColor,footer_link_color footerLinkColor,footer_hover_color footerHoverColor,card_hover_background cardHoverBackground,card_hover_border_color cardHoverBorderColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
     ),
     env.DB.prepare(
       `SELECT pa.id,pa.name,pa.slug,pa.logo_url logoUrl,COUNT(DISTINCT o.product_id) productCount FROM partners pa JOIN offers o ON o.partner_id=pa.id AND o.availability='available' JOIN products p ON p.id=o.product_id AND p.status='published' WHERE pa.is_active=1 GROUP BY pa.id ORDER BY productCount DESC,pa.name`,
@@ -6098,6 +6108,15 @@ const THEME_COLORS = [
   "accentColor",
   "pageTextColor",
   "mutedTextColor",
+  "priceColor",
+  "oldPriceColor",
+  "headerHoverColor",
+  "footerBackground",
+  "footerTextColor",
+  "footerLinkColor",
+  "footerHoverColor",
+  "cardHoverBackground",
+  "cardHoverBorderColor",
 ];
 
 function validateTheme(body) {
@@ -6128,6 +6147,15 @@ function themeValues(body) {
     String(body.accentColor).toLowerCase(),
     String(body.pageTextColor).toLowerCase(),
     String(body.mutedTextColor).toLowerCase(),
+    String(body.priceColor).toLowerCase(),
+    String(body.oldPriceColor).toLowerCase(),
+    String(body.headerHoverColor).toLowerCase(),
+    String(body.footerBackground).toLowerCase(),
+    String(body.footerTextColor).toLowerCase(),
+    String(body.footerLinkColor).toLowerCase(),
+    String(body.footerHoverColor).toLowerCase(),
+    String(body.cardHoverBackground).toLowerCase(),
+    String(body.cardHoverBorderColor).toLowerCase(),
     String(body.logoText || "SHOPLAB")
       .trim()
       .slice(0, 40) || "SHOPLAB",
@@ -6157,7 +6185,7 @@ async function adminThemes(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,header_media_size headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat,starts_at startsAt,ends_at endsAt,is_active isActive,created_at createdAt FROM seasonal_themes ORDER BY is_active DESC,created_at DESC`,
+    `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,price_color priceColor,old_price_color oldPriceColor,header_hover_color headerHoverColor,footer_background footerBackground,footer_text_color footerTextColor,footer_link_color footerLinkColor,footer_hover_color footerHoverColor,card_hover_background cardHoverBackground,card_hover_border_color cardHoverBorderColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,header_media_size headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat,starts_at startsAt,ends_at endsAt,is_active isActive,created_at createdAt FROM seasonal_themes ORDER BY is_active DESC,created_at DESC`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -6179,7 +6207,7 @@ async function createTheme(req, env, id) {
     );
   statements.push(
     env.DB.prepare(
-`INSERT INTO seasonal_themes(id,name,holiday,header_background,header_background_end,header_gradient_enabled,header_gradient_angle,header_text_color,accent_color,page_text_color,muted_text_color,logo_text,logo_text_color,logo_height,logo_storage_key,logo_hover_storage_key,header_media_storage_key,header_media_opacity,header_media_position,header_media_size,header_media_scale,header_media_repeat,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+`INSERT INTO seasonal_themes(id,name,holiday,header_background,header_background_end,header_gradient_enabled,header_gradient_angle,header_text_color,accent_color,page_text_color,muted_text_color,price_color,old_price_color,header_hover_color,footer_background,footer_text_color,footer_link_color,footer_hover_color,card_hover_background,card_hover_border_color,logo_text,logo_text_color,logo_height,logo_storage_key,logo_hover_storage_key,header_media_storage_key,header_media_opacity,header_media_position,header_media_size,header_media_scale,header_media_repeat,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(themeId, ...themeValues(body)),
   );
   await env.DB.batch(statements);
@@ -6222,7 +6250,7 @@ async function updateTheme(req, env, themeId, id) {
     );
   statements.push(
     env.DB.prepare(
-`UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+`UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,price_color=?,old_price_color=?,header_hover_color=?,footer_background=?,footer_text_color=?,footer_link_color=?,footer_hover_color=?,card_hover_background=?,card_hover_border_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(...themeValues(body), themeId),
   );
   await env.DB.batch(statements);
@@ -6304,6 +6332,45 @@ async function removeThemeMedia(req, env, themeId, kind, id) {
   await env.DB.prepare(`UPDATE seasonal_themes SET ${column}=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(themeId).run();
   if(storageKey&&env.MEDIA)await env.MEDIA.delete(storageKey);
   return ok(req,env,{id:themeId,removed:kind},id);
+}
+
+async function publicCollection(req, env, slug, id) {
+  const collection = await env.DB.prepare(
+    `SELECT id,name,slug,description FROM product_collections WHERE slug=? AND is_active=1`,
+  ).bind(String(slug).slice(0,100)).first();
+  if (!collection) return fail(req, env, "COLLECTION_NOT_FOUND", "Coleção não encontrada", 404, id);
+  const { results } = await env.DB.prepare(
+    `${PRODUCT_CARD_SELECT} JOIN product_collection_items pci ON pci.product_id=p.id WHERE pci.collection_id=? AND p.status='published' ORDER BY pci.sort_order,p.name`,
+  ).bind(collection.id).all();
+  return ok(req, env, {...collection, products:(results||[]).map(normalizeProduct)}, id);
+}
+
+async function adminCollections(req, env, id) {
+  const [collections, products] = await env.DB.batch([
+    env.DB.prepare(`SELECT pc.id,pc.name,pc.slug,pc.description,pc.is_active isActive,pc.created_at createdAt,GROUP_CONCAT(pci.product_id) productIds,COUNT(pci.product_id) productCount FROM product_collections pc LEFT JOIN product_collection_items pci ON pci.collection_id=pc.id GROUP BY pc.id ORDER BY pc.updated_at DESC`),
+    env.DB.prepare(`SELECT id,name,slug,status FROM products ORDER BY name LIMIT 500`),
+  ]);
+  return ok(req,env,{collections:(collections.results||[]).map(row=>({...row,productIds:row.productIds?row.productIds.split(','):[]})),products:products.results||[]},id);
+}
+
+async function saveCollection(req, env, collectionId, id) {
+  const body=await readJson(req,100000),name=String(body.name||'').trim(),slug=String(body.slug||'').trim().toLowerCase();
+  const productIds=[...new Set((Array.isArray(body.productIds)?body.productIds:[]).map(value=>String(value).slice(0,100)))].slice(0,500);
+  if(!name||name.length>140||!/^[a-z0-9-]{2,100}$/.test(slug)||!productIds.length)
+    return fail(req,env,"VALIDATION_ERROR","Informe título, slug válido e selecione pelo menos um produto",422,id);
+  const targetId=collectionId||crypto.randomUUID(),statements=[];
+  if(collectionId) statements.push(env.DB.prepare(`UPDATE product_collections SET name=?,slug=?,description=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(name.slice(0,140),slug,String(body.description||'').slice(0,1000),body.isActive===false?0:1,targetId));
+  else statements.push(env.DB.prepare(`INSERT INTO product_collections(id,name,slug,description,is_active) VALUES(?,?,?,?,?)`).bind(targetId,name.slice(0,140),slug,String(body.description||'').slice(0,1000),body.isActive===false?0:1));
+  statements.push(env.DB.prepare(`DELETE FROM product_collection_items WHERE collection_id=?`).bind(targetId));
+  productIds.forEach((productId,index)=>statements.push(env.DB.prepare(`INSERT INTO product_collection_items(collection_id,product_id,sort_order) SELECT ?,id,? FROM products WHERE id=?`).bind(targetId,index,productId)));
+  try{const result=await env.DB.batch(statements);if(collectionId&&!result[0].meta.changes)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id)}catch(error){if(/unique constraint failed:.*slug/i.test(String(error)))return fail(req,env,"COLLECTION_SLUG_EXISTS","Este link já está sendo usado",409,id);throw error}
+  return ok(req,env,{id:targetId,slug,link:`colecao.html?slug=${encodeURIComponent(slug)}`},id);
+}
+
+async function deleteCollection(req, env, collectionId, id) {
+  const result=await env.DB.prepare(`DELETE FROM product_collections WHERE id=?`).bind(String(collectionId).slice(0,100)).run();
+  if(!result.meta.changes)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id);
+  return ok(req,env,{id:collectionId,deleted:true},id);
 }
 
 async function adminHeaderSpotlights(req, env, id) {
@@ -6615,6 +6682,7 @@ function adminPermissionForRequest(method, path) {
   if (path.includes("/brands")) return method === "GET" ? "products.view" : "brands.manage";
   if (path.includes("/partners")) return method === "GET" ? "products.view" : "partners.manage";
   if (path.includes("/promotions")) return "promotions.manage";
+  if (path.includes("/collections")) return "categories.manage";
   if (path.includes("/header-spotlights")) return "header_spotlights.manage";
   if (path.includes("/header-ads")) return "header_ads.manage";
   if (path.includes("/banners")) return "banners.manage";
