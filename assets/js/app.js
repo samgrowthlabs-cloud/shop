@@ -121,7 +121,10 @@ detail=async()=>{
   setSeo({title:`${product.name} — preço e análise | SHOPLAB`,description,canonical,image});
   let schema=document.head.querySelector('script[data-seo-product]');
   if(!schema){schema=document.createElement('script');schema.type='application/ld+json';schema.dataset.seoProduct='';document.head.append(schema)}
-  schema.textContent=JSON.stringify({'@context':'https://schema.org','@type':'Product',name:product.name,description,image:image?[image]:undefined,category:product.category,brand:product.brand?{'@type':'Brand',name:product.brand}:undefined,url:canonical,offers:{'@type':'Offer',url:canonical,priceCurrency:'BRL',price:(Number(product.price||0)/100).toFixed(2),availability:'https://schema.org/InStock'}});
+  const images=(product.media||[]).map(media=>media.storageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(media.storageKey)}`:media.externalUrl).filter(url=>/^https?:\/\//i.test(String(url||'')));
+  if(image&&!images.includes(image))images.unshift(image);
+  const offerRows=(product.offers||[]).filter(offer=>Number(offer.price)>0),offers=(offerRows.length?offerRows:[{price:product.price,availability:'available',store:product.store}]).map(offer=>({'@type':'Offer',url:canonical,priceCurrency:offer.currency||'BRL',price:(Number(offer.price||0)/100).toFixed(2),itemCondition:'https://schema.org/NewCondition',availability:offer.availability==='available'?'https://schema.org/InStock':'https://schema.org/OutOfStock',seller:offer.store?{'@type':'Organization',name:offer.store}:undefined}));
+  schema.textContent=JSON.stringify({'@context':'https://schema.org','@graph':[{'@type':'Product','@id':`${canonical}#product`,sku:product.slug,name:product.name,description,image:images.length?images:undefined,category:product.category,brand:product.brand?{'@type':'Brand',name:product.brand}:undefined,url:canonical,offers:offers.length===1?offers[0]:offers},{'@type':'BreadcrumbList','@id':`${canonical}#breadcrumb`,itemListElement:[{'@type':'ListItem',position:1,name:'Início',item:seoUrl('/','')},{'@type':'ListItem',position:2,name:product.category||'Produtos',item:product.categorySlug?seoUrl('/categoria',`?slug=${encodeURIComponent(product.categorySlug)}`):seoUrl('/produtos','')},{'@type':'ListItem',position:3,name:product.name,item:canonical}]}]});
   return html;
 };
 async function init(){
