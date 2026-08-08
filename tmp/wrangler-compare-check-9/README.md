@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "shoplab" generated at 2026-08-08T05:23:36.689Z.

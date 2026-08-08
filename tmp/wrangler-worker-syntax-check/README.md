@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "shoplab-syntax-check" generated at 2026-08-08T06:53:11.250Z.
