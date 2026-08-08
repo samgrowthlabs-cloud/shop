@@ -113,9 +113,19 @@ function localComparisonAnalysis(products) {
       tradeoffs: ['Compare os campos destacados na ficha técnica antes de decidir.', 'A análise usa somente informações cadastradas no catálogo.'],
       evidence: [`Menor preço: ${safe(bestValue.name)} (${money(bestValue.price)}).`, ...(bestOverall.slug !== bestValue.slug ? [`Maior nota SHOPLAB: ${safe(bestOverall.name)} (${scoreFor(bestOverall)}/100).`] : [])],
     },
-    profileScores: products.map(product => ({ productSlug: product.slug, productName: product.name, performance: scoreFor(product), value: product.slug === bestValue.slug ? 100 : Math.max(1, Math.round(Number(bestValue.price || 0) / Math.max(1, Number(product.price || 0)) * 100)), work: scoreFor(product), gaming: scoreFor(product), study: scoreFor(product), portability: scoreFor(product), confidence: 'medium', missingData: [] })),
+    profileScores: [],
     recommendations: products.map(product => ({ productSlug: product.slug, bestFor: product.slug === bestValue.slug ? 'Quem quer gastar menos entre as opções selecionadas.' : product.slug === bestOverall.slug ? 'Quem prioriza a maior nota SHOPLAB cadastrada.' : 'Quem prefere este conjunto específico de preço e recursos.', highlights: [`Preço: ${money(product.price)}`, `Nota SHOPLAB: ${scoreFor(product)}/100`] })),
   };
+}
+function normalizeProfileScoreDisplay(container) {
+  container.querySelectorAll('.comparison-score-products article').forEach(card => {
+    const rows = [...card.querySelectorAll('.comparison-score-row')];
+    const lowConfidence = [...card.querySelectorAll('small')].some(note => /baixa/i.test(note.textContent));
+    const allNeutral = rows.length > 0 && rows.every(row => Number(row.querySelector('strong')?.textContent) === 50);
+    if (!lowConfidence || !allNeutral) return;
+    rows.forEach(row => row.remove());
+    card.querySelector('h4')?.insertAdjacentHTML('afterend', '<p class=comparison-score-unavailable><strong>Dados insuficientes para pontuar</strong><span>As fichas n&atilde;o permitem diferenciar estes perfis com seguran&ccedil;a.</span></p>');
+  });
 }
 function renderRecommendations(analysis, products) {
   if (!analysis) return '';
@@ -220,6 +230,7 @@ function applyAnalysisToUI(analysis, products) {
     insight.innerHTML = renderPremiumComparisonState(analysis);
   } else {
     insight.innerHTML = renderRecommendations(analysis, products);
+    normalizeProfileScoreDisplay(insight);
   }
 
   if (analysis.freeAccess) {
@@ -273,7 +284,11 @@ function startComparisonAnalysis(slugs, products) {
 export function initializeComparisonPage() {
   if (document.body.dataset.page !== 'compare' || !activeComparison) return;
   const { slugs, products } = activeComparison;
-  applyAnalysisToUI(localComparisonAnalysis(products), products);
+  const loadingCopy = document.querySelector('.comparison-loading-copy');
+  if (loadingCopy && !loadingCopy.querySelector('.comparison-progress')) {
+    loadingCopy.insertAdjacentHTML('beforeend', '<div class=comparison-progress><i><span></span></i><small><b>Analisando</b><span>Isso pode levar alguns segundos</span></small></div>');
+  }
+  startComparisonAnalysis(slugs, products);
 
 }
 

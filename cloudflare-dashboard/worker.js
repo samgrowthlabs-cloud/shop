@@ -1759,6 +1759,14 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
     const models = [...new Set([primaryModel, fallbackModel].filter(Boolean))];
     const messages = [
         {
+          role: 'system',
+          content: 'Score every usage criterion independently from the evidence relevant to that criterion. Missing battery or screen data must not block processor, memory, storage, work, study, or value comparisons. Use neutral 50 only for the unsupported criterion, never for the entire product. Give non-neutral scores when explicit comparable facts support a difference. Put only criterion-relevant missing fields in missingData.',
+        },
+        {
+          role: 'system',
+          content: 'Resolve the purchase decision immediately: say which product to choose, why, and exactly when the alternative is better. Start with the recommendation, then cite the 2 or 3 differences that materially change the decision. Missing data is unknown, never zero and never evidence that a product is worse. If essential data is missing, use neutral score 50, low confidence, and name the missing fields. Never use extreme scores without exceptional explicit evidence. Best value is not automatically the cheapest. Evidence must contain only short, verifiable input facts. Tradeoffs must describe real losses, not generic advice. Write concise natural Brazilian Portuguese.',
+        },
+        {
           role: "system",
           content: "Você é o algoritmo SHOPLAB+ de comparação da SHOPLAB. Compare somente os dados fornecidos no título, descrição curta, descrição completa, análise editorial e especificações. Use as descrições para compreender finalidade, conteúdo, público, recursos, vantagens e limitações, especialmente em livros e produtos com ficha técnica curta. Reconheça nomes equivalentes como RAM/memória, CPU/processador, armazenamento/SSD e tela/display. Nunca transforme linguagem promocional em fato comprovado e nunca invente benchmarks, autonomia, desempenho ou especificações. Campo ausente significa dado não informado, nunca produto pior. Avalie preço, equilíbrio técnico, limitações e adequação ao uso. O melhor custo-benefício deve justificar a diferença de preço. O melhor geral precisa ser sustentado pelos dados. Informe se vale pagar mais usando yes, no ou depends e explique para qual uso. Em evidence, cite fatos exatos presentes na entrada. Gere notas comparativas de 0 a 100 para desempenho, custo-benefício, trabalho, jogos, estudos e portabilidade; elas comparam apenas estes produtos e não são benchmarks absolutos. Quando faltarem dados relevantes, reduza a confiança e liste-os em missingData. Recomende usos concretos e diferentes. Escreva em português brasileiro claro e direto. Retorne somente o JSON solicitado.",
         },
@@ -1774,7 +1782,7 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
         messages,
         ...(structured ? { response_format: { type: "json_schema", json_schema: PREMIUM_COMPARISON_SUMMARY_SCHEMA } } : {}),
         temperature: 0,
-        max_tokens: 1600,
+        max_tokens: 2400,
       }, {
         gateway: {
         id: String(env.AI_GATEWAY_ID || "default"),
@@ -1786,6 +1794,9 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
         },
       });
     const responseValue = (result) => {
+      if (result?.choices?.[0]?.message?.content) result = { response: result.choices[0].message.content };
+      else if (result?.result?.response) result = { response: result.result.response };
+      else if (result?.output_text) result = { response: result.output_text };
       if (result?.response && typeof result.response === "object") return result.response;
       const text = String(result?.response || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
       if (!text) return null;
@@ -1824,9 +1835,8 @@ for (let attempt = 0; attempt < models.length && !raw; attempt += 1) {
     console.warn(JSON.stringify({ event: "ai_product_comparison_failed", cacheKey: version, error: String(error?.message || error) }));
     const persistedFallback = { ...fallback, aiUsed: false, summary: "A análise inteligente não ficou disponível para esta combinação. Os dados técnicos abaixo continuam válidos para comparação.", premiumRequired: false };
     await env.DB.prepare(
-      `UPDATE comparison_analysis_cache SET product_slugs=?,analysis_json=?,updated_at=CURRENT_TIMESTAMP WHERE cache_key=? AND analysis_json='null'`,
-    ).bind(JSON.stringify([...slugs].sort()), JSON.stringify(persistedFallback), version).run();
-    cacheComparisonAtEdge(ctx, cacheKey, persistedFallback);
+      `DELETE FROM comparison_analysis_cache WHERE cache_key=? AND analysis_json='null'`,
+    ).bind(version).run();
     if (freeFeatureKey) await refundFreeAiCredit(env, userId, freeFeatureKey);
     else await env.DB.prepare(`UPDATE premium_ai_usage SET generations=MAX(generations-1,0),updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND period_key=?`).bind(userId, usagePeriod).run();
     return persistedFallback;
@@ -2107,6 +2117,8 @@ async function analyzeProductComparison(req, env, ctx, id) {
   if (!hasComparisonContext) return ok(req, env, technicalResult, id);
   const comparisonAiSetting = await aiFeatureSetting(env, "comparison");
   if (!comparisonAiSetting.isEnabled) return ok(req, env, technicalResult, id);
+  const comparisonAlgorithmVersion = 'v17';
+  products.forEach((product) => { product.updatedAt = `${product.updatedAt}|${comparisonAlgorithmVersion}`; });
   const version = await sha256(`comparison-v14|${comparisonAiSetting.modelId}|${comparisonAiSetting.fallbackModelId || ""}|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
   const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
   try {
