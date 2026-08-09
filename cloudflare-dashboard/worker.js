@@ -421,6 +421,8 @@ async function route(request, env, ctx, requestId) {
     return listCategories(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/site-config")
     return publicSiteConfig(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/shoplab-ads")
+    return publicShoplabAds(request, env, requestId);
   if (request.method === "GET" && /^\/share\/[^/]+$/.test(path))
     return shareProductPage(
       request,
@@ -431,6 +433,8 @@ async function route(request, env, ctx, requestId) {
     return attributedShareRedirect(request, env, path.split("/").pop());
   if (request.method === "GET" && path === "/api/v1/promotions")
     return publicPromotions(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/collections")
+    return publicFeaturedCollections(request, env, requestId);
   if (request.method === "GET" && /^\/api\/v1\/collections\/[^/]+$/.test(path))
     return publicCollection(request, env, decodeURIComponent(path.split("/").pop()), requestId);
   if (request.method === "GET" && /^\/api\/v1\/promotions\/[^/]+$/.test(path))
@@ -687,7 +691,12 @@ async function route(request, env, ctx, requestId) {
     return updateHeaderSpotlight(request, env, path.split("/").pop(), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/header-spotlights\/[^/]+$/.test(path))
     return deleteHeaderSpotlight(request, env, path.split("/").pop(), requestId);
-  if (request.method === "GET" && path === "/api/v1/admin/header-ads")
+  if (request.method === "GET" && path === "/api/v1/admin/shoplab-ads") return adminShoplabAds(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/shoplab-ads") return createShoplabAd(request, env, requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/shoplab-ads\/[^/]+$/.test(path)) return updateShoplabAd(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/shoplab-ads\/[^/]+$/.test(path)) return deleteShoplabAd(request, env, path.split("/").pop(), requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/shoplab-ad-assignments") return adminShoplabAdAssignments(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/shoplab-ad-assignments") return saveShoplabAdAssignments(request, env, requestId);  if (request.method === "GET" && path === "/api/v1/admin/header-ads")
     return adminHeaderAds(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/header-ads")
     return createHeaderAd(request, env, requestId);
@@ -2185,6 +2194,16 @@ const generated = await generateAndPersistProductComparison(env, ctx, {
   return ok(req, env, { ...technicalResult, premium: premium.premium, premiumRequired: false, freeAccess: !premium.premium, freeCredits: freeAccess, processing: true, usage: premium.usage }, id);
 }
 
+function repairLegacyText(value) {
+  let text = String(value ?? "");
+  for (let pass = 0; pass < 3; pass += 1) {
+    text = text
+      .replace(/\u00c3\u0192(?:\u00c2)?([\u00a0-\u00bf])/g, (_, tail) => String.fromCharCode(tail.charCodeAt(0) + 0x40))
+      .replace(/\u00c3([\u0080-\u00bf])/g, (_, tail) => String.fromCharCode(tail.charCodeAt(0) + 0x40));
+  }
+  return text;
+}
+
 function premiumRelationText(value) {
   return String(value || "")
     .normalize("NFD")
@@ -2315,7 +2334,7 @@ function moneyCents(value) {
 
 async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
   if (!env.AI || !candidates.length) return null;
-  const version = await sha256(`premium-related-v1|${source.slug}:${source.updatedAt}:${source.price}|${candidates.map((product) => `${product.slug}:${product.updatedAt}:${product.price}`).join("|")}`);
+  const version = await sha256(`premium-related-v2|${source.slug}:${source.updatedAt}:${source.price}|${candidates.map((product) => `${product.slug}:${product.updatedAt}:${product.price}`).join("|")}`);
   try {
     const compact = (product) => ({
       id: product.id,
@@ -2352,7 +2371,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
         id: String(env.AI_GATEWAY_ID || "default"),
         skipCache: false,
         cacheTtl: 2592000,
-        cacheKey: `premium-related-v1:${version}`,
+        cacheKey: `premium-related-v2:${version}`,
         collectLog: true,
         metadata: { feature: "premium-related-products", sourceSlug: source.slug },
       },
@@ -2382,7 +2401,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
         premiumRelation: true,
         relationType,
         relationLabel: labels[relationType],
-        relationReason: String(recommendation.reason || "").trim().slice(0, 240),
+        relationReason: repairLegacyText(recommendation.reason || "").trim().slice(0, 240),
         priceDifferenceCents: Number(product.price || 0) - Number(source.price || 0),
       });
     }
@@ -4074,14 +4093,14 @@ async function adminImportProductLink(req, env, id) {
 
 async function adminAiProductDraft(req, env, id) {
   if (!(await requireAdmin(req, env)))
-    return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+    return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   if (!env.AI)
-    return fail(req, env, "AI_NOT_CONFIGURED", "O binding Workers AI chamado AI nÃ£o foi configurado", 503, id);
+    return fail(req, env, "AI_NOT_CONFIGURED", "O binding Workers AI chamado AI não foi configurado", 503, id);
   const body = await readJson(req, 24000);
   const source = String(body.source || "").trim().slice(0, 12000);
   const current = body.current && typeof body.current === "object" ? body.current : {};
   if (!source && !String(current.name || "").trim() && !String(current.fullDescription || "").trim())
-    return fail(req, env, "VALIDATION_ERROR", "Informe um tÃ­tulo, descriÃ§Ã£o ou texto de origem", 422, id);
+    return fail(req, env, "VALIDATION_ERROR", "Informe um título, descrição ou texto de origem", 422, id);
   const categories = await env.DB.prepare(
     "SELECT id,name FROM categories WHERE is_active=1 ORDER BY sort_order,name LIMIT 100",
   ).all();
@@ -4092,14 +4111,14 @@ async function adminAiProductDraft(req, env, id) {
       return fail(req, env, "AI_FEATURE_DISABLED", "O assistente de cadastro está desativado", 409, id);
     const result = await env.AI.run(aiSetting.modelId, {
       messages: [
-        { role: "system", content: `VocÃª auxilia o cadastro editorial de produtos da SHOPLAB. Gere portuguÃªs brasileiro claro, objetivo e sem exageros. Preserve marca, modelo, capacidade e medidas. Nunca invente especificaÃ§Ãµes, avaliaÃ§Ãµes, preÃ§os, garantias ou benefÃ­cios. Se um dado nÃ£o estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hÃ­fen. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro fÃ­sico, digital para produto digital e affiliate nos demais casos. A descriÃ§Ã£o curta deve ter atÃ© 300 caracteres. imageAlt deve descrever o produto de forma curta.` },
+        { role: "system", content: `Você auxilia o cadastro editorial de produtos da SHOPLAB. Gere português brasileiro claro, objetivo e sem exageros. Preserve marca, modelo, capacidade e medidas. Nunca invente especificações, avaliações, preços, garantias ou benefícios. Se um dado não estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hífen. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro físico, digital para produto digital e affiliate nos demais casos. A descrição curta deve ter até 300 caracteres. imageAlt deve descrever o produto de forma curta.` },
         { role: "user", content: JSON.stringify({ source, current }).slice(0, 16000) },
       ],
       response_format: { type: "json_schema", json_schema: ADMIN_PRODUCT_DRAFT_SCHEMA },
       temperature: 0.2, max_tokens: 1200,
     });
     const raw = typeof result?.response === "string" ? JSON.parse(result.response) : result?.response;
-    if (!raw || typeof raw.name !== "string") throw new Error("Resposta estruturada invÃ¡lida");
+    if (!raw || typeof raw.name !== "string") throw new Error("Resposta estruturada inválida");
     const validCategories = new Set((categories.results || []).map((item) => item.id));
     const slug = normalizeSearch(raw.slug || raw.name).replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
     const specifications = (Array.isArray(raw.specifications) ? raw.specifications : [])
@@ -4115,7 +4134,7 @@ async function adminAiProductDraft(req, env, id) {
     }, id);
   } catch (error) {
     console.warn(JSON.stringify({ event: "admin_ai_product_draft_failed", requestId: id, error: String(error?.message || error) }));
-    return fail(req, env, "AI_GENERATION_FAILED", "NÃ£o foi possÃ­vel gerar as sugestÃµes agora", 502, id);
+    return fail(req, env, "AI_GENERATION_FAILED", "Não foi possível gerar as sugestões agora", 502, id);
   }
 }
 
@@ -4834,10 +4853,10 @@ async function updateAdminUserAccess(req,env,userId,id){
 }
 
 async function grantAdminUserPremium(req,env,userId,id){
-  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","NÃ£o autorizado",401,id);
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
   const body=await readJson(req,4096),days=clamp(body.days,1,3650,30);
   const profile=await env.DB.prepare(`SELECT email FROM user_profiles WHERE user_id=?`).bind(userId).first();
-  if(!profile)return fail(req,env,"USER_NOT_FOUND","UsuÃ¡rio nÃ£o encontrado",404,id);
+  if(!profile)return fail(req,env,"USER_NOT_FOUND","Usuário não encontrado",404,id);
   const now=Date.now(),requestedExpiry=Date.parse(String(body.claimExpiresAt||""));
   const claimExpiresAt=new Date(Number.isFinite(requestedExpiry)&&requestedExpiry>now?Math.min(requestedExpiry,now+365*86400000):now+7*86400000).toISOString();
   const grantId=crypto.randomUUID();
@@ -4850,7 +4869,7 @@ async function grantAdminUserPremium(req,env,userId,id){
 }
 
 async function revokeAdminUserPremium(req,env,userId,id){
-  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","NÃ£o autorizado",401,id);
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
   const paidSubscription=await env.DB.prepare(
     `SELECT id FROM premium_subscriptions WHERE user_id=? AND status='authorized' LIMIT 1`,
   ).bind(userId).first();
@@ -4861,7 +4880,7 @@ async function revokeAdminUserPremium(req,env,userId,id){
      LIMIT 1`,
   ).bind(userId).first();
   if(paidSubscription||paidPass)
-    return fail(req,env,"PAID_PREMIUM_ACCESS","O Plus pago nÃ£o pode ser retirado como prÃªmio",409,id);
+    return fail(req,env,"PAID_PREMIUM_ACCESS","O Plus pago não pode ser retirado como prêmio",409,id);
   const [passes,grants]=await env.DB.batch([
     env.DB.prepare(
       `UPDATE premium_pass_payments SET status='cancelled',updated_at=CURRENT_TIMESTAMP
@@ -4871,7 +4890,7 @@ async function revokeAdminUserPremium(req,env,userId,id){
     env.DB.prepare(`UPDATE premium_access_grants SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='pending'`).bind(userId),
   ]);
   if(!Number(passes.meta?.changes||0)&&!Number(grants.meta?.changes||0))
-    return fail(req,env,"ADMIN_PREMIUM_NOT_FOUND","Este usuÃ¡rio nÃ£o possui Plus concedido pelo Admin",404,id);
+    return fail(req,env,"ADMIN_PREMIUM_NOT_FOUND","Este usuário não possui Plus concedido pelo Admin",404,id);
   return ok(req,env,{userId,premium:false,revoked:true},id);
 }
 
@@ -5900,6 +5919,15 @@ async function storeSiteImage(env, file, prefix, ownerId) {
   return key;
 }
 
+// Ads can use a short, muted video without making other CMS uploaders accept video.
+async function storeHeaderAdMedia(env, file, ownerId) {
+  const valid = file instanceof File && (file.type.startsWith("image/") || ["video/mp4", "video/webm"].includes(file.type));
+  if (!valid || file.size > 25 * 1024 * 1024) throw new Error("Envie uma imagem, MP4 ou WebM de até 25 MB");
+  const extension = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8);
+  const key = `site/header-ad-strips/${ownerId}/${crypto.randomUUID()}.${extension}`;
+  await env.MEDIA.put(key, file.stream(), { httpMetadata: { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" }, customMetadata: { ownerId, originalName: file.name.slice(0, 120) } });
+  return key;
+}
 async function adminBanners(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
@@ -6348,38 +6376,31 @@ async function removeThemeMedia(req, env, themeId, kind, id) {
 }
 
 async function publicCollection(req, env, slug, id) {
-  const collection = await env.DB.prepare(
-    `SELECT id,name,slug,description FROM product_collections WHERE slug=? AND is_active=1`,
-  ).bind(String(slug).slice(0,100)).first();
-  if (!collection) return fail(req, env, "COLLECTION_NOT_FOUND", "Coleção não encontrada", 404, id);
-  const { results } = await env.DB.prepare(
-    `${PRODUCT_CARD_SELECT} JOIN product_collection_items pci ON pci.product_id=p.id WHERE pci.collection_id=? AND p.status='published' ORDER BY pci.sort_order,p.name`,
-  ).bind(collection.id).all();
-  return ok(req, env, {...collection, products:(results||[]).map(normalizeProduct)}, id);
+  const collection=await env.DB.prepare(`SELECT id,name,slug,description FROM product_collections WHERE slug=? AND is_active=1`).bind(String(slug).slice(0,100)).first();
+  if(!collection)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id);
+  const {results=[]}=await env.DB.prepare(`${PRODUCT_CARD_SELECT} LEFT JOIN product_collection_items pci ON pci.product_id=p.id AND pci.collection_id=? LEFT JOIN product_collection_categories pcc ON pcc.category_id=p.category_id AND pcc.collection_id=? WHERE p.status='published' AND (pci.collection_id IS NOT NULL OR pcc.collection_id IS NOT NULL) ORDER BY CASE WHEN pci.product_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(pci.sort_order,pcc.sort_order),p.name`).bind(collection.id,collection.id).all();
+  return ok(req,env,{...collection,products:results.map(normalizeProduct)},id);
 }
-
+async function publicFeaturedCollections(req,env,id){
+  const {results=[]}=await env.DB.prepare(`SELECT id,name,slug,description,home_title homeTitle FROM product_collections WHERE is_active=1 AND is_home_featured=1 ORDER BY home_sort_order,name LIMIT 8`).all(),collections=[];
+  for(const collection of results){const products=await env.DB.prepare(`${PRODUCT_CARD_SELECT} LEFT JOIN product_collection_items pci ON pci.product_id=p.id AND pci.collection_id=? LEFT JOIN product_collection_categories pcc ON pcc.category_id=p.category_id AND pcc.collection_id=? WHERE p.status='published' AND (pci.collection_id IS NOT NULL OR pcc.collection_id IS NOT NULL) ORDER BY CASE WHEN pci.product_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(pci.sort_order,pcc.sort_order),p.name LIMIT 12`).bind(collection.id,collection.id).all();if(products.results?.length)collections.push({...collection,products:products.results.map(normalizeProduct)})}
+  return ok(req,env,collections,id);
+}
 async function adminCollections(req, env, id) {
-  const [collections, products] = await env.DB.batch([
-    env.DB.prepare(`SELECT pc.id,pc.name,pc.slug,pc.description,pc.is_active isActive,pc.created_at createdAt,GROUP_CONCAT(pci.product_id) productIds,COUNT(pci.product_id) productCount FROM product_collections pc LEFT JOIN product_collection_items pci ON pci.collection_id=pc.id GROUP BY pc.id ORDER BY pc.updated_at DESC`),
-    env.DB.prepare(`SELECT id,name,slug,status FROM products ORDER BY name LIMIT 500`),
+  const [collections,products,categories]=await env.DB.batch([
+    env.DB.prepare(`SELECT pc.id,pc.name,pc.slug,pc.description,pc.is_active isActive,pc.is_home_featured isHomeFeatured,pc.home_sort_order homeSortOrder,pc.home_title homeTitle,GROUP_CONCAT(DISTINCT pci.product_id) productIds,GROUP_CONCAT(DISTINCT pcc.category_id) categoryIds,COUNT(DISTINCT pci.product_id) productCount,COUNT(DISTINCT pcc.category_id) categoryCount FROM product_collections pc LEFT JOIN product_collection_items pci ON pci.collection_id=pc.id LEFT JOIN product_collection_categories pcc ON pcc.collection_id=pc.id GROUP BY pc.id ORDER BY pc.home_sort_order,pc.updated_at DESC`),
+    env.DB.prepare(`SELECT id,name,slug,status FROM products ORDER BY name LIMIT 500`),env.DB.prepare(`SELECT id,name,slug,is_active isActive FROM categories ORDER BY sort_order,name`)
   ]);
-  return ok(req,env,{collections:(collections.results||[]).map(row=>({...row,productIds:row.productIds?row.productIds.split(','):[]})),products:products.results||[]},id);
+  return ok(req,env,{collections:(collections.results||[]).map(row=>({...row,productIds:row.productIds?row.productIds.split(','):[],categoryIds:row.categoryIds?row.categoryIds.split(','):[]})),products:products.results||[],categories:categories.results||[]},id);
 }
-
-async function saveCollection(req, env, collectionId, id) {
-  const body=await readJson(req,100000),name=String(body.name||'').trim(),slug=String(body.slug||'').trim().toLowerCase();
-  const productIds=[...new Set((Array.isArray(body.productIds)?body.productIds:[]).map(value=>String(value).slice(0,100)))].slice(0,500);
-  if(!name||name.length>140||!/^[a-z0-9-]{2,100}$/.test(slug)||!productIds.length)
-    return fail(req,env,"VALIDATION_ERROR","Informe título, slug válido e selecione pelo menos um produto",422,id);
-  const targetId=collectionId||crypto.randomUUID(),statements=[];
-  if(collectionId) statements.push(env.DB.prepare(`UPDATE product_collections SET name=?,slug=?,description=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(name.slice(0,140),slug,String(body.description||'').slice(0,1000),body.isActive===false?0:1,targetId));
-  else statements.push(env.DB.prepare(`INSERT INTO product_collections(id,name,slug,description,is_active) VALUES(?,?,?,?,?)`).bind(targetId,name.slice(0,140),slug,String(body.description||'').slice(0,1000),body.isActive===false?0:1));
-  statements.push(env.DB.prepare(`DELETE FROM product_collection_items WHERE collection_id=?`).bind(targetId));
-  productIds.forEach((productId,index)=>statements.push(env.DB.prepare(`INSERT INTO product_collection_items(collection_id,product_id,sort_order) SELECT ?,id,? FROM products WHERE id=?`).bind(targetId,index,productId)));
-  try{const result=await env.DB.batch(statements);if(collectionId&&!result[0].meta.changes)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id)}catch(error){if(/unique constraint failed:.*slug/i.test(String(error)))return fail(req,env,"COLLECTION_SLUG_EXISTS","Este link já está sendo usado",409,id);throw error}
-  return ok(req,env,{id:targetId,slug,link:`colecao.html?slug=${encodeURIComponent(slug)}`},id);
+async function saveCollection(req,env,collectionId,id){
+  const body=await readJson(req,100000),name=String(body.name||'').trim(),slug=String(body.slug||'').trim().toLowerCase(),productIds=[...new Set((Array.isArray(body.productIds)?body.productIds:[]).map(v=>String(v).slice(0,100)))].slice(0,500),categoryIds=[...new Set((Array.isArray(body.categoryIds)?body.categoryIds:[]).map(v=>String(v).slice(0,100)))].slice(0,100);
+  if(!name||name.length>140||!/^[a-z0-9-]{2,100}$/.test(slug)||(!productIds.length&&!categoryIds.length))return fail(req,env,"VALIDATION_ERROR","Informe título, slug válido e selecione uma categoria ou produto",422,id);
+  const targetId=collectionId||crypto.randomUUID(),featured=body.isHomeFeatured===true?1:0,homeOrder=clamp(body.homeSortOrder,-10000,10000,0),homeTitle=String(body.homeTitle||'').trim().slice(0,140),statements=[];
+  if(collectionId)statements.push(env.DB.prepare(`UPDATE product_collections SET name=?,slug=?,description=?,is_active=?,is_home_featured=?,home_sort_order=?,home_title=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(name.slice(0,140),slug,String(body.description||'').slice(0,1000),body.isActive===false?0:1,featured,homeOrder,homeTitle,targetId));else statements.push(env.DB.prepare(`INSERT INTO product_collections(id,name,slug,description,is_active,is_home_featured,home_sort_order,home_title) VALUES(?,?,?,?,?,?,?,?)`).bind(targetId,name.slice(0,140),slug,String(body.description||'').slice(0,1000),body.isActive===false?0:1,featured,homeOrder,homeTitle));
+  statements.push(env.DB.prepare(`DELETE FROM product_collection_items WHERE collection_id=?`).bind(targetId),env.DB.prepare(`DELETE FROM product_collection_categories WHERE collection_id=?`).bind(targetId));productIds.forEach((v,i)=>statements.push(env.DB.prepare(`INSERT INTO product_collection_items(collection_id,product_id,sort_order) SELECT ?,id,? FROM products WHERE id=?`).bind(targetId,i,v)));categoryIds.forEach((v,i)=>statements.push(env.DB.prepare(`INSERT INTO product_collection_categories(collection_id,category_id,sort_order) SELECT ?,id,? FROM categories WHERE id=?`).bind(targetId,i,v)));
+  try{const result=await env.DB.batch(statements);if(collectionId&&!result[0].meta.changes)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id)}catch(error){if(/unique constraint failed:.*slug/i.test(String(error)))return fail(req,env,"COLLECTION_SLUG_EXISTS","Este link já está sendo usado",409,id);throw error}return ok(req,env,{id:targetId,slug,link:`colecao.html?slug=${encodeURIComponent(slug)}`},id);
 }
-
 async function deleteCollection(req, env, collectionId, id) {
   const result=await env.DB.prepare(`DELETE FROM product_collections WHERE id=?`).bind(String(collectionId).slice(0,100)).run();
   if(!result.meta.changes)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id);
@@ -6493,8 +6514,23 @@ async function deleteHeaderSpotlight(req, env, spotlightId, id) {
   return ok(req, env, { deleted: true }, id);
 }
 
-async function adminHeaderAds(req, env, id) {
-  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+async function ensureShoplabAdsSchema(env){
+  await env.DB.batch([
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ads(id TEXT PRIMARY KEY,name TEXT NOT NULL,description TEXT,public_title TEXT,ad_label TEXT NOT NULL DEFAULT 'PUBLICIDADE · SHOPLAB ADSENSE',show_header INTEGER NOT NULL DEFAULT 1,dismissible INTEGER NOT NULL DEFAULT 1,dismiss_minutes INTEGER NOT NULL DEFAULT 30,cta_text TEXT NOT NULL DEFAULT 'Saiba mais',cta_color TEXT NOT NULL DEFAULT '#075fce',media_type TEXT NOT NULL DEFAULT 'image',storage_key TEXT,link_url TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'draft',priority INTEGER NOT NULL DEFAULT 1,starts_at TEXT,ends_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ad_assignments(id TEXT PRIMARY KEY,ad_id TEXT NOT NULL,device TEXT NOT NULL,page_kind TEXT NOT NULL,position_key TEXT NOT NULL,category_slug TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(device,page_kind,position_key,category_slug))`)
+  ]);
+  const columns=[['public_title','TEXT'],['ad_label',`TEXT NOT NULL DEFAULT 'PUBLICIDADE · SHOPLAB ADSENSE'`],['show_header','INTEGER NOT NULL DEFAULT 1'],['dismissible','INTEGER NOT NULL DEFAULT 1'],['dismiss_minutes','INTEGER NOT NULL DEFAULT 30'],['cta_text',"TEXT NOT NULL DEFAULT 'Saiba mais'"],['cta_color',"TEXT NOT NULL DEFAULT '#075fce'"]];
+  for(const [column,definition] of columns){try{await env.DB.prepare(`ALTER TABLE shoplab_ads ADD COLUMN ${column} ${definition}`).run()}catch(error){if(!new RegExp(`duplicate column name:.*${column}`,'i').test(String(error?.message||error)))throw error}}
+}
+function shoplabAdPresentation(form,name){return{publicTitle:String(form.get('publicTitle')||name).trim().slice(0,140),adLabel:String(form.get('adLabel')||'PUBLICIDADE · SHOPLAB ADSENSE').trim().slice(0,80),showHeader:form.get('showHeader')==='0'?0:1,dismissible:form.get('dismissible')==='0'?0:1,dismissMinutes:clamp(form.get('dismissMinutes'),1,10080,30),ctaText:String(form.get('ctaText')||'Saiba mais').trim().slice(0,40),ctaColor:/^#[0-9a-f]{6}$/i.test(String(form.get('ctaColor')||''))?String(form.get('ctaColor')):'#075fce'}}
+async function adminShoplabAds(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const {results}=await env.DB.prepare(`SELECT id,name,description,public_title publicTitle,ad_label adLabel,show_header showHeader,dismissible,dismiss_minutes dismissMinutes,cta_text ctaText,cta_color ctaColor,media_type mediaType,storage_key storageKey,link_url linkUrl,status,priority,starts_at startsAt,ends_at endsAt FROM shoplab_ads ORDER BY priority DESC,created_at DESC`).all();return ok(req,env,results||[],id)}
+async function createShoplabAd(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);if(!env.MEDIA)return fail(req,env,'R2_NOT_CONFIGURED','Mídia não configurada',503,id);const form=await req.formData(),name=String(form.get('name')||'').trim().slice(0,140),link=validDestination(form.get('linkUrl')),status=['draft','active','paused'].includes(form.get('status'))?form.get('status'):'draft',file=form.get('file'),presentation=shoplabAdPresentation(form,name);if(!name||!link)return fail(req,env,'VALIDATION_ERROR','Informe nome e destino válidos',422,id);const adId=crypto.randomUUID();let storageKey=null;try{if(file instanceof File&&file.size)storageKey=await storeHeaderAdMedia(env,file,adId)}catch(error){return fail(req,env,'INVALID_FILE',error.message,422,id)}const mediaType=file instanceof File&&file.type.startsWith('video/')?'video':'image';await env.DB.prepare(`INSERT INTO shoplab_ads(id,name,description,public_title,ad_label,show_header,dismissible,dismiss_minutes,cta_text,cta_color,media_type,storage_key,link_url,status,priority) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(adId,name,String(form.get('description')||'').slice(0,240),presentation.publicTitle,presentation.adLabel,presentation.showHeader,presentation.dismissible,presentation.dismissMinutes,presentation.ctaText,presentation.ctaColor,mediaType,storageKey,link,status,clamp(form.get('priority'),1,1000,1)).run();return ok(req,env,{id:adId,storageKey},id)}
+async function updateShoplabAd(req,env,adId,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const current=await env.DB.prepare(`SELECT storage_key storageKey,media_type mediaType FROM shoplab_ads WHERE id=?`).bind(adId).first();if(!current)return fail(req,env,'AD_NOT_FOUND','Anúncio não encontrado',404,id);const form=await req.formData(),name=String(form.get('name')||'').trim().slice(0,140),link=validDestination(form.get('linkUrl')),status=['draft','active','paused'].includes(form.get('status'))?form.get('status'):'draft',file=form.get('file'),presentation=shoplabAdPresentation(form,name);if(!name||!link)return fail(req,env,'VALIDATION_ERROR','Informe nome e destino válidos',422,id);let storageKey=current.storageKey,mediaType=current.mediaType;try{if(file instanceof File&&file.size){if(!env.MEDIA)return fail(req,env,'R2_NOT_CONFIGURED','Mídia não configurada',503,id);storageKey=await storeHeaderAdMedia(env,file,adId);mediaType=file.type.startsWith('video/')?'video':'image'}}catch(error){return fail(req,env,'INVALID_FILE',error.message,422,id)}await env.DB.prepare(`UPDATE shoplab_ads SET name=?,description=?,public_title=?,ad_label=?,show_header=?,dismissible=?,dismiss_minutes=?,cta_text=?,cta_color=?,media_type=?,storage_key=?,link_url=?,status=?,priority=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(name,String(form.get('description')||'').slice(0,240),presentation.publicTitle,presentation.adLabel,presentation.showHeader,presentation.dismissible,presentation.dismissMinutes,presentation.ctaText,presentation.ctaColor,mediaType,storageKey,link,status,clamp(form.get('priority'),1,1000,1),adId).run();if(file instanceof File&&file.size&&current.storageKey&&current.storageKey!==storageKey&&env.MEDIA)await env.MEDIA.delete(current.storageKey);return ok(req,env,{id:adId,storageKey,status},id)}
+async function deleteShoplabAd(req,env,adId,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const ad=await env.DB.prepare(`SELECT storage_key storageKey FROM shoplab_ads WHERE id=?`).bind(adId).first();if(!ad)return fail(req,env,'AD_NOT_FOUND','Anúncio não encontrado',404,id);await env.DB.batch([env.DB.prepare(`DELETE FROM shoplab_ad_assignments WHERE ad_id=?`).bind(adId),env.DB.prepare(`DELETE FROM shoplab_ads WHERE id=?`).bind(adId)]);if(ad.storageKey&&env.MEDIA)await env.MEDIA.delete(ad.storageKey);return ok(req,env,{deleted:true},id)}
+async function adminShoplabAdAssignments(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const {results}=await env.DB.prepare(`SELECT id,ad_id adId,device,page_kind pageKind,position_key positionKey,category_slug categorySlug FROM shoplab_ad_assignments`).all();return ok(req,env,results||[],id)}
+async function saveShoplabAdAssignments(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const body=await readJson(req,120000),items=Array.isArray(body.items)?body.items.slice(0,200):[],devices=new Set(['desktop','mobile']),pages=new Set(['home','products','category','product']);await env.DB.prepare(`DELETE FROM shoplab_ad_assignments`).run();let saved=0;for(const item of items){if(!devices.has(item.device)||!pages.has(item.pageKind)||!item.adId||!item.positionKey)continue;const adId=String(item.adId);await env.DB.batch([env.DB.prepare(`INSERT INTO shoplab_ad_assignments(id,ad_id,device,page_kind,position_key,category_slug) VALUES(?,?,?,?,?,?)`).bind(crypto.randomUUID(),adId,item.device,item.pageKind,String(item.positionKey).slice(0,80),String(item.categorySlug||'').slice(0,100)),env.DB.prepare(`UPDATE shoplab_ads SET status='active',updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(adId)]);saved++}return ok(req,env,{saved},id)}
+async function publicShoplabAds(req,env,id){await ensureShoplabAdsSchema(env);const url=new URL(req.url),device=url.searchParams.get('device')==='mobile'?'mobile':'desktop',pageKind=['home','products','category','product'].includes(url.searchParams.get('page'))?url.searchParams.get('page'):'home',category=String(url.searchParams.get('category')||'').slice(0,100),origin=url.origin,{results}=await env.DB.prepare(`SELECT a.id,a.name,a.public_title publicTitle,a.ad_label adLabel,a.show_header showHeader,a.dismissible,a.dismiss_minutes dismissMinutes,a.cta_text ctaText,a.cta_color ctaColor,a.media_type mediaType,a.storage_key storageKey,a.link_url linkUrl,x.position_key positionKey FROM shoplab_ad_assignments x JOIN shoplab_ads a ON a.id=x.ad_id WHERE x.device=? AND x.page_kind=? AND (x.category_slug='' OR x.category_slug=?) AND a.status='active' AND (a.starts_at IS NULL OR datetime(a.starts_at)<=CURRENT_TIMESTAMP) AND (a.ends_at IS NULL OR datetime(a.ends_at)>=CURRENT_TIMESTAMP) ORDER BY a.priority DESC`).bind(device,pageKind,category).all();return ok(req,env,(results||[]).map(row=>({...row,mediaUrl:row.storageKey?`${origin}/media/${encodeURIComponent(row.storageKey)}`:null,storageKey:undefined})),id)}async function adminHeaderAds(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
     `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,placement,display_duration_ms displayDurationMs,style_json styleJson,updated_at updatedAt FROM header_ad_strips ORDER BY placement,sort_order,created_at`,
   ).all();
@@ -6504,7 +6540,7 @@ async function adminHeaderAds(req, env, id) {
 function headerAdValues(body) {
   const rawStyle=parse(body.styleJson||"{}",{}),safeColor=(value,fallback)=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):fallback;
   const layers=(Array.isArray(rawStyle.layers)?rawStyle.layers:[]).slice(0,24).map((layer,index)=>({id:String(layer.id||crypto.randomUUID()).slice(0,100),type:layer.type==="text"?"text":"image",text:String(layer.text||"").slice(0,300),storageKey:String(layer.storageKey||"").slice(0,500),device:["both","desktop","mobile"].includes(layer.device)?layer.device:"both",x:clamp(layer.x,0,100,50),y:clamp(layer.y,0,100,50),width:clamp(layer.width,2,100,20),scale:clamp(layer.scale,10,500,100),rotation:clamp(layer.rotation,-180,180,0),opacity:clamp(layer.opacity,0,100,100),fontSize:clamp(layer.fontSize,8,72,16),fontWeight:clamp(layer.fontWeight,300,900,700),color:safeColor(layer.color,"#ffffff"),zIndex:clamp(layer.zIndex,1,100,index+1)}));
-  const styleJson=JSON.stringify({backgroundType:rawStyle.backgroundType==="gradient"?"gradient":"solid",backgroundColor:safeColor(rawStyle.backgroundColor,"#ffffff"),gradientStart:safeColor(rawStyle.gradientStart,"#ffffff"),gradientEnd:safeColor(rawStyle.gradientEnd,"#eef5f3"),gradientAngle:clamp(rawStyle.gradientAngle,0,360,90),layers});
+  const targetPages=(Array.isArray(rawStyle.targetPages)?rawStyle.targetPages:[]).filter(value=>["home","products","category","search","brand","author","new","product","promotions"].includes(value)).slice(0,9),categorySlugs=(Array.isArray(rawStyle.categorySlugs)?rawStyle.categorySlugs:[]).map(value=>String(value).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,100)).filter(Boolean).slice(0,30); const styleJson=JSON.stringify({backgroundType:rawStyle.backgroundType==="gradient"?"gradient":"solid",backgroundColor:safeColor(rawStyle.backgroundColor,"#ffffff"),gradientStart:safeColor(rawStyle.gradientStart,"#ffffff"),gradientEnd:safeColor(rawStyle.gradientEnd,"#eef5f3"),gradientAngle:clamp(rawStyle.gradientAngle,0,360,90),targetPages,categorySlugs,layers});
   return [
     String(body.name || "").trim().slice(0, 140),
     validDestination(body.linkUrl),
@@ -6531,14 +6567,14 @@ function headerAdValues(body) {
 
 function validateHeaderAd(body) {
   const values = headerAdValues(body);
-  if (!values[0]) return "Informe um nome para o anÃºncio";
-  if (!values[1]) return "Informe um destino vÃ¡lido";
-  if (values[3] && values[4] && Date.parse(values[4]) <= Date.parse(values[3])) return "O tÃ©rmino deve ser posterior ao inÃ­cio";
+  if (!values[0]) return "Informe um nome para o anúncio";
+  if (!values[1]) return "Informe um destino válido";
+  if (values[3] && values[4] && Date.parse(values[4]) <= Date.parse(values[3])) return "O término deve ser posterior ao início";
   return null;
 }
 
 async function createHeaderAd(req, env, id) {
-  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const body = await readJson(req, 12000), validation = validateHeaderAd(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const adId = crypto.randomUUID();
@@ -6549,24 +6585,24 @@ async function createHeaderAd(req, env, id) {
 }
 
 async function updateHeaderAd(req, env, adId, id) {
-  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const body = await readJson(req, 12000), validation = validateHeaderAd(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
     `UPDATE header_ad_strips SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,image_position_x=?,image_position_y=?,image_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,image_rotation=?,animation_preset=?,animation_duration=?,animation_delay=?,placement=?,display_duration_ms=?,style_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
   ).bind(...headerAdValues(body), adId).run();
-  if (!result.meta.changes) return fail(req, env, "HEADER_AD_NOT_FOUND", "AnÃºncio nÃ£o encontrado", 404, id);
+  if (!result.meta.changes) return fail(req, env, "HEADER_AD_NOT_FOUND", "Anúncio não encontrado", 404, id);
   return ok(req, env, { id: adId }, id);
 }
 
 async function uploadHeaderAdMedia(req, env, adId, id) {
-  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
-  if (!env.MEDIA) return fail(req, env, "R2_NOT_CONFIGURED", "O binding R2 MEDIA nÃ£o foi configurado", 503, id);
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  if (!env.MEDIA) return fail(req, env, "R2_NOT_CONFIGURED", "O binding R2 MEDIA não foi configurado", 503, id);
   const current = await env.DB.prepare(`SELECT storage_key storageKey FROM header_ad_strips WHERE id=?`).bind(adId).first();
-  if (!current) return fail(req, env, "HEADER_AD_NOT_FOUND", "AnÃºncio nÃ£o encontrado", 404, id);
+  if (!current) return fail(req, env, "HEADER_AD_NOT_FOUND", "Anúncio não encontrado", 404, id);
   const form = await req.formData();
   let storageKey;
-  try { storageKey = await storeSiteImage(env, form.get("file"), "header-ad-strips", adId); }
+  try { storageKey = await storeHeaderAdMedia(env, form.get("file"), adId); }
   catch (error) { return fail(req, env, "INVALID_FILE", error.message, 422, id); }
   await env.DB.prepare(`UPDATE header_ad_strips SET storage_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(storageKey, adId).run();
   if (current.storageKey) await env.MEDIA.delete(current.storageKey);
@@ -6584,9 +6620,9 @@ async function uploadHeaderAdLayer(req, env, adId, id) {
 }
 
 async function deleteHeaderAd(req, env, adId, id) {
-  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const ad = await env.DB.prepare(`SELECT storage_key storageKey FROM header_ad_strips WHERE id=?`).bind(adId).first();
-  if (!ad) return fail(req, env, "HEADER_AD_NOT_FOUND", "AnÃºncio nÃ£o encontrado", 404, id);
+  if (!ad) return fail(req, env, "HEADER_AD_NOT_FOUND", "Anúncio não encontrado", 404, id);
   await env.DB.prepare(`DELETE FROM header_ad_strips WHERE id=?`).bind(adId).run();
   if (ad.storageKey && env.MEDIA) await env.MEDIA.delete(ad.storageKey);
   return ok(req, env, { deleted: true }, id);
@@ -8226,6 +8262,7 @@ async function personalizedRecommendations(req, env, id) {
       COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,
       pa.name store,o.id offerId,
       COALESCE(ci.weight,0)*1.6+COALESCE(bi.weight,0)*0.9+
+      COALESCE((SELECT SUM(ci2.weight)*0.7 FROM product_collection_categories pcc JOIN category_interest ci2 ON ci2.category_id=pcc.category_id WHERE pcc.collection_id IN (SELECT pcc2.collection_id FROM product_collection_categories pcc2 WHERE pcc2.category_id=p.category_id)),0)+
       COALESCE(activity.score,0)*0.12+COALESCE(p.editorial_score,0)*0.08+
       p.is_featured*4+CASE WHEN p.published_at>=datetime('now','-30 days') THEN 3 ELSE 0 END+
       COALESCE((SELECT SUM(rs.weight)*4 FROM recent_searches rs

@@ -1,4 +1,4 @@
-const VERSION='shoplab-pwa-v6-comparison-refresh';
+const VERSION='shoplab-pwa-v7-utf8-fix';
 const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{

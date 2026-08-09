@@ -1,55 +1,55 @@
-# Instalação no dashboard da Cloudflare
+﻿# InstalaÃ§Ã£o no dashboard da Cloudflare
 
 ## 1. Banco D1
 
-1. Cloudflare Dashboard → Storage & Databases → D1 → Create database.
-2. Abra o banco → Console.
-3. Cole e execute todo o conteúdo de `schema.sql`.
-4. Em seguida, cole e execute todo o conteúdo de `search-upgrade.sql` para criar ou atualizar o FTS5, os gatilhos de sincronização e os índices dos algoritmos. Ele pode ser executado novamente em um banco existente.
-5. Para ativar campanhas promocionais em um banco existente, execute também `promotion-upgrade.sql`. Ele apenas cria índices e preserva as promoções já cadastradas.
-6. Para adicionar preço normal ao cadastro de produtos, execute uma única vez `product-pricing-upgrade.sql`.
-7. Em bancos existentes, execute uma única vez `brand-store-logo-upgrade.sql` para permitir logos de marcas e lojas. Bancos novos já recebem essas colunas pelo `schema.sql`.
-8. Para permitir imagem ou GIF clicável e independente dos temas no destaque direito do cabeçalho, execute uma única vez `header-spotlight-upgrade.sql`. Bancos novos já recebem essa configuração pelo `schema.sql`.
-9. Para a faixa publicitária independente abaixo do menu, execute `header-ad-strips-upgrade.sql`. Se a tabela já existir, execute uma única vez `header-ad-editor-upgrade.sql` para habilitar enquadramento separado de computador/celular, zoom, rotação e animação. Se o editor visual básico já estiver instalado, execute também `header-ad-layers-upgrade.sql` para habilitar fundo, gradiente, textos e imagens em camadas.
+1. Cloudflare Dashboard â†’ Storage & Databases â†’ D1 â†’ Create database.
+2. Abra o banco â†’ Console.
+3. Cole e execute todo o conteÃºdo de `schema.sql`.
+4. Em seguida, cole e execute todo o conteÃºdo de `search-upgrade.sql` para criar ou atualizar o FTS5, os gatilhos de sincronizaÃ§Ã£o e os Ã­ndices dos algoritmos. Ele pode ser executado novamente em um banco existente.
+5. Para ativar campanhas promocionais em um banco existente, execute tambÃ©m `promotion-upgrade.sql`. Ele apenas cria Ã­ndices e preserva as promoÃ§Ãµes jÃ¡ cadastradas.
+6. Para adicionar preÃ§o normal ao cadastro de produtos, execute uma Ãºnica vez `product-pricing-upgrade.sql`.
+7. Em bancos existentes, execute uma Ãºnica vez `brand-store-logo-upgrade.sql` para permitir logos de marcas e lojas. Bancos novos jÃ¡ recebem essas colunas pelo `schema.sql`.
+8. Para permitir imagem ou GIF clicÃ¡vel e independente dos temas no destaque direito do cabeÃ§alho, execute uma Ãºnica vez `header-spotlight-upgrade.sql`. Bancos novos jÃ¡ recebem essa configuraÃ§Ã£o pelo `schema.sql`.
+9. Para a faixa publicitÃ¡ria independente abaixo do menu, execute `header-ad-strips-upgrade.sql`. Se a tabela jÃ¡ existir, execute uma Ãºnica vez `header-ad-editor-upgrade.sql` para habilitar enquadramento separado de computador/celular, zoom, rotaÃ§Ã£o e animaÃ§Ã£o. Se o editor visual bÃ¡sico jÃ¡ estiver instalado, execute tambÃ©m `header-ad-layers-upgrade.sql` para habilitar fundo, gradiente, textos e imagens em camadas.
 
-10. Para habilitar a consulta manual de preços importados do Mercado Livre, execute uma única vez `mercadolivre-price-sync-upgrade.sql`. Os preços só mudam ao importar o produto ou ao usar o botão de atualização manual no admin.
-11. Para habilitar o editor visual completo dos banners em um banco existente, execute uma única vez `banner-style-editor-upgrade.sql`. Bancos novos já recebem `style_json` pelo `schema.sql`.
-12. Para escolher um modelo de IA diferente para cada função no admin, execute uma única vez `ai-feature-settings-upgrade.sql`.
-13. Para criar contas administrativas com cargos e permissões, execute uma única vez `admin-collaborators-upgrade.sql`.
+10. Para habilitar a consulta manual de preÃ§os importados do Mercado Livre, execute uma Ãºnica vez `mercadolivre-price-sync-upgrade.sql`. Os preÃ§os sÃ³ mudam ao importar o produto ou ao usar o botÃ£o de atualizaÃ§Ã£o manual no admin.
+11. Para habilitar o editor visual completo dos banners em um banco existente, execute uma Ãºnica vez `banner-style-editor-upgrade.sql`. Bancos novos jÃ¡ recebem `style_json` pelo `schema.sql`.
+12. Para escolher um modelo de IA diferente para cada funÃ§Ã£o no admin, execute uma Ãºnica vez `ai-feature-settings-upgrade.sql`.
+13. Para criar contas administrativas com cargos e permissÃµes, execute uma Ãºnica vez `admin-collaborators-upgrade.sql`.
 
-O SQL cria tabelas, índices e três produtos demonstrativos. Os valores monetários são armazenados em centavos.
+O SQL cria tabelas, Ã­ndices e trÃªs produtos demonstrativos. Os valores monetÃ¡rios sÃ£o armazenados em centavos.
 
-## 2. Worker
+14. Para ativar o Shoplab Adsense em um banco existente, execute uma vez `shoplab-adsense-upgrade.sql`. Em bancos novos, as tabelas já fazem parte de `schema.sql`.`r`n`r`n## 2. Worker
 
-1. Workers & Pages → Create → Worker.
-2. Abra o editor, substitua o código pelo conteúdo de `worker.js` e publique.
-3. Settings → Bindings → Add → D1 Database. Use exatamente o nome `DB` e selecione o banco criado.
+1. Workers & Pages â†’ Create â†’ Worker.
+2. Abra o editor, substitua o cÃ³digo pelo conteÃºdo de `worker.js` e publique.
+3. Settings â†’ Bindings â†’ Add â†’ D1 Database. Use exatamente o nome `DB` e selecione o banco criado.
 4. Para imagens: crie um bucket R2 e adicione ao Worker o binding `MEDIA`. O editor de produtos usa esse binding para enviar, servir e remover imagens reais.
-5. Para entregar imagens responsivas e leves: em **Settings → Bindings → Add → Images**, crie o binding com o nome exato `IMAGES`. Sem ele, a rota de mídia continua entregando a imagem original automaticamente.
-5. Para a busca inteligente: adicione um binding **Workers AI** com o nome exato `AI`. Sem esse binding, ou se a inferência falhar, a busca continua funcionando automaticamente com FTS5, correção e sinônimos.
+5. Para entregar imagens responsivas e leves: em **Settings â†’ Bindings â†’ Add â†’ Images**, crie o binding com o nome exato `IMAGES`. Sem ele, a rota de mÃ­dia continua entregando a imagem original automaticamente.
+5. Para a busca inteligente: adicione um binding **Workers AI** com o nome exato `AI`. Sem esse binding, ou se a inferÃªncia falhar, a busca continua funcionando automaticamente com FTS5, correÃ§Ã£o e sinÃ´nimos.
 
-6. Em **Settings → Triggers → Cron Triggers**, adicione `*/30 * * * *` apenas para lembretes e rotinas de conta. Esse agendamento não altera preços de produtos.
+6. Em **Settings â†’ Triggers â†’ Cron Triggers**, adicione `*/30 * * * *` apenas para lembretes e rotinas de conta. Esse agendamento nÃ£o altera preÃ§os de produtos.
 
-## 3. Variáveis e secrets
+## 3. VariÃ¡veis e secrets
 
-Em Settings → Variables and Secrets, cadastre:
+Em Settings â†’ Variables and Secrets, cadastre:
 
-- `ALLOWED_ORIGINS` como variável: domínio exato do frontend, sem barra final. Para mais de um, separe por vírgula.
+- `ALLOWED_ORIGINS` como variÃ¡vel: domÃ­nio exato do frontend, sem barra final. Para mais de um, separe por vÃ­rgula.
 - `ADMIN_PASSWORD` como **secret**: senha longa e exclusiva do painel.
 - `TURNSTILE_SECRET_KEY` como **secret**: chave secreta do widget Turnstile.
 
-- `MERCADOLIVRE_CLIENT_ID` como **secret**: identificador da aplicação do Mercado Livre.
-- `MERCADOLIVRE_CLIENT_SECRET` como **secret**: segredo da aplicação do Mercado Livre.
+- `MERCADOLIVRE_CLIENT_ID` como **secret**: identificador da aplicaÃ§Ã£o do Mercado Livre.
+- `MERCADOLIVRE_CLIENT_SECRET` como **secret**: segredo da aplicaÃ§Ã£o do Mercado Livre.
 
 Nunca coloque esses valores em `worker.js` ou no frontend.
 
-No frontend, coloque somente a **sitekey pública** do mesmo widget em `assets/js/config.js`, no campo `TURNSTILE_SITE_KEY`. A sitekey pode aparecer no navegador; a secret key nunca pode.
+No frontend, coloque somente a **sitekey pÃºblica** do mesmo widget em `assets/js/config.js`, no campo `TURNSTILE_SITE_KEY`. A sitekey pode aparecer no navegador; a secret key nunca pode.
 
-Para a sessão administrativa funcionar com maior confiabilidade, associe um domínio personalizado ao Worker, por exemplo `api.shoplab.bidjory.com.br`, e use essa URL em `API_BASE_URL`. Isso mantém frontend e API sob `bidjory.com.br` e evita bloqueios de cookies entre sites.
+Para a sessÃ£o administrativa funcionar com maior confiabilidade, associe um domÃ­nio personalizado ao Worker, por exemplo `api.shoplab.bidjory.com.br`, e use essa URL em `API_BASE_URL`. Isso mantÃ©m frontend e API sob `bidjory.com.br` e evita bloqueios de cookies entre sites.
 
 ## 4. Conectar o frontend
 
-Antes de `assets/js/config.js`, inclua na página:
+Antes de `assets/js/config.js`, inclua na pÃ¡gina:
 
 ```html
 <script>
@@ -62,9 +62,9 @@ window.SHOPLAB_CONFIG = {
 </script>
 ```
 
-Como alternativa, altere os valores padrão somente em `assets/js/config.js`. Não repita a URL em outros módulos.
+Como alternativa, altere os valores padrÃ£o somente em `assets/js/config.js`. NÃ£o repita a URL em outros mÃ³dulos.
 
-## 5. Rotas incluídas
+## 5. Rotas incluÃ­das
 
 - `GET /api/v1/health`
 - `GET /api/v1/categories`
@@ -90,49 +90,49 @@ Como alternativa, altere os valores padrão somente em `assets/js/config.js`. N�
 - `POST /api/v1/admin/products`
 - `PUT /api/v1/admin/products/:id`
 
-O login exige um token Turnstile válido e cria uma sessão opaca em D1 com cookie `HttpOnly`, `Secure` e `SameSite=None` para o frontend e a API em origens diferentes.
+O login exige um token Turnstile vÃ¡lido e cria uma sessÃ£o opaca em D1 com cookie `HttpOnly`, `Secure` e `SameSite=None` para o frontend e a API em origens diferentes.
 
-## Observações importantes
+## ObservaÃ§Ãµes importantes
 
-- Troque os links `example.com` das ofertas antes da produção.
-- O frontend administrativo atual ainda é demonstrativo; os endpoints estão prontos para a integração dos formulários.
-- Cadastre a sitekey pública do Turnstile apenas no HTML. A chave secreta fica exclusivamente no Worker.
-- Restrinja `ALLOWED_ORIGINS` ao domínio real. Não use `*` com cookies.
+- Troque os links `example.com` das ofertas antes da produÃ§Ã£o.
+- O frontend administrativo atual ainda Ã© demonstrativo; os endpoints estÃ£o prontos para a integraÃ§Ã£o dos formulÃ¡rios.
+- Cadastre a sitekey pÃºblica do Turnstile apenas no HTML. A chave secreta fica exclusivamente no Worker.
+- Restrinja `ALLOWED_ORIGINS` ao domÃ­nio real. NÃ£o use `*` com cookies.
 
 ## 6. SHOPLAB+ com Stripe
 
 1. Em um banco D1 existente, execute uma vez `premium-subscriptions-upgrade.sql` e depois `premium-settings-upgrade.sql`.
 2. No Stripe Dashboard, ative primeiro o **modo de teste**.
-3. Em **Developers → API keys**, copie a chave secreta de teste (`sk_test_...`) para o secret `STRIPE_SECRET_KEY` do Worker. Não é necessário colocar a chave publicável no frontend porque o projeto usa Stripe Checkout hospedado.
-4. Em **Developers → Webhooks**, crie um endpoint apontando para `https://SEU-WORKER/api/v1/payments/stripe/webhook`.
+3. Em **Developers â†’ API keys**, copie a chave secreta de teste (`sk_test_...`) para o secret `STRIPE_SECRET_KEY` do Worker. NÃ£o Ã© necessÃ¡rio colocar a chave publicÃ¡vel no frontend porque o projeto usa Stripe Checkout hospedado.
+4. Em **Developers â†’ Webhooks**, crie um endpoint apontando para `https://SEU-WORKER/api/v1/payments/stripe/webhook`.
 5. Selecione estes eventos: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded` e `invoice.payment_failed`.
 6. Abra o endpoint criado, revele o **Signing secret** (`whsec_...`) e salve-o no Worker como secret `STRIPE_WEBHOOK_SECRET`.
 7. Configure `PUBLIC_SITE_URL` com a origem HTTPS do site, sem barra final.
-8. Em **Settings → Payment methods** no Stripe, habilite os meios desejados. O Checkout mostra automaticamente apenas os meios compatíveis com o país, moeda e tipo de cobrança. Pagamentos recorrentes podem ter opções diferentes do passe avulso.
-9. Em **Settings → Branding**, envie o ícone e o logo da SHOPLAB e confira as cores. O checkout já envia o nome e as cores da SHOPLAB por sessão; o Branding da conta também deixa recibos, e-mails e o Portal do Cliente consistentes.
-10. Em **Settings → Billing → Customer portal**, ative a atualização do meio de pagamento, o histórico de faturas e o cancelamento da assinatura. Faça essa configuração separadamente no modo de teste e no modo de produção.
+8. Em **Settings â†’ Payment methods** no Stripe, habilite os meios desejados. O Checkout mostra automaticamente apenas os meios compatÃ­veis com o paÃ­s, moeda e tipo de cobranÃ§a. Pagamentos recorrentes podem ter opÃ§Ãµes diferentes do passe avulso.
+9. Em **Settings â†’ Branding**, envie o Ã­cone e o logo da SHOPLAB e confira as cores. O checkout jÃ¡ envia o nome e as cores da SHOPLAB por sessÃ£o; o Branding da conta tambÃ©m deixa recibos, e-mails e o Portal do Cliente consistentes.
+10. Em **Settings â†’ Billing â†’ Customer portal**, ative a atualizaÃ§Ã£o do meio de pagamento, o histÃ³rico de faturas e o cancelamento da assinatura. FaÃ§a essa configuraÃ§Ã£o separadamente no modo de teste e no modo de produÃ§Ã£o.
 
-Variáveis opcionais do plano:
+VariÃ¡veis opcionais do plano:
 
-- `PREMIUM_PLAN_NAME`: padrão `SHOPLAB+`.
-- `PREMIUM_MONTHLY_PRICE_CENTS`: padrão `990` (R$ 9,90).
-- `PREMIUM_PASS_PRICE_CENTS`: preço do passe avulso; por padrão usa o preço mensal.
-- `PREMIUM_PASS_DAYS`: duração do passe avulso; padrão `30` dias.
-- `PREMIUM_AI_MONTHLY_LIMIT`: padrão `50` novas análises por mês.
-- `PREMIUM_PROMO_LABEL`: texto exibido quando houver preço promocional.
-- `PREMIUM_PROMO_MONTHLY_PRICE_CENTS`: preço promocional mensal em centavos.
-- `PREMIUM_PROMO_PASS_PRICE_CENTS`: preço promocional do passe em centavos.
-- `PREMIUM_PROMO_ENDS_AT`: término opcional da promoção em data ISO.
+- `PREMIUM_PLAN_NAME`: padrÃ£o `SHOPLAB+`.
+- `PREMIUM_MONTHLY_PRICE_CENTS`: padrÃ£o `990` (R$ 9,90).
+- `PREMIUM_PASS_PRICE_CENTS`: preÃ§o do passe avulso; por padrÃ£o usa o preÃ§o mensal.
+- `PREMIUM_PASS_DAYS`: duraÃ§Ã£o do passe avulso; padrÃ£o `30` dias.
+- `PREMIUM_AI_MONTHLY_LIMIT`: padrÃ£o `50` novas anÃ¡lises por mÃªs.
+- `PREMIUM_PROMO_LABEL`: texto exibido quando houver preÃ§o promocional.
+- `PREMIUM_PROMO_MONTHLY_PRICE_CENTS`: preÃ§o promocional mensal em centavos.
+- `PREMIUM_PROMO_PASS_PRICE_CENTS`: preÃ§o promocional do passe em centavos.
+- `PREMIUM_PROMO_ENDS_AT`: tÃ©rmino opcional da promoÃ§Ã£o em data ISO.
 - `PREMIUM_EMAIL_FROM`: remetente dos e-mails Premium; se ausente, usa `REWARD_EMAIL_FROM`.
-- `STRIPE_BRAND_LOGO_URL`: URL HTTPS pública opcional do logo da SHOPLAB usado no topo do Checkout hospedado. Use PNG/JPG quadrado ou horizontal com boa margem interna.
+- `STRIPE_BRAND_LOGO_URL`: URL HTTPS pÃºblica opcional do logo da SHOPLAB usado no topo do Checkout hospedado. Use PNG/JPG quadrado ou horizontal com boa margem interna.
 
-Nunca coloque `STRIPE_SECRET_KEY` nem `STRIPE_WEBHOOK_SECRET` no frontend. O status Premium somente é atualizado depois que o Worker valida a assinatura do webhook e confere valor, moeda, usuário e identificadores da sessão Stripe.
+Nunca coloque `STRIPE_SECRET_KEY` nem `STRIPE_WEBHOOK_SECRET` no frontend. O status Premium somente Ã© atualizado depois que o Worker valida a assinatura do webhook e confere valor, moeda, usuÃ¡rio e identificadores da sessÃ£o Stripe.
 
-### Preço, promoção e comparação Premium
+### PreÃ§o, promoÃ§Ã£o e comparaÃ§Ã£o Premium
 
-- Acesse `admin/premium.html` para definir os preços mensal e avulso, duração do passe, limite mensal de novas análises e promoções com data de início e término.
-- Alterações de preço valem para novos checkouts. Assinaturas Stripe existentes continuam com o preço aceito quando foram contratadas.
-- A comparação Premium usa por padrão `@cf/qwen/qwen3-30b-a3b-fp8`, com resposta estruturada e cache no AI Gateway. O modelo pode ser trocado pela variável `PREMIUM_COMPARISON_AI_MODEL`.
-- Defina opcionalmente `AI_GATEWAY_ID` com o identificador do seu AI Gateway. Se não for definido, o Worker usa o gateway `default`.
-- O AI Gateway mantém observabilidade e cache de inferência por 30 dias. O resultado final também é persistido no D1 e no Cache API por versão dos produtos; abrir novamente a mesma comparação não consome outra análise. Mudanças de preço, ficha técnica ou versão do algoritmo geram automaticamente uma análise nova.
-- O resultado Premium inclui diferença exata de preço, decisão sobre valer a pena pagar mais, evidências utilizadas, confiança, dados ausentes e notas comparativas por perfil de uso.
+- Acesse `admin/premium.html` para definir os preÃ§os mensal e avulso, duraÃ§Ã£o do passe, limite mensal de novas anÃ¡lises e promoÃ§Ãµes com data de inÃ­cio e tÃ©rmino.
+- AlteraÃ§Ãµes de preÃ§o valem para novos checkouts. Assinaturas Stripe existentes continuam com o preÃ§o aceito quando foram contratadas.
+- A comparaÃ§Ã£o Premium usa por padrÃ£o `@cf/qwen/qwen3-30b-a3b-fp8`, com resposta estruturada e cache no AI Gateway. O modelo pode ser trocado pela variÃ¡vel `PREMIUM_COMPARISON_AI_MODEL`.
+- Defina opcionalmente `AI_GATEWAY_ID` com o identificador do seu AI Gateway. Se nÃ£o for definido, o Worker usa o gateway `default`.
+- O AI Gateway mantÃ©m observabilidade e cache de inferÃªncia por 30 dias. O resultado final tambÃ©m Ã© persistido no D1 e no Cache API por versÃ£o dos produtos; abrir novamente a mesma comparaÃ§Ã£o nÃ£o consome outra anÃ¡lise. MudanÃ§as de preÃ§o, ficha tÃ©cnica ou versÃ£o do algoritmo geram automaticamente uma anÃ¡lise nova.
+- O resultado Premium inclui diferenÃ§a exata de preÃ§o, decisÃ£o sobre valer a pena pagar mais, evidÃªncias utilizadas, confianÃ§a, dados ausentes e notas comparativas por perfil de uso.
