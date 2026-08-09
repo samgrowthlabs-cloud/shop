@@ -216,6 +216,7 @@ CREATE TABLE IF NOT EXISTS banners (
   mobile_position_y INTEGER NOT NULL DEFAULT 50, mobile_scale INTEGER NOT NULL DEFAULT 100,
     targeting_json TEXT NOT NULL DEFAULT '{}', style_json TEXT NOT NULL DEFAULT '{}',
   starts_at TEXT, ends_at TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+  display_duration_ms INTEGER NOT NULL DEFAULT 6000,
   sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -247,6 +248,7 @@ CREATE TABLE IF NOT EXISTS header_spotlights (
   spotlight_animation TEXT NOT NULL DEFAULT 'fade',
   spotlight_animation_duration INTEGER NOT NULL DEFAULT 700,
   spotlight_animation_delay INTEGER NOT NULL DEFAULT 0,
+  display_duration_ms INTEGER NOT NULL DEFAULT 5000,
   starts_at TEXT, ends_at TEXT,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -389,6 +391,8 @@ CREATE TABLE IF NOT EXISTS header_ad_strips (
   animation_preset TEXT NOT NULL DEFAULT 'fade',
   animation_duration INTEGER NOT NULL DEFAULT 700,
   animation_delay INTEGER NOT NULL DEFAULT 0,
+  placement TEXT NOT NULL DEFAULT 'below_menu' CHECK(placement IN ('below_menu','product_after_offer','product_after_analysis','product_before_related')),
+  display_duration_ms INTEGER NOT NULL DEFAULT 6000,
   style_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -757,7 +757,7 @@ async function listCategories(req, env, id) {
 async function publicSiteConfig(req, env, id) {
   const [banners, theme, stores, brands, headerPromotions, headerSpotlights, headerAds] = await env.DB.batch([
     env.DB.prepare(
-      `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
+      `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,display_duration_ms displayDurationMs,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
     ),
     env.DB.prepare(
       `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,price_color priceColor,old_price_color oldPriceColor,header_hover_color headerHoverColor,footer_background footerBackground,footer_text_color footerTextColor,footer_link_color footerLinkColor,footer_hover_color footerHoverColor,card_hover_background cardHoverBackground,card_hover_border_color cardHoverBorderColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
@@ -772,10 +772,10 @@ async function publicSiteConfig(req, env, id) {
       `SELECT name,slug,coupon_code couponCode,rules_json rulesJson FROM promotions WHERE is_active=1 AND datetime(starts_at)<=CURRENT_TIMESTAMP AND datetime(ends_at)>=CURRENT_TIMESTAMP ORDER BY datetime(ends_at) LIMIT 3`,
     ),
     env.DB.prepare(
-      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,spotlight_rotation imageRotation,spotlight_animation animationPreset,spotlight_animation_duration animationDuration,spotlight_animation_delay animationDelay FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
+      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,spotlight_rotation imageRotation,spotlight_animation animationPreset,spotlight_animation_duration animationDuration,spotlight_animation_delay animationDelay,display_duration_ms displayDurationMs FROM header_spotlights WHERE is_active=1 AND storage_key IS NOT NULL AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
     ),
     env.DB.prepare(
-      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,style_json styleJson FROM header_ad_strips WHERE is_active=1 AND (storage_key IS NOT NULL OR style_json<>'{}') AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 12`,
+      `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,placement,display_duration_ms displayDurationMs,style_json styleJson FROM header_ad_strips WHERE is_active=1 AND (storage_key IS NOT NULL OR style_json<>'{}') AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 48`,
     ),
   ]);
   const origin = new URL(req.url).origin;
@@ -5904,7 +5904,7 @@ async function adminBanners(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,created_at createdAt FROM banners ORDER BY sort_order,created_at DESC`,
+    `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,starts_at startsAt,ends_at endsAt,is_active isActive,display_duration_ms displayDurationMs,sort_order sortOrder,created_at createdAt FROM banners ORDER BY sort_order,created_at DESC`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -6052,6 +6052,7 @@ async function saveBanner(req, env, bannerId, id, creating) {
     startsAt,
     endsAt,
     String(form.get("isActive")) === "true" ? 1 : 0,
+    clamp(form.get("displayDurationMs"), 2000, 60000, 6000),
     clamp(form.get("sortOrder"), -10000, 10000, 0),
     clamp(form.get("desktopPositionX"), 0, 100, 50),
     clamp(form.get("desktopPositionY"), 0, 100, 50),
@@ -6062,13 +6063,13 @@ async function saveBanner(req, env, bannerId, id, creating) {
   ];
   if (creating)
     await env.DB.prepare(
-      `INSERT INTO banners(id,name,eyebrow,title,message,button_text,link_url,desktop_storage_key,mobile_storage_key,alt_text,targeting_json,style_json,starts_at,ends_at,is_active,sort_order,desktop_position_x,desktop_position_y,desktop_scale,mobile_position_x,mobile_position_y,mobile_scale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO banners(id,name,eyebrow,title,message,button_text,link_url,desktop_storage_key,mobile_storage_key,alt_text,targeting_json,style_json,starts_at,ends_at,is_active,display_duration_ms,sort_order,desktop_position_x,desktop_position_y,desktop_scale,mobile_position_x,mobile_position_y,mobile_scale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
       .bind(bannerId, ...values)
       .run();
   else
     await env.DB.prepare(
-      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,style_json=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,desktop_position_x=?,desktop_position_y=?,desktop_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,style_json=?,starts_at=?,ends_at=?,is_active=?,display_duration_ms=?,sort_order=?,desktop_position_x=?,desktop_position_y=?,desktop_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     )
       .bind(...values, bannerId)
       .run();
@@ -6389,7 +6390,7 @@ async function adminHeaderSpotlights(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,spotlight_rotation imageRotation,spotlight_animation animationPreset,spotlight_animation_duration animationDuration,spotlight_animation_delay animationDelay,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,updated_at updatedAt FROM header_spotlights ORDER BY sort_order,created_at`,
+    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,spotlight_position_x imagePositionX,spotlight_position_y imagePositionY,spotlight_scale imageScale,spotlight_rotation imageRotation,spotlight_animation animationPreset,spotlight_animation_duration animationDuration,spotlight_animation_delay animationDelay,display_duration_ms displayDurationMs,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,updated_at updatedAt FROM header_spotlights ORDER BY sort_order,created_at`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -6410,6 +6411,7 @@ function headerSpotlightValues(body) {
     ["none", "fade", "slide-left", "slide-up", "zoom", "float", "pulse"].includes(body.animationPreset) ? body.animationPreset : "fade",
     clamp(body.animationDuration, 200, 10000, 700),
     clamp(body.animationDelay, 0, 10000, 0),
+    clamp(body.displayDurationMs, 2000, 60000, 5000),
   ];
 }
 
@@ -6430,7 +6432,7 @@ async function createHeaderSpotlight(req, env, id) {
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const spotlightId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,spotlight_position_x,spotlight_position_y,spotlight_scale,spotlight_rotation,spotlight_animation,spotlight_animation_duration,spotlight_animation_delay) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,spotlight_position_x,spotlight_position_y,spotlight_scale,spotlight_rotation,spotlight_animation,spotlight_animation_duration,spotlight_animation_delay,display_duration_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(spotlightId, ...headerSpotlightValues(body)).run();
   return ok(req, env, { id: spotlightId }, id);
 }
@@ -6442,7 +6444,7 @@ async function updateHeaderSpotlight(req, env, spotlightId, id) {
   const validation = validateHeaderSpotlight(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,spotlight_position_x=?,spotlight_position_y=?,spotlight_scale=?,spotlight_rotation=?,spotlight_animation=?,spotlight_animation_duration=?,spotlight_animation_delay=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,spotlight_position_x=?,spotlight_position_y=?,spotlight_scale=?,spotlight_rotation=?,spotlight_animation=?,spotlight_animation_duration=?,spotlight_animation_delay=?,display_duration_ms=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
   ).bind(...headerSpotlightValues(body), spotlightId).run();
   if (!result.meta.changes)
     return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
@@ -6494,7 +6496,7 @@ async function deleteHeaderSpotlight(req, env, spotlightId, id) {
 async function adminHeaderAds(req, env, id) {
   if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "NÃ£o autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,style_json styleJson,updated_at updatedAt FROM header_ad_strips ORDER BY sort_order,created_at`,
+    `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,starts_at startsAt,ends_at endsAt,is_active isActive,sort_order sortOrder,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,placement,display_duration_ms displayDurationMs,style_json styleJson,updated_at updatedAt FROM header_ad_strips ORDER BY placement,sort_order,created_at`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -6521,6 +6523,8 @@ function headerAdValues(body) {
     ["none", "fade", "slide-left", "slide-up", "zoom", "float", "pulse"].includes(body.animationPreset) ? body.animationPreset : "fade",
     clamp(body.animationDuration, 200, 10000, 700),
     clamp(body.animationDelay, 0, 5000, 0),
+    ["below_menu","product_after_offer","product_after_analysis","product_before_related"].includes(body.placement) ? body.placement : "below_menu",
+    clamp(body.displayDurationMs, 2000, 60000, 6000),
     styleJson,
   ];
 }
@@ -6539,7 +6543,7 @@ async function createHeaderAd(req, env, id) {
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const adId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO header_ad_strips(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,image_position_x,image_position_y,image_scale,mobile_position_x,mobile_position_y,mobile_scale,image_rotation,animation_preset,animation_duration,animation_delay,style_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO header_ad_strips(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,image_position_x,image_position_y,image_scale,mobile_position_x,mobile_position_y,mobile_scale,image_rotation,animation_preset,animation_duration,animation_delay,placement,display_duration_ms,style_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(adId, ...headerAdValues(body)).run();
   return ok(req, env, { id: adId }, id);
 }
@@ -6549,7 +6553,7 @@ async function updateHeaderAd(req, env, adId, id) {
   const body = await readJson(req, 12000), validation = validateHeaderAd(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE header_ad_strips SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,image_position_x=?,image_position_y=?,image_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,image_rotation=?,animation_preset=?,animation_duration=?,animation_delay=?,style_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE header_ad_strips SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,image_position_x=?,image_position_y=?,image_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,image_rotation=?,animation_preset=?,animation_duration=?,animation_delay=?,placement=?,display_duration_ms=?,style_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
   ).bind(...headerAdValues(body), adId).run();
   if (!result.meta.changes) return fail(req, env, "HEADER_AD_NOT_FOUND", "AnÃºncio nÃ£o encontrado", 404, id);
   return ok(req, env, { id: adId }, id);

@@ -92,6 +92,8 @@ function showInstallPrompt(){
 }
 
 ensureHead();
-if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?v=20260802-responsive-images-cache-10').then(registration=>registration.update()).catch(()=>{}));
+let pwaRefreshing=false;
+if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('controllerchange',()=>{if(pwaRefreshing)return;pwaRefreshing=true;location.reload()});
+if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?v=20260808-comparison-refresh-11').then(registration=>registration.update()).catch(()=>{}));
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installEvent=event;armInstallPrompt()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installMobileNavigation,{once:true});else installMobileNavigation();
