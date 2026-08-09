@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
-  icon TEXT NOT NULL DEFAULT '⌬',
+  icon TEXT NOT NULL DEFAULT 'âŒ¬',
   image_storage_key TEXT,
   image_scale INTEGER NOT NULL DEFAULT 100 CHECK (image_scale BETWEEN 50 AND 250),
   image_position_x INTEGER NOT NULL DEFAULT 0 CHECK (image_position_x BETWEEN -100 AND 100),
@@ -405,14 +405,14 @@ CREATE INDEX IF NOT EXISTS idx_premium_product_insight_user ON premium_product_i
 CREATE UNIQUE INDEX IF NOT EXISTS idx_only_one_active_seasonal_theme ON seasonal_themes(is_active) WHERE is_active=1;
 
 INSERT OR IGNORE INTO categories (id,name,slug,icon,sort_order) VALUES
-('cat_books','Livros e e-books','livros','▤',1),('cat_tech','Tecnologia','tecnologia','⌘',2),
-('cat_audio','Áudio','audio','♫',3),('cat_productivity','Produtividade','produtividade','✓',4),('cat_courses','Cursos','cursos','◫',5);
+('cat_books','Livros e e-books','livros','â–¤',1),('cat_tech','Tecnologia','tecnologia','âŒ˜',2),
+('cat_audio','Ãudio','audio','â™«',3),('cat_productivity','Produtividade','produtividade','âœ“',4),('cat_courses','Cursos','cursos','â—«',5);
 INSERT OR IGNORE INTO brands (id,name,slug) VALUES ('brand_shoplab','SHOPLAB','shoplab'),('brand_nexon','Nexon','nexon'),('brand_orbit','Orbit','orbit'),('brand_foco','Foco','foco');
 INSERT OR IGNORE INTO partners (id,name,slug,website_url) VALUES ('partner_demo','Parceiro Demo','parceiro-demo','https://example.com');
 INSERT OR IGNORE INTO products (id,name,slug,product_type,status,category_id,brand_id,short_description,editorial_score,is_featured,published_at) VALUES
-('prod_habits','Hábitos Atômicos','habitos-atomicos','book','published','cat_books',NULL,'Guia prático para criar bons hábitos.',96,1,CURRENT_TIMESTAMP),
+('prod_habits','HÃ¡bitos AtÃ´micos','habitos-atomicos','book','published','cat_books',NULL,'Guia prÃ¡tico para criar bons hÃ¡bitos.',96,1,CURRENT_TIMESTAMP),
 ('prod_ssd','SSD NVMe Pulse 1 TB','ssd-nvme-pulse-1tb','affiliate','published','cat_tech','brand_nexon','Armazenamento veloz para trabalho e estudo.',92,1,CURRENT_TIMESTAMP),
-('prod_headphone','Fone Orbit ANC','fone-orbit-anc','affiliate','published','cat_audio','brand_orbit','Cancelamento de ruído e som equilibrado.',88,0,CURRENT_TIMESTAMP);
+('prod_headphone','Fone Orbit ANC','fone-orbit-anc','affiliate','published','cat_audio','brand_orbit','Cancelamento de ruÃ­do e som equilibrado.',88,0,CURRENT_TIMESTAMP);
 INSERT OR IGNORE INTO offers (id,product_id,partner_id,affiliate_url,current_price_cents,previous_price_cents,is_primary) VALUES
 ('offer_habits','prod_habits','partner_demo','https://example.com/oferta/habitos',4490,6990,1),
 ('offer_ssd','prod_ssd','partner_demo','https://example.com/oferta/ssd',36990,44990,1),
@@ -449,3 +449,37 @@ CREATE TABLE IF NOT EXISTS ai_general_settings (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 INSERT OR IGNORE INTO ai_general_settings(id,free_credit_limit) VALUES('default',5);
+
+CREATE TABLE IF NOT EXISTS shoplab_ads (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  public_title TEXT,
+  ad_label TEXT NOT NULL DEFAULT 'PUBLICIDADE · SHOPLAB ADSENSE',
+  show_header INTEGER NOT NULL DEFAULT 1,
+  dismissible INTEGER NOT NULL DEFAULT 1,
+  dismiss_minutes INTEGER NOT NULL DEFAULT 30,
+  cta_text TEXT NOT NULL DEFAULT 'Saiba mais',
+  cta_color TEXT NOT NULL DEFAULT '#075fce',
+  media_type TEXT NOT NULL DEFAULT 'image' CHECK(media_type IN ('image','video')),
+  storage_key TEXT,
+  link_url TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','active','paused')),
+  priority INTEGER NOT NULL DEFAULT 1,
+  starts_at TEXT,
+  ends_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS shoplab_ad_assignments (
+  id TEXT PRIMARY KEY,
+  ad_id TEXT NOT NULL REFERENCES shoplab_ads(id) ON DELETE CASCADE,
+  device TEXT NOT NULL CHECK(device IN ('desktop','mobile')),
+  page_kind TEXT NOT NULL CHECK(page_kind IN ('home','products','category','product')),
+  position_key TEXT NOT NULL,
+  category_slug TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(device,page_kind,position_key,category_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_shoplab_ads_active ON shoplab_ads(status,starts_at,ends_at,priority);
+CREATE INDEX IF NOT EXISTS idx_shoplab_ad_assignments_target ON shoplab_ad_assignments(device,page_kind,category_slug,position_key);
