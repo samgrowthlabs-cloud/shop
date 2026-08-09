@@ -253,3 +253,19 @@ const detailObserver=new MutationObserver(()=>{
 });
 function scan(){if(document.querySelector('.detail'))detailMedia();else detailObserver.observe(document.documentElement,{childList:true,subtree:true})}
 document.readyState==='loading'?document.addEventListener('DOMContentLoaded',scan,{once:true}):scan();
+
+document.addEventListener('error',event=>{
+  const image=event.target;
+  if(!(image instanceof HTMLImageElement)||!image.closest('.product-card .product-media'))return;
+  const media=image.closest('.product-media');
+  if(media.dataset.mediaFallback)return;
+  media.dataset.mediaFallback='1';
+  image.remove();
+  const fallback=document.createElement('span');
+  fallback.className='product-symbol product-media-fallback';
+  fallback.setAttribute('role','img');
+  fallback.setAttribute('aria-label','Imagem do produto indisponível');
+  fallback.textContent='⌕';
+  media.append(fallback);
+  media.closest('.product-card')?.classList.add('has-media-fallback');
+},true);

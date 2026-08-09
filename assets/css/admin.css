@@ -675,3 +675,5 @@ html[data-admin-theme="dark"] .admin-context-menu{border-color:#315048;backgroun
 .adsense-ad.is-dragging{opacity:.55;outline:2px dashed var(--accent);cursor:grabbing}
 
 .adsense-ad .adsense-edit{margin-left:auto;padding:6px 9px;border:1px solid #bfd2cc;border-radius:7px;background:#fff;color:#087268;font-size:11px;font-weight:800;cursor:pointer}.adsense-ad .adsense-edit:hover{border-color:#078879;background:#eaf7f3}.adsense-ad>i{font-style:normal;color:#7c8b87}
+
+.permission-option{min-height:57px;border:1px solid transparent;transition:border-color .16s ease,background .16s ease,transform .16s ease}.permission-option:hover{border-color:#9bd8ca;background:#eef9f6;transform:translateY(-1px)}.permission-option:has(input:checked){background:#e2f6f0;border-color:#71cdb9}.permission-option b{font-size:13px}.permission-option small{line-height:1.4}.permission-toolbar>div:first-child{display:grid;gap:3px}.permission-toolbar small{color:var(--muted);font-size:12px}.collaborator-permissions .permission-option:not(:has(input:checked)){display:none}.collaborator-permissions .permission-option:has(input:checked){background:#e2f6f0;border-color:#71cdb9}
