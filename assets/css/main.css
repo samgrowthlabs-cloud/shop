@@ -5211,3 +5211,8 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
   .product-card .product-media{aspect-ratio:1/1!important;max-height:180px}
   .product-card.has-media-fallback .product-media{min-height:112px!important}
 }
+/* Card de comparação rápida: preço e nota em linhas próprias. */
+.quick-comparison-stats{display:grid;gap:2px;margin-top:5px;line-height:1.2}
+.quick-comparison-stats strong{color:var(--accent);font-size:16px;letter-spacing:-.02em}
+.quick-comparison-stats span{color:#65736f;font-size:11px;font-weight:700}
+@media(max-width:760px){.quick-comparison-stats strong{font-size:15px}.quick-comparison-stats span{font-size:10px}}
