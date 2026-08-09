@@ -5215,4 +5215,11 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
 .quick-comparison-stats{display:grid;gap:2px;margin-top:5px;line-height:1.2}
 .quick-comparison-stats strong{color:var(--accent);font-size:16px;letter-spacing:-.02em}
 .quick-comparison-stats span{color:#65736f;font-size:11px;font-weight:700}
-@media(max-width:760px){.quick-comparison-stats strong{font-size:15px}.quick-comparison-stats span{font-size:10px}}
+@media(max-width:760px){.quick-comparison-stats strong{font-size:15px}.quick-comparison-stats span{font-size:10px}}/* Mobile header: a busca usa o cabeçalho próprio; a barra desktop não deve competir com ela. */
+@media(max-width:760px){
+  .header>.header-row,.header>.subnav{display:none!important}
+  .header .mobile-home-header{display:block!important}
+  .header .mobile-home-header-actions{z-index:2}
+  .header .account-dropdown{z-index:90}
+}
+
