@@ -1,4 +1,4 @@
-const VERSION='shoplab-pwa-v5-media-domain';
+const VERSION='shoplab-pwa-v6-comparison-refresh';
 const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{
@@ -27,6 +27,13 @@ self.addEventListener('fetch',event=>{
     return;
   }
   if(!/\.(?:css|js|svg|png|webp|jpg|jpeg|gif|woff2?)(?:$|\?)/i.test(url.pathname+url.search))return;
+  if(/\.(?:css|js)(?:$|\?)/i.test(url.pathname+url.search)){
+    event.respondWith(fetch(request,{cache:'reload'}).then(async response=>{
+      if(response.ok){const copy=response.clone();const cache=await caches.open(VERSION);await cache.put(request,copy)}
+      return response;
+    }).catch(()=>caches.match(request)));
+    return;
+  }
   const cached=caches.match(request);
   const fresh=fetch(request).then(async response=>{
     if(response.ok){const copy=response.clone();const cache=await caches.open(VERSION);await cache.put(request,copy)}

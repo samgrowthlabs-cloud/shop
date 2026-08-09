@@ -3212,7 +3212,7 @@ body[data-page="home"] .product-rail>.products{
   grid-template-columns:none!important;
   gap:16px!important;
   overflow-x:auto!important;
-  padding:2px 2px 14px!important;
+  padding:8px 2px 14px!important;
   scroll-behavior:smooth;
   scroll-snap-type:x mandatory;
   scrollbar-width:none;
@@ -3902,7 +3902,7 @@ body[data-page="product"] .detail-main-image img{
     height:auto!important;
     min-height:0!important;
   }
-  html body .header:has(.header-ad-strip){min-height:180px!important}
+  html body .header:has(.header-ad-strip){min-height:0!important}
   .header-ad-strip{height:42px;overflow:hidden}
   .header-ad-stage{width:100%;max-width:none;margin:0}
   .header-ad-slide{--spotlight-scale:var(--header-ad-mobile-scale,1)}
@@ -5106,6 +5106,12 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
 
 /* Ajustes solicitados: cabecalho compacto e destaque antes do rodape. */
 .product-footer-spotlight{padding:18px 0 22px;background:#f7faf9}
+.product-ad-slot{padding:18px 0;background:#fff}
+.product-ad-slot.product_after_analysis{background:#f7faf9}
+.product-ad-slot .header-ad-strip{width:100%;border-radius:16px;overflow:hidden;box-shadow:0 8px 26px rgba(15,54,46,.09)}
+.product-ad-slot .header-ad-stage{max-width:none}
+.product-ad-slot .header-ad-counter{right:12px}
+@media(max-width:760px){.product-ad-slot{padding:12px 0}.product-ad-slot .container{padding-inline:12px!important}.product-ad-slot .header-ad-strip{display:block!important;height:56px!important;border-radius:12px}}
 .product-footer-spotlight .header-highlight{
   position:relative!important;
   inset:auto!important;
@@ -5146,3 +5152,8 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
 }
 .comparison-progress{display:grid;gap:7px;max-width:780px;margin-top:16px}.comparison-progress>i{display:block;height:10px;overflow:hidden;border-radius:999px;background:#dfeeea}.comparison-progress>i>span{display:block;width:45%;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#35bfa8);animation:comparison-progress-bar 1.7s ease-in-out infinite}.comparison-progress>small{display:flex;justify-content:space-between;gap:12px;color:var(--muted)}.comparison-progress>small b{color:var(--accent)}@keyframes comparison-progress-bar{0%{transform:translateX(-110%)}100%{transform:translateX(245%)}}
 .comparison-score-unavailable{display:grid;gap:5px;margin:14px 0;padding:14px;border:1px dashed #b9cbc6;border-radius:10px;background:#f7faf9;color:var(--muted)}.comparison-score-unavailable strong{color:var(--text)}.comparison-score-unavailable span{font-size:12px;line-height:1.45}
+
+/* Faixa abaixo do menu: acabamento de vitrine, sem comprometer o conteúdo criado no estúdio. */
+.header-ad-strip{isolation:isolate;background:linear-gradient(90deg,color-mix(in srgb,var(--surface-soft) 82%,#fff),#fff,color-mix(in srgb,var(--surface-soft) 82%,#fff));box-shadow:0 5px 14px rgba(9,51,43,.06)}
+.header-ad-strip::before{content:'';position:absolute;z-index:0;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);pointer-events:none}.header-ad-stage{isolation:isolate}.header-ad-slide{will-change:opacity,transform}.header-ad-slide:focus-visible{z-index:3;outline:3px solid var(--accent);outline-offset:-3px}.header-ad-layer.text{text-shadow:0 1px 2px rgba(0,0,0,.18);letter-spacing:.01em}.header-ad-counter{right:12px;bottom:8px;padding:2px 7px;background:rgba(4,35,31,.66);backdrop-filter:blur(8px)}
+@media(max-width:760px){.header-ad-strip{box-shadow:0 3px 10px rgba(9,51,43,.05)}.header-ad-counter{right:7px;bottom:5px}}
