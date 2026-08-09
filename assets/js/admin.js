@@ -4,6 +4,7 @@ let adminSession=null;
 const can=permission=>Boolean(adminSession?.actor?.permissions?.includes('*')||adminSession?.actor?.permissions?.includes(permission));
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=v=>v==null?'—':(Number(v)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const collaboratorStartPage=actor=>{const permissions=new Set(actor?.permissions||[]),canOpen=permission=>permissions.has('*')||permissions.has(permission);return [['dashboard.view','index.html'],['products.view','produtos.html'],['categories.manage','categorias.html'],['promotions.manage','promocoes.html'],['banners.manage','banners.html'],['header_spotlights.manage','destaque-cabecalho.html'],['header_ads.manage','anuncios-cabecalho.html'],['themes.manage','temas.html'],['users.view','usuarios.html']].find(([permission])=>canOpen(permission))?.[1]||'login.html'};
 async function categoryCropFile(){const source=$('#category-image-preview img')?.src;if(!source)return null;const image=await new Promise((resolve,reject)=>{const value=new Image();value.crossOrigin='anonymous';value.onload=()=>resolve(value);value.onerror=()=>reject(new Error('Não foi possível preparar a imagem da categoria'));value.src=source});const size=512,canvas=document.createElement('canvas'),context=canvas.getContext('2d'),zoom=Number($('#category-image-scale')?.value||100)/100,x=Number($('#category-position-x')?.value||0)/100,y=Number($('#category-position-y')?.value||0)/100,base=Math.min(size/image.naturalWidth,size/image.naturalHeight),width=image.naturalWidth*base*zoom,height=image.naturalHeight*base*zoom;canvas.width=size;canvas.height=size;context.clearRect(0,0,size,size);context.drawImage(image,(size-width)/2+x*size,(size-height)/2+y*size,width,height);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.92));if(!blob)throw new Error('Não foi possível recortar a imagem da categoria');return new File([blob],'categoria-enquadrada.webp',{type:'image/webp'})}
 async function prepareAdminForm(path,options){if(!(options.body instanceof FormData)||!/^\/api\/v1\/admin\/categories(?:\/|$)/.test(path))return;const cropped=await categoryCropFile();if(cropped)options.body.set('image',cropped);options.body.set('imageScale','100');options.body.set('imagePositionX','0');options.body.set('imagePositionY','0')}
 async function api(path,options={}){await prepareAdminForm(path,options);const isForm=options.body instanceof FormData,res=await fetch(`${C.API_BASE_URL}${path}`,{...options,credentials:'include',headers:{...(options.body&&!isForm?{'Content-Type':'application/json'}:{}),...options.headers}});let json;try{json=await res.json()}catch{throw new Error('Resposta inválida da API')}if(res.status===401&&page!=='login'){location.href='login.html';throw new Error('Sessão expirada')}if(!res.ok||!json.success)throw new Error(json.error?.message||`Erro ${res.status}`);return json.data}
@@ -62,8 +63,8 @@ async function login(){
     button.disabled=true;
     button.textContent='Entrando…';
     try{
-      await api('/api/v1/admin/auth/login',{method:'POST',body:JSON.stringify({email,password,turnstileToken:window.turnstileToken})});
-      location.href='index.html';
+      const session=await api('/api/v1/admin/auth/login',{method:'POST',body:JSON.stringify({email,password,turnstileToken:window.turnstileToken})});
+      location.href=collaboratorStartPage(session.actor);
     }catch(error){
       message(error.message);
       window.turnstileToken='';
