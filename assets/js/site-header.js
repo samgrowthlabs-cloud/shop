@@ -58,6 +58,7 @@ export function applySiteTheme(theme){
     '--accent-hover':`color-mix(in srgb,${theme.accentColor} 82%,#000)`,
     '--text':theme.pageTextColor,
     '--muted':theme.mutedTextColor,
+    '--season-icon-color':theme.iconColor||theme.accentColor,
     '--season-price':theme.priceColor||theme.accentColor,
     '--season-old-price':theme.oldPriceColor||theme.mutedTextColor,
     '--season-footer-bg':theme.footerBackground||'#eef3f1',

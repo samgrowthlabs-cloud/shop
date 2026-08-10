@@ -237,7 +237,7 @@ export default {
       if (/no such column:.*price_(?:source|sync)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PRICE_SYNC_MIGRATION_REQUIRED",message:"Execute mercadolivre-price-sync-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (
-        /no such column:.*(?:header_background_end|header_gradient_enabled|header_gradient_angle|header_media_storage_key|header_media_opacity|header_media_position|header_media_size|header_media_scale|header_media_repeat|logo_text_color|logo_height)/i.test(
+        /no such column:.*(?:header_background_end|header_gradient_enabled|header_gradient_angle|header_media_storage_key|header_media_opacity|header_media_position|header_media_size|header_media_scale|header_media_repeat|logo_text_color|logo_height|icon_color)/i.test(
           detail,
         )
       )
@@ -769,7 +769,7 @@ async function publicSiteConfig(req, env, id) {
       `SELECT id,name,eyebrow,title,message,button_text buttonText,link_url linkUrl,desktop_storage_key desktopStorageKey,mobile_storage_key mobileStorageKey,alt_text altText,desktop_position_x desktopPositionX,desktop_position_y desktopPositionY,desktop_scale desktopScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,targeting_json targetingJson,style_json styleJson,display_duration_ms displayDurationMs,sort_order sortOrder FROM banners WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at DESC`,
     ),
     env.DB.prepare(
-      `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,price_color priceColor,old_price_color oldPriceColor,header_hover_color headerHoverColor,footer_background footerBackground,footer_text_color footerTextColor,footer_link_color footerLinkColor,footer_hover_color footerHoverColor,card_hover_background cardHoverBackground,card_hover_border_color cardHoverBorderColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
+      `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,icon_color iconColor,price_color priceColor,old_price_color oldPriceColor,header_hover_color headerHoverColor,footer_background footerBackground,footer_text_color footerTextColor,footer_link_color footerLinkColor,footer_hover_color footerHoverColor,card_hover_background cardHoverBackground,card_hover_border_color cardHoverBorderColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,CASE WHEN lower(header_media_storage_key) LIKE '%.gif' AND header_media_size='cover' THEN 'contain' ELSE header_media_size END headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat FROM seasonal_themes WHERE is_active=1 AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) LIMIT 1`,
     ),
     env.DB.prepare(
       `SELECT pa.id,pa.name,pa.slug,pa.logo_url logoUrl,COUNT(DISTINCT o.product_id) productCount FROM partners pa JOIN offers o ON o.partner_id=pa.id AND o.availability='available' JOIN products p ON p.id=o.product_id AND p.status='published' WHERE pa.is_active=1 GROUP BY pa.id ORDER BY productCount DESC,pa.name`,
@@ -6149,6 +6149,7 @@ const THEME_COLORS = [
   "accentColor",
   "pageTextColor",
   "mutedTextColor",
+  "iconColor",
   "priceColor",
   "oldPriceColor",
   "headerHoverColor",
@@ -6188,6 +6189,7 @@ function themeValues(body) {
     String(body.accentColor).toLowerCase(),
     String(body.pageTextColor).toLowerCase(),
     String(body.mutedTextColor).toLowerCase(),
+    String(body.iconColor).toLowerCase(),
     String(body.priceColor).toLowerCase(),
     String(body.oldPriceColor).toLowerCase(),
     String(body.headerHoverColor).toLowerCase(),
@@ -6226,7 +6228,7 @@ async function adminThemes(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,price_color priceColor,old_price_color oldPriceColor,header_hover_color headerHoverColor,footer_background footerBackground,footer_text_color footerTextColor,footer_link_color footerLinkColor,footer_hover_color footerHoverColor,card_hover_background cardHoverBackground,card_hover_border_color cardHoverBorderColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,header_media_size headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat,starts_at startsAt,ends_at endsAt,is_active isActive,created_at createdAt FROM seasonal_themes ORDER BY is_active DESC,created_at DESC`,
+    `SELECT id,name,holiday,header_background headerBackground,header_background_end headerBackgroundEnd,header_gradient_enabled headerGradientEnabled,header_gradient_angle headerGradientAngle,header_text_color headerTextColor,accent_color accentColor,page_text_color pageTextColor,muted_text_color mutedTextColor,icon_color iconColor,price_color priceColor,old_price_color oldPriceColor,header_hover_color headerHoverColor,footer_background footerBackground,footer_text_color footerTextColor,footer_link_color footerLinkColor,footer_hover_color footerHoverColor,card_hover_background cardHoverBackground,card_hover_border_color cardHoverBorderColor,logo_text logoText,logo_text_color logoTextColor,logo_height logoHeight,logo_storage_key logoStorageKey,logo_hover_storage_key logoHoverStorageKey,header_media_storage_key headerMediaStorageKey,header_media_opacity headerMediaOpacity,header_media_position headerMediaPosition,header_media_size headerMediaSize,header_media_scale headerMediaScale,header_media_repeat headerMediaRepeat,starts_at startsAt,ends_at endsAt,is_active isActive,created_at createdAt FROM seasonal_themes ORDER BY is_active DESC,created_at DESC`,
   ).all();
   return ok(req, env, results || [], id);
 }
@@ -6248,7 +6250,7 @@ async function createTheme(req, env, id) {
     );
   statements.push(
     env.DB.prepare(
-`INSERT INTO seasonal_themes(id,name,holiday,header_background,header_background_end,header_gradient_enabled,header_gradient_angle,header_text_color,accent_color,page_text_color,muted_text_color,price_color,old_price_color,header_hover_color,footer_background,footer_text_color,footer_link_color,footer_hover_color,card_hover_background,card_hover_border_color,logo_text,logo_text_color,logo_height,logo_storage_key,logo_hover_storage_key,header_media_storage_key,header_media_opacity,header_media_position,header_media_size,header_media_scale,header_media_repeat,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+`INSERT INTO seasonal_themes(id,name,holiday,header_background,header_background_end,header_gradient_enabled,header_gradient_angle,header_text_color,accent_color,page_text_color,muted_text_color,icon_color,price_color,old_price_color,header_hover_color,footer_background,footer_text_color,footer_link_color,footer_hover_color,card_hover_background,card_hover_border_color,logo_text,logo_text_color,logo_height,logo_storage_key,logo_hover_storage_key,header_media_storage_key,header_media_opacity,header_media_position,header_media_size,header_media_scale,header_media_repeat,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(themeId, ...themeValues(body)),
   );
   await env.DB.batch(statements);
@@ -6291,7 +6293,7 @@ async function updateTheme(req, env, themeId, id) {
     );
   statements.push(
     env.DB.prepare(
-`UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,price_color=?,old_price_color=?,header_hover_color=?,footer_background=?,footer_text_color=?,footer_link_color=?,footer_hover_color=?,card_hover_background=?,card_hover_border_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+`UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,icon_color=?,price_color=?,old_price_color=?,header_hover_color=?,footer_background=?,footer_text_color=?,footer_link_color=?,footer_hover_color=?,card_hover_background=?,card_hover_border_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(...themeValues(body), themeId),
   );
   await env.DB.batch(statements);

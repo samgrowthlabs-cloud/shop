@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS seasonal_themes (
   header_gradient_enabled INTEGER NOT NULL DEFAULT 0 CHECK (header_gradient_enabled IN (0,1)), header_gradient_angle INTEGER NOT NULL DEFAULT 90,
   header_text_color TEXT NOT NULL DEFAULT '#233330',
   accent_color TEXT NOT NULL DEFAULT '#0a7c71', page_text_color TEXT NOT NULL DEFAULT '#233330',
-  muted_text_color TEXT NOT NULL DEFAULT '#687773', logo_text TEXT NOT NULL DEFAULT 'SHOPLAB', logo_text_color TEXT NOT NULL DEFAULT '#0a7c71', logo_height INTEGER NOT NULL DEFAULT 36,
+  muted_text_color TEXT NOT NULL DEFAULT '#687773', icon_color TEXT NOT NULL DEFAULT '#0a7c71', logo_text TEXT NOT NULL DEFAULT 'SHOPLAB', logo_text_color TEXT NOT NULL DEFAULT '#0a7c71', logo_height INTEGER NOT NULL DEFAULT 36,
   price_color TEXT NOT NULL DEFAULT '#087c70', old_price_color TEXT NOT NULL DEFAULT '#687773',
   header_hover_color TEXT NOT NULL DEFAULT '#0a7c71', footer_background TEXT NOT NULL DEFAULT '#eef3f1', footer_text_color TEXT NOT NULL DEFAULT '#233330',
   footer_link_color TEXT NOT NULL DEFAULT '#687773', footer_hover_color TEXT NOT NULL DEFAULT '#0a7c71', card_hover_background TEXT NOT NULL DEFAULT '#ffffff', card_hover_border_color TEXT NOT NULL DEFAULT '#0a7c71',

@@ -1323,8 +1323,8 @@ html{scrollbar-gutter:stable}
 .header-brand.is-premium{flex-direction:row!important;align-items:center!important;gap:5px!important}
 .header-brand .default-site-logo{position:relative!important;display:inline-flex!important;align-items:center!important;width:auto!important;max-width:100%!important;overflow:visible!important}
 .header-brand .default-site-logo::after{content:"+";position:absolute;top:50%;left:calc(100% + 5px);color:transparent;font-family:Arial,sans-serif;font-size:34px;font-weight:900;line-height:1;transform:translateY(-50%)}
-.header-brand.is-premium .default-site-logo::after{color:#111}
-.premium-checkout-header>a:first-child{display:inline-flex;align-items:center;gap:7px}.premium-wordmark-plus{color:#111;font-family:Arial,sans-serif;font-size:34px;font-weight:900;line-height:1}
+.header-brand.is-premium .default-site-logo::after{color:#07956f}
+.premium-checkout-header>a:first-child{display:inline-flex;align-items:center;gap:7px}.premium-wordmark-plus{color:#07956f;font-family:Arial,sans-serif;font-size:34px;font-weight:900;line-height:1}
 @media(max-width:760px){
   .header-brand,body[data-page="home"] .header-brand{flex-direction:row!important;align-items:center!important;justify-content:center!important;gap:4px!important}
   .brand-premium-label{font-size:7px;letter-spacing:.22em;text-indent:.22em}
@@ -2508,7 +2508,7 @@ body[data-page="home"] .home-banner-arrow:focus-visible{opacity:1}
   border:0;
   border-radius:0;
   background:none;
-  color:#111!important;
+  color:#07956f!important;
   font:900 30px/1 Arial,sans-serif;
   box-shadow:none;
   transform:translateY(-53%);
@@ -5223,3 +5223,10 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
   .header .account-dropdown{z-index:90}
 }
 
+
+/* Cor de ícones do tema sazonal, inclusive a Lista no desktop e no celular. */
+html[data-seasonal-theme] svg{color:var(--season-icon-color,var(--accent))}
+html[data-seasonal-theme] .nav-cart{color:var(--season-icon-color,var(--accent))!important}
+html[data-seasonal-theme] .nav-cart img{display:none!important}
+html[data-seasonal-theme] .nav-cart::before{content:"";display:block;flex:0 0 auto;width:24px;height:24px;background:var(--season-icon-color,var(--accent));mask:url("../icons/list.svg") center/contain no-repeat;-webkit-mask:url("../icons/list.svg") center/contain no-repeat}
+@media(max-width:760px){html[data-seasonal-theme] .mobile-home-header-actions .nav-cart::before{width:27px;height:27px}}
