@@ -61,7 +61,7 @@ const ADMIN_ROLE_LABELS = {
 const AI_FEATURES = {
   search_intent: { label: "Interpretação da pesquisa", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
   premium_search: { label: "Ordenação da pesquisa SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8" },
-  comparison: { label: "Comparação de produtos", model: "@cf/qwen/qwen3-30b-a3b-fp8", fallback: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+  comparison: { label: "Comparação de produtos", model: "@cf/openai/gpt-oss-120b", fallback: "@cf/qwen/qwen3-30b-a3b-fp8" },
   product_insight: { label: "Análise do produto", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
   premium_related: { label: "Alternativas SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8" },
   related_ranking: { label: "Produtos relacionados", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
@@ -1793,6 +1793,9 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
           content: "Você é o algoritmo SHOPLAB+ de comparação da SHOPLAB. Compare somente os dados fornecidos no título, descrição curta, descrição completa, análise editorial e especificações. Use as descrições para compreender finalidade, conteúdo, público, recursos, vantagens e limitações, especialmente em livros e produtos com ficha técnica curta. Reconheça nomes equivalentes como RAM/memória, CPU/processador, armazenamento/SSD e tela/display. Nunca transforme linguagem promocional em fato comprovado e nunca invente benchmarks, autonomia, desempenho ou especificações. Campo ausente significa dado não informado, nunca produto pior. Avalie preço, equilíbrio técnico, limitações e adequação ao uso. O melhor custo-benefício deve justificar a diferença de preço. O melhor geral precisa ser sustentado pelos dados. Informe se vale pagar mais usando yes, no ou depends e explique para qual uso. Em evidence, cite fatos exatos presentes na entrada. Gere notas comparativas de 0 a 100 para desempenho, custo-benefício, trabalho, jogos, estudos e portabilidade; elas comparam apenas estes produtos e não são benchmarks absolutos. Quando faltarem dados relevantes, reduza a confiança e liste-os em missingData. Recomende usos concretos e diferentes. Escreva em português brasileiro claro e direto. Retorne somente o JSON solicitado.",
         },
         {
+          role: "system",
+          content: "ESTÁGIO FINAL — faça uma recomendação de compra que justificaria pagar por esta análise. Trabalhe como um analista técnico independente, não como vendedor. Antes de concluir, construa mentalmente uma matriz: fatos explicitamente comprovados por produto, diferenças materiais para cada perfil de uso e lacunas que impedem uma conclusão. Entregue uma decisão, não um resumo. O veredito deve declarar a escolha principal, o perfil exato para o qual ela vence, e o caso específico em que cada alternativa passa a ser melhor. Em recommendations, crie uma recomendação distinta por produto: bestFor deve descrever uma pessoa ou uso concreto e highlights devem citar apenas fatos disponíveis. Em profileScores, pontue cada perfil somente quando houver evidência relevante; use 50 e confidence low apenas no perfil sem dados suficientes. Em tradeoffs, escreva perdas concretas de escolher cada opção. Em worthPayingMoreReason, compare a diferença de preço com o benefício comprovado e diga para quem ela se paga — ou por que não se paga. Em evidence, use fatos curtos auditáveis da entrada. Não invente, não complete lacunas por conhecimento externo, não transforme marketing em especificação e não chame o mais barato de melhor sem motivo. Retorne apenas o JSON do schema.",
+        },        {
           role: "user",
           content: JSON.stringify({
             category: products[0].category,
@@ -1804,15 +1807,15 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
         messages,
         ...(structured ? { response_format: { type: "json_schema", json_schema: PREMIUM_COMPARISON_SUMMARY_SCHEMA } } : {}),
         temperature: 0,
-        max_tokens: 2400,
+        max_tokens: 3200,
       }, {
         gateway: {
         id: String(env.AI_GATEWAY_ID || "default"),
         skipCache: false,
         cacheTtl: 2592000,
-        cacheKey: `premium-comparison-v14:${attempt}:${structured ? "schema" : "json"}:${version}`,
+        cacheKey: `premium-comparison-v19:${attempt}:${structured ? "schema" : "json"}:${version}`,
         collectLog: true,
-        metadata: { feature: "premium-product-comparison", comparisonVersion: "v14", productSlugs: [...slugs].sort().join(",") },
+        metadata: { feature: "premium-product-comparison", comparisonVersion: "v19", productSlugs: [...slugs].sort().join(",") },
         },
       });
     const responseValue = (result) => {
@@ -1888,7 +1891,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     if (!freeAccess.allowed)
       return ok(req, env, { premium: false, premiumRequired: true, freeCreditsExhausted: true, freeCredits: freeAccess, plan: premium.plan }, id);
   }
-  const version = await sha256(`premium-product-insight-v3|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
+  const version = await sha256(`premium-product-insight-v4|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
   const cached = await env.DB.prepare(
     `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
   ).bind(version, user.id).first();
@@ -1932,7 +1935,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     const aiSetting = insightAiSetting;
     if (!aiSetting.isEnabled) throw new Error("AI_PRODUCT_INSIGHT_DISABLED");
     const messages = [
-      { role: "system", content: "Você analisa produtos da SHOPLAB em português brasileiro. Use só os dados fornecidos. Gere um JSON com:\n{\"conclusion\":[\"frase1\",\"frase2\",\"frase3\"],\"bestFor\":[\"frase1\",\"frase2\"],\"howItHelps\":[\"frase1\",\"frase2\"]}\nRetorne APENAS o JSON, sem markdown, sem explicação." },
+      { role: "system", content: "Você é o analista de decisão SHOPLAB+ e escreve em português brasileiro. Use exclusivamente fatos presentes nos dados fornecidos; ausência de dado é incerteza, nunca defeito. Produza uma análise que realmente ajude a comprar: diga o encaixe real com o contexto do usuário, ganhos concretos, limitações verificáveis e o que confirmar antes de pagar. Não invente testes, desempenho, autonomia, compatibilidade ou promessas. Gere APENAS JSON: {\"conclusion\":[\"decisão direta baseada em fatos\"],\"bestFor\":[\"perfil ou uso específico\"],\"howItHelps\":[\"benefício ligado a um dado\"]}. Cada item deve ser curto, específico e útil; não use frases genéricas." },
       { role: "user", content: JSON.stringify({
         product: {
           name: product.name, category: product.category, brand: product.brand, priceCents: product.price,
@@ -2139,9 +2142,9 @@ async function analyzeProductComparison(req, env, ctx, id) {
   if (!hasComparisonContext) return ok(req, env, technicalResult, id);
   const comparisonAiSetting = await aiFeatureSetting(env, "comparison");
   if (!comparisonAiSetting.isEnabled) return ok(req, env, technicalResult, id);
-  const comparisonAlgorithmVersion = 'v17';
+  const comparisonAlgorithmVersion = 'v19';
   products.forEach((product) => { product.updatedAt = `${product.updatedAt}|${comparisonAlgorithmVersion}`; });
-  const version = await sha256(`comparison-v14|${comparisonAiSetting.modelId}|${comparisonAiSetting.fallbackModelId || ""}|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
+  const version = await sha256(`comparison-v19|${comparisonAiSetting.modelId}|${comparisonAiSetting.fallbackModelId || ""}|${products.map((product) => `${product.slug}:${product.updatedAt}:${product.price}:${product.fullDescription}:${JSON.stringify(product.specifications)}`).join("|")}`);
   const cacheKey = new Request(`https://comparison.shoplab.internal/v1/${version}`);
   try {
     const cached = await caches.default.match(cacheKey);
@@ -3414,12 +3417,22 @@ function premiumSearchSelection(ranked, baseline) {
   return selected;
 }
 
-async function premiumSearchRank(env, ctx, query, intent, products) {
+async function premiumPersonalSearchContext(env, userId) {
+  const [searches, products] = await env.DB.batch([
+    env.DB.prepare(`SELECT query_text query FROM events WHERE user_id=? AND event_type IN ('search','search_result_click','offer_click') AND query_text IS NOT NULL AND query_text<>'' ORDER BY created_at DESC LIMIT 12`).bind(userId),
+    env.DB.prepare(`SELECT p.name FROM user_favorites f JOIN products p ON p.slug=f.product_slug WHERE f.user_id=? UNION ALL SELECT p.name FROM user_view_history h JOIN products p ON p.slug=h.product_slug WHERE h.user_id=? ORDER BY name LIMIT 12`).bind(userId, userId),
+  ]);
+  return {
+    recentSearches: [...new Set((searches.results || []).map((item) => normalizeSearch(item.query)).filter(Boolean))].slice(0, 8),
+    interestedProducts: [...new Set((products.results || []).map((item) => String(item.name || "")).filter(Boolean))].slice(0, 8),
+  };
+}
+async function premiumSearchRank(env, ctx, query, intent, products, personalContext = null) {
   const baseline = premiumSearchBaseline(products);
   const aiSetting = await aiFeatureSetting(env, "premium_search");
   if (!aiSetting.isEnabled) return { products: baseline.slice(0, 24), aiUsed: false, explanation: "Ordenado por relevância, qualidade e custo-benefício." };
   if (!env.AI || baseline.length < 2) return { products: baseline.slice(0, 24), aiUsed: false, explanation: "Ordenado por relevância, qualidade e custo-benefício." };
-  const signature = await sha256(`premium-search-v1|${aiSetting.modelId}|${normalizeSearch(query)}|${JSON.stringify(intent || {})}|${baseline.map((item) => `${item.slug}:${item.updatedAt}:${item.price}:${item.editorialScore}:${item.ratingAverage}:${item.ratingTotal}`).join("|")}`);
+  const signature = await sha256(`premium-search-v1|${aiSetting.modelId}|${normalizeSearch(query)}|${JSON.stringify(intent || {})}|${JSON.stringify(personalContext || {})}|${baseline.map((item) => `${item.slug}:${item.updatedAt}:${item.price}:${item.editorialScore}:${item.ratingAverage}:${item.ratingTotal}`).join("|")}`);
   const cacheKey = new Request(`https://premium-search.shoplab.internal/v1/${signature}`);
   try {
     const cached = await caches.default.match(cacheKey);
@@ -3437,7 +3450,7 @@ async function premiumSearchRank(env, ctx, query, intent, products) {
     const result = await env.AI.run(model, {
       messages: [
         { role: "system", content: "Você reranqueia resultados da SHOPLAB para assinantes SHOPLAB+. Considere primeiro a intenção e a finalidade declaradas na busca. Depois avalie aderência técnica, qualidade editorial, avaliações com sua quantidade, preço, desconto e custo-benefício. Produto mais barato não é automaticamente melhor; produto caro precisa justificar a diferença com dados fornecidos. Campo ausente não significa desempenho ruim. Não invente especificações, benchmarks ou benefícios. Use somente os slugs fornecidos, sem repetir, e escreva motivos curtos em português brasileiro. Retorne primeiro os produtos realmente mais adequados." },
-        { role: "user", content: JSON.stringify({ query, intent, products: baseline.slice(0, 30).map((product) => ({ slug: product.slug, name: product.name, category: product.category, brand: product.brand, priceCents: product.price, oldPriceCents: product.oldPrice, editorialScore: product.editorialScore, ratingAverage: product.ratingAverage, ratingTotal: product.ratingTotal, baselineValueScore: product.premiumValueScore, shortDescription: String(product.shortDescription || "").slice(0, 500), specifications: parse(product.specificationsJson, []).slice(0, 16) })) }) },
+        { role: "user", content: JSON.stringify({ query, intent, personalContext, products: baseline.slice(0, 30).map((product) => ({ slug: product.slug, name: product.name, category: product.category, brand: product.brand, priceCents: product.price, oldPriceCents: product.oldPrice, editorialScore: product.editorialScore, ratingAverage: product.ratingAverage, ratingTotal: product.ratingTotal, baselineValueScore: product.premiumValueScore, shortDescription: String(product.shortDescription || "").slice(0, 500), specifications: parse(product.specificationsJson, []).slice(0, 16) })) }) },
       ],
       response_format: { type: "json_schema", json_schema: PREMIUM_SEARCH_RANK_SCHEMA },
       temperature: 0,
@@ -3468,8 +3481,6 @@ async function searchV2(req, env, url, ctx, id) {
   const searchUser = req.headers.has("authorization") ? await activeUser(req, env) : null;
   const premium = searchUser ? await premiumSubscriptionData(env, searchUser.id) : null;
   const premiumEnabled = Boolean(premium?.premium);
-  // One small, cached intent call is enough for natural-language searches.
-  // Simple product-name searches go straight to D1 without invoking AI.
   const intent = await cachedSearchIntent(env, originalQuery, ctx);
   const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
   const ftsQuery = intent
@@ -3568,9 +3579,11 @@ async function searchV2(req, env, url, ctx, id) {
       .slice(0, 20);
   }
   if (intent && results.length && !sort) results = rankContextualCandidates(results, intent.searchTerms);
+  const smartSearch = url.searchParams.get("smart") === "1" && premiumEnabled;
+  const personalContext = smartSearch ? await premiumPersonalSearchContext(env, searchUser.id) : null;
   let premiumRanking = null;
   if (premiumEnabled && results.length)
-    premiumRanking = await premiumSearchRank(env, ctx, originalQuery, intent, results);
+    premiumRanking = await premiumSearchRank(env, ctx, originalQuery, intent, results, personalContext);
   if (premiumRanking) results = premiumRanking.products;
   ctx.waitUntil(
     env.DB.prepare(

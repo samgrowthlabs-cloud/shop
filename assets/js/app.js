@@ -103,7 +103,7 @@ async function home(){const[p,c]=await Promise.all([getProducts(),getCategories(
 async function listing(){
   const q=params.get('q')||'',slug=params.get('slug')||'',store=params.get('store')||'',initialCategory=params.get('category')||'',initialSort=params.get('sort')||'';
   const categories=await getCategories(),pageCategory=page==='category'?categories.find(item=>item.slug===slug):null;
-  const intelligentSearch=page==='search'&&q?await searchProductsWithMeta({q,categorySlug:pageCategory?.slug||'',sort:''}):null;
+  const intelligentSearch=page==='search'&&q?await searchProductsWithMeta({q,categorySlug:pageCategory?.slug||'',sort:'',smart:params.get('smart')==='1'}):null;
   let all=intelligentSearch?.data||await searchProducts({q,category:pageCategory?.name||'',categorySlug:pageCategory?.slug||'',sort:'',store});
   if(page==='brand'&&slug)all=all.filter(product=>(product.brand||'').toLocaleLowerCase('pt-BR')===decodeURIComponent(slug).replace(/-/g,' ').toLocaleLowerCase('pt-BR'));
   if(page==='author'&&slug)all=all.filter(product=>(product.author||'').toLocaleLowerCase('pt-BR')===decodeURIComponent(slug).replace(/-/g,' ').toLocaleLowerCase('pt-BR'));
