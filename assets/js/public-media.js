@@ -2,6 +2,12 @@ import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 import{session,userApi}from'./auth.js';
 
 const cache=new Map();
+const INSIGHT_CACHE_TTL=1000*60*60*12;
+function cachedInsight(slug){
+  const key=`shoplab:product-insight:${slug}`;
+  try{const item=JSON.parse(sessionStorage.getItem(key)||'null');if(item&&Date.now()-item.savedAt<INSIGHT_CACHE_TTL)return Promise.resolve(item.value)}catch{}
+  return userApi(`products/${encodeURIComponent(slug)}/plus-insight`).then(value=>{if(value?.conclusion?.length)try{sessionStorage.setItem(key,JSON.stringify({savedAt:Date.now(),value}))}catch{}return value});
+}
 async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=fetch(`${C.API_BASE_URL}/api/v1/products/${encodeURIComponent(slug)}?mediaVersion=2`,{cache:'default'}).then(r=>r.ok?r.json():null).then(j=>j?.data||null).catch(()=>null);cache.set(slug,promise);return promise}
 const url=(m,width=0)=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}${width?`?w=${width}&q=78`:''}`:m?.externalUrl||'';
 const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -137,13 +143,13 @@ async function renderPremiumProductInsight(data,insightPromise){
     anchor.insertAdjacentElement('afterend',section);
     return;
   }
-  section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Preparando uma conclusão personalizada…</p></div>';
+  section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';
   anchor.insertAdjacentElement('afterend',section);
   try{
-    const insight=await(insightPromise||userApi(`products/${encodeURIComponent(data.slug)}/plus-insight`));
+    const insight=await(insightPromise||cachedInsight(data.slug));
     if(insight.freeCreditsExhausted){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SEUS 5 CRÉDITOS FORAM USADOS</span><h2>Continue analisando com SHOPLAB+</h2><p>Você já aproveitou suas análises gratuitas. Assine para receber novas análises inteligentes todos os meses.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>';return}
     if(insight.premiumRequired){section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>`;return}
-    if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+</span><h2>Limite mensal de novas análises atingido</h2><p>Análises já salvas em cache continuam disponíveis. Consulte seu plano para acompanhar a renovação da cota.</p><a class="btn ghost" href="conta.html?aba=plus">Ver meu plano</a></div>';return}
+    if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';return}
     if(insight.generationFailed){section.className='section premium-product-insight is-unavailable';section.innerHTML='<div class="container"><span class="eyebrow">ANÁLISE INDISPONÍVEL</span><h2>Não foi possível gerar a análise agora</h2><p>A análise personalizada não ficou pronta desta vez. Tente novamente em alguns instantes ou confira os dados do produto abaixo.</p></div>';return}
     if(!insight.conclusion?.length){section.remove();return}
     const lines=value=>`<div>${(value||[]).map(item=>`<p>${safe(item)}</p>`).join('')}</div>`;
@@ -176,7 +182,7 @@ function openGallery(items,startIndex,name){
 
 async function detailMedia(){
   const box=document.querySelector('.detail-media');if(!box||box.dataset.mediaReady)return;box.dataset.mediaReady='1';
-  const slug=new URLSearchParams(location.search).get('slug'),insightPromise=slug&&session()?userApi(`products/${encodeURIComponent(slug)}/plus-insight`).catch(()=>null):null,data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data,insightPromise);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
+  const slug=new URLSearchParams(location.search).get('slug'),insightPromise=slug&&session()?cachedInsight(slug).catch(()=>null):null,data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data,insightPromise);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
   const main=items.find(x=>x.isPrimary)||items[0],mainIndex=items.indexOf(main),visible=items.slice(0,4);
   const responsiveImage=(item)=>({src:url(item,960),srcset:[320,640,960,1280].map(width=>`${url(item,width)} ${width}w`).join(', ')});
   const mainSource=responsiveImage(main);

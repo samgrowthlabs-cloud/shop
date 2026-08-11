@@ -116,6 +116,8 @@ Banco SQLite gerenciado usado para catálogo, ofertas, promoções, usuários, s
 
 Crie um banco novo com `schema.sql`. Em banco existente, aplique também as migrações correspondentes; veja [docs/MIGRATIONS.md](docs/MIGRATIONS.md).
 
+Para executar a API sobre AWS RDS/Aurora, PostgreSQL, MySQL ou outro provedor, consulte o [guia de portabilidade de banco](docs/DATABASE-PORTABILITY.md).
+
 ### Cloudflare R2 — binding obrigatório `MEDIA`
 
 Armazena imagens de produtos, banners, logos, fontes enviadas pelo painel e demais arquivos de mídia. O Worker é responsável por validar upload, construir URLs e remover arquivos substituídos. Não exponha um bucket privado diretamente sem passar pelas rotas e políticas do Worker.

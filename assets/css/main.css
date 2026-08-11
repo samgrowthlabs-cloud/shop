@@ -5381,3 +5381,20 @@ body:not([data-admin-page]) .product-specifications-section,body:not([data-admin
   body[data-page="search"] .listing-section .toolbar{display:none!important}
 }
 @media(max-width:760px){body[data-page="search"] .page-hero>.eyebrow{display:none}}
+/* Comparador: tipografia e leitura seguem a identidade configurada no Admin. */
+body[data-page="compare"] .comparison-page,
+body[data-page="compare"] .comparison-page :is(button,input,select,textarea,table,th,td,a,strong,small,p,h1,h2,h3,h4,li,span){font-family:var(--site-font-family,Arial,Helvetica,sans-serif)!important}
+body[data-page="compare"] .comparison-table{border-color:color-mix(in srgb,var(--accent) 18%,var(--border));font-size:14px}
+body[data-page="compare"] .comparison-table thead th{padding:16px 14px;background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 7%,#fff),#fff)}
+body[data-page="compare"] .comparison-table thead strong{display:-webkit-box;overflow:hidden;min-height:42px;font-size:15px;line-height:1.38;letter-spacing:-.012em;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+body[data-page="compare"] .comparison-table tbody th{font-size:12px;font-weight:800;letter-spacing:.01em}
+body[data-page="compare"] .comparison-table td{font-size:14px;line-height:1.5}
+body[data-page="compare"] .comparison-table td>strong{font-size:16px;letter-spacing:-.01em}
+body[data-page="compare"] .criterion-explanation{font-size:12px;line-height:1.45}
+body[data-page="compare"] .comparison-note{font-size:12px;line-height:1.5}
+body[data-page="compare"] .comparison-intelligence h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.035em}
+body[data-page="compare"] .comparison-verdict p,.comparison-summary{font-size:15px;line-height:1.7}
+@media(max-width:600px){body[data-page="compare"] .comparison-table thead strong{min-height:36px;font-size:12px;line-height:1.35}body[data-page="compare"] .comparison-table tbody th{font-size:11px}body[data-page="compare"] .comparison-table td{font-size:12px}body[data-page="compare"] .comparison-table td>strong{font-size:14px}body[data-page="compare"] .comparison-intelligence h2{font-size:23px}body[data-page="compare"] .comparison-verdict p,body[data-page="compare"] .comparison-summary{font-size:14px;line-height:1.65}}
+.premium-insight-progress{width:min(520px,100%);height:8px;margin-top:8px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.16)}
+.premium-insight-progress>span{display:block;width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#73ead6,#d8fff8,#73ead6);box-shadow:0 0 16px rgba(116,226,207,.8);animation:premium-insight-progress 1.55s ease-in-out infinite}
+.premium-insight-progress-label{color:#bdece3;font-size:12px;line-height:1.4}@keyframes premium-insight-progress{0%{transform:translateX(-110%)}55%{transform:translateX(145%)}100%{transform:translateX(280%)}}

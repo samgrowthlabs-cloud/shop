@@ -59,23 +59,77 @@ const ADMIN_ROLE_LABELS = {
   custom: "Personalizado",
 };
 const AI_FEATURES = {
-  search_intent: { label: "Interpretação da pesquisa", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
-  premium_search: { label: "Ordenação da pesquisa SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8" },
+  search_intent: { label: "Interpretação da pesquisa", model: "@cf/qwen/qwen3-30b-a3b-fp8", fallback: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+  premium_search: { label: "Ordenação da pesquisa SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8", fallback: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
   comparison: { label: "Comparação de produtos", model: "@cf/openai/gpt-oss-120b", fallback: "@cf/qwen/qwen3-30b-a3b-fp8" },
-  product_insight: { label: "Análise do produto", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
-  premium_related: { label: "Alternativas SHOPLAB+", model: "@cf/qwen/qwen3-30b-a3b-fp8" },
+  product_insight: { label: "Análise do produto", model: "deepseek/deepseek-v4-pro", fallback: "@cf/openai/gpt-oss-120b" },
+  premium_related: { label: "Alternativas SHOPLAB+", model: "@cf/openai/gpt-oss-120b", fallback: "@cf/qwen/qwen3-30b-a3b-fp8" },
   related_ranking: { label: "Produtos relacionados", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
-  product_draft: { label: "Assistente de cadastro", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+  product_draft: { label: "Assistente de cadastro", model: "deepseek/deepseek-v4-pro", fallback: "@cf/openai/gpt-oss-120b" },
 };
 const WORKERS_AI_MODELS = [
   { id: "@cf/qwen/qwen3-30b-a3b-fp8", name: "Qwen3 30B A3B FP8" },
   { id: "@cf/qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" },
   { id: "@cf/mistralai/mistral-small-3.1-24b-instruct", name: "Mistral Small 3.1 24B" },
   { id: "@cf/openai/gpt-oss-20b", name: "GPT-OSS 20B" },
+  { id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
   { id: "@cf/openai/gpt-oss-120b", name: "GPT-OSS 120B" },
   { id: "@cf/nvidia/nemotron-3-120b-a12b", name: "Nemotron 3 120B A12B" },
 ];
 
+/* Database boundary: all application code uses this small D1-shaped contract. */
+function databaseFor(env) {
+  const provider = String(env.DB_PROVIDER || "d1").toLowerCase();
+  if (provider === "d1") {
+    if (!env.DB) throw new Error("DATABASE_BINDING_MISSING: configure the DB D1 binding");
+    return env.DB;
+  }
+  if (provider === "http-gateway") return createHttpDatabaseGateway(env);
+  throw new Error(`DATABASE_PROVIDER_UNSUPPORTED:${provider}`);
+}
+
+function createHttpDatabaseGateway(env) {
+  const baseUrl = String(env.DATABASE_GATEWAY_URL || "").replace(/\/+$/, "");
+  const token = String(env.DATABASE_GATEWAY_TOKEN || "");
+  if (!baseUrl || !token) throw new Error("DATABASE_GATEWAY_CONFIG_MISSING");
+  const execute = async (statements) => {
+    const response = await fetch(`${baseUrl}/v1/database/execute`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ statements }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.success)
+      throw new Error(`DATABASE_GATEWAY_ERROR:${payload?.error?.message || response.status}`);
+    return payload.results || [];
+  };
+  const statement = (sql, values = []) => ({
+    sql, values,
+    bind(...nextValues) { return statement(sql, nextValues); },
+    async first() { return (await execute([{ sql, values, mode: "first" }]))[0]?.result ?? null; },
+    async all() { const result = (await execute([{ sql, values, mode: "all" }]))[0]?.result || []; return { results: result }; },
+    async run() { return (await execute([{ sql, values, mode: "run" }]))[0]?.result || {}; },
+  });
+  return {
+    prepare(sql) { return statement(sql); },
+    async batch(statements) {
+      return execute(statements.map(({ sql, values }) => ({ sql, values })));
+    },
+  };
+}
+
+async function runAiWithFallback(env, aiSetting, input, options = undefined) {
+  let lastError = null;
+  for (const modelId of [...new Set([aiSetting.modelId, aiSetting.fallbackModelId].filter(Boolean))]) {
+    try {
+      return await env.AI.run(modelId, input, options);
+    } catch (error) {
+      lastError = error;
+      console.warn(JSON.stringify({ event: "ai_model_fallback", feature: aiSetting.featureKey, modelId, error: String(error?.message || error) }));
+    }
+  }
+  throw lastError || new Error("AI_MODEL_RUN_FAILED");
+}
 async function aiFeatureSetting(env, featureKey) {
   const defaults = AI_FEATURES[featureKey];
   if (!defaults) throw new Error(`AI_FEATURE_UNKNOWN:${featureKey}`);
@@ -114,6 +168,7 @@ function allowedOrigins(env) {
 export default {
   async fetch(request, env, ctx) {
     const requestId = crypto.randomUUID();
+    env = { ...env, DB: databaseFor(env) };
     try {
       const url = new URL(request.url);
       const shouldAudit = url.pathname.startsWith("/api/v1/admin/") && (request.method !== "GET" || url.pathname === "/api/v1/admin/auth/session");
@@ -1223,7 +1278,7 @@ async function relatedProducts(req, env, ctx, slug, id) {
     if (ctx?.waitUntil) ctx.waitUntil(aiTask.catch(() => null));
     const aiRecommendations = await Promise.race([
       aiTask,
-      new Promise((resolve) => setTimeout(() => resolve(null), 180)),
+      new Promise((resolve) => setTimeout(() => resolve(null), 1400)),
     ]);
     premiumAiRanked = Boolean(aiRecommendations?.length);
     const mergedRecommendations = mergePremiumRelatedProducts(aiRecommendations || [], safeRecommendations).slice(0, 4);
@@ -1891,7 +1946,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     if (!freeAccess.allowed)
       return ok(req, env, { premium: false, premiumRequired: true, freeCreditsExhausted: true, freeCredits: freeAccess, plan: premium.plan }, id);
   }
-  const version = await sha256(`premium-product-insight-v4|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
+  const version = await sha256(`premium-product-insight-v5|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
   const cached = await env.DB.prepare(
     `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=?`,
   ).bind(version, user.id).first();
@@ -1935,7 +1990,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     const aiSetting = insightAiSetting;
     if (!aiSetting.isEnabled) throw new Error("AI_PRODUCT_INSIGHT_DISABLED");
     const messages = [
-      { role: "system", content: "Você é o analista de decisão SHOPLAB+ e escreve em português brasileiro. Use exclusivamente fatos presentes nos dados fornecidos; ausência de dado é incerteza, nunca defeito. Produza uma análise que realmente ajude a comprar: diga o encaixe real com o contexto do usuário, ganhos concretos, limitações verificáveis e o que confirmar antes de pagar. Não invente testes, desempenho, autonomia, compatibilidade ou promessas. Gere APENAS JSON: {\"conclusion\":[\"decisão direta baseada em fatos\"],\"bestFor\":[\"perfil ou uso específico\"],\"howItHelps\":[\"benefício ligado a um dado\"]}. Cada item deve ser curto, específico e útil; não use frases genéricas." },
+      { role: "system", content: "Você é o especialista SHOPLAB+ que transforma ficha técnica em decisão de compra. Escreva em português brasileiro com clareza, energia e precisão. Use apenas fatos presentes nos dados; se algo importante não estiver informado, diga isso como incerteza, nunca invente nem trate como defeito. Gere uma análise que valha a leitura: em conclusion, comece com um hook de decisão — uma frase curta que responda se este produto faz sentido para esta pessoa agora — e depois explique os dois fatos que mais mudam a compra. Em bestFor, descreva perfis de uso concretos, ligados ao histórico e às características cadastradas; não escreva “para quem busca qualidade”. Em howItHelps, conecte cada benefício diretamente a uma especificação, preço ou característica real, explicando o impacto prático no dia a dia. Se os dados apontarem uma limitação, mencione-a com honestidade na conclusão. Nunca invente testes, desempenho, autonomia, compatibilidade, câmeras, resistência ou promessas. Gere APENAS JSON: {\"conclusion\":[\"frases de decisão\"],\"bestFor\":[\"perfil específico\"],\"howItHelps\":[\"fato e impacto prático\"]}. Cada frase deve ser específica, útil e sem marketing vazio." },
       { role: "user", content: JSON.stringify({
         product: {
           name: product.name, category: product.category, brand: product.brand, priceCents: product.price,
@@ -1947,14 +2002,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
         userContext: context,
       }) },
     ];
-    let result;
-    try {
-      result = await env.AI.run(aiSetting.modelId, { messages, temperature: 0.3, max_tokens: 1024 });
-    } catch (aiError) {
-      // Retry without any extra options
-      result = await env.AI.run(aiSetting.modelId, { messages, temperature: 0.3, max_tokens: 1024 }).catch(() => null);
-    }
-    if (!result) throw new Error("AI_MODEL_RUN_FAILED");
+    const result = await runAiWithFallback(env, aiSetting, { messages, temperature: 0.3, max_tokens: 1024 });
     let raw = null;
     const responseText = String(result?.response || "");
     if (result?.response && typeof result.response === "object") {
@@ -2241,7 +2289,9 @@ function premiumProductFamily(product) {
     ["smartwatch", /\b(smartwatch|relogio inteligente|smart band|smartband)\b/],
     ["livro", /\b(livro|ebook|e-book|kindle|autor|editora)\b/],
     ["audio", /\b(fone|headset|headphone|earbuds|caixa de som|alto-falante)\b/],
-    ["camera", /\b(camera|webcam|filmadora)\b/],
+    ["smart_camera", /\b(camera|cam|webcam|filmadora|cftv|vigilancia|im3|im5)\b/],
+    ["smart_speaker", /\b(echo|alexa|smart speaker|assistente de voz)\b/],
+    ["smart_switch", /\b(interruptor|switch|tomada inteligente|modulo inteligente)\b/],
     ["console", /\b(console|playstation|xbox|nintendo switch)\b/],
     ["monitor", /\b(monitor|display gamer)\b/],
     ["tablet", /\b(tablet|ipad|galaxy tab)\b/],
@@ -2255,8 +2305,7 @@ function premiumRelatedCandidatePool(source, candidates) {
   const sourceCategory = premiumRelationText(source.category);
   const sourceFamily = premiumProductFamily(source);
   if (sourceFamily) {
-    const sameFamily = candidates.filter((product) => premiumProductFamily(product) === sourceFamily);
-    if (sameFamily.length) return sameFamily;
+    return candidates.filter((product) => premiumProductFamily(product) === sourceFamily);
   }
   const sameCategory = candidates.filter((product) =>
     sourceCategory && premiumRelationText(product.category) === sourceCategory,
@@ -2350,7 +2399,9 @@ function moneyCents(value) {
 
 async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
   if (!env.AI || !candidates.length) return null;
-  const version = await sha256(`premium-related-v2|${source.slug}:${source.updatedAt}:${source.price}|${candidates.map((product) => `${product.slug}:${product.updatedAt}:${product.price}`).join("|")}`);
+  const aiSetting = await aiFeatureSetting(env, "premium_related");
+  if (!aiSetting.isEnabled) return null;
+  const version = await sha256(`premium-related-v3|${aiSetting.modelId}|${aiSetting.fallbackModelId || ""}|${source.slug}:${source.updatedAt}:${source.price}|${candidates.map((product) => `${product.slug}:${product.updatedAt}:${product.price}`).join("|")}`);
   try {
     const compact = (product) => ({
       id: product.id,
@@ -2366,13 +2417,15 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
       tags: parse(product.tagsJson, []).slice(0, 12),
       specifications: parse(product.specificationsJson, []).slice(0, 20),
     });
-    const aiSetting = await aiFeatureSetting(env, "premium_related");
-    if (!aiSetting.isEnabled) return null;
-    const result = await env.AI.run(aiSetting.modelId, {
+    let result = null;
+    let lastError = null;
+    for (const modelId of [...new Set([aiSetting.modelId, aiSetting.fallbackModelId].filter(Boolean))]) {
+      try {
+        result = await env.AI.run(modelId, {
       messages: [
         {
           role: "system",
-          content: "Você é o recomendador SHOPLAB+ de alternativas diretas. Não recomende apenas por pertencer à mesma categoria. Selecione de 4 a 8 produtos, quando houver opções realmente válidas, que atendam praticamente à mesma necessidade do produto principal. Priorize primeiro o equivalente mais barato, depois uma opção de maior desempenho, o melhor custo-benefício e as alternativas mais parecidas. Classifique cada escolha como: cheaper_equivalent quando for realmente semelhante e mais barata; more_performance quando os dados fornecidos mostrarem recursos ou desempenho potencialmente superiores; best_value quando equilibrar melhor preço e recursos; very_similar quando for a alternativa mais próxima. Use somente preço, descrição e especificações fornecidos. Nunca invente benchmark, desempenho ou característica. Não use more_performance sem evidência concreta na ficha. Não recomende acessórios ou complementos quando o principal for um produto completo. É melhor retornar menos produtos do que incluir uma relação fraca. Escreva um motivo curto, específico e comparativo em português brasileiro. Retorne somente o JSON solicitado.",
+          content: "Você é o curador SHOPLAB+ de alternativas de compra. Uma alternativa só é válida quando pode substituir o produto principal para resolver a mesma necessidade do usuário. Faça primeiro uma validação rígida de família funcional e finalidade de uso; categoria ampla não prova similaridade. Por exemplo, uma câmera não é similar a interruptor, tela, caixa de som ou assistente de voz só porque todos pertencem a casa inteligente. Descarte itens de família incompatível, acessórios e complementos, mesmo se forem mais baratos ou populares. Para cada item aprovado, compare exclusivamente informações verificáveis da ficha: tipo, recursos, especificações, público, preço e nota. Priorize, nesta ordem, equivalente mais barato, alternativa realmente mais próxima, melhor custo-benefício e opção com recurso comprovadamente superior. Classifique cada escolha como: cheaper_equivalent quando cumprir praticamente a mesma função e custar menos; more_performance apenas quando uma especificação concreta comprovar vantagem; best_value quando equilibrar preço e recursos para o mesmo uso; very_similar quando for a substituição mais próxima. O motivo deve citar uma ou duas características concretas da ficha e a diferença de uso ou preço. Nunca invente benchmark, desempenho ou característica. É melhor retornar menos produtos do que incluir uma relação fraca. Retorne somente o JSON solicitado.",
         },
         {
           role: "user",
@@ -2383,15 +2436,21 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates) {
       temperature: 0,
       max_tokens: 900,
     }, {
-      gateway: {
-        id: String(env.AI_GATEWAY_ID || "default"),
-        skipCache: false,
-        cacheTtl: 2592000,
-        cacheKey: `premium-related-v2:${version}`,
-        collectLog: true,
-        metadata: { feature: "premium-related-products", sourceSlug: source.slug },
-      },
-    });
+          gateway: {
+            id: String(env.AI_GATEWAY_ID || "default"),
+            skipCache: false,
+            cacheTtl: 2592000,
+            cacheKey: `premium-related-v3:${version}`,
+            collectLog: true,
+            metadata: { feature: "premium-related-products", sourceSlug: source.slug, modelId },
+          },
+        });
+        if (result) break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!result) throw lastError || new Error("AI_MODEL_RUN_FAILED");
     const value = result?.response && typeof result.response === "object"
       ? result.response
       : JSON.parse(String(result?.response || "{}").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
@@ -2452,7 +2511,7 @@ async function rankRelatedProductsWithAi(env, source, candidates) {
       editorialScore: product.editorialScore,
       price: product.price,
     }));
-    const result = await env.AI.run(aiSetting.modelId, {
+    const result = await runAiWithFallback(env, aiSetting, {
       messages: [
         {
           role: "system",
@@ -3446,8 +3505,7 @@ async function premiumSearchRank(env, ctx, query, intent, products, personalCont
     console.warn(JSON.stringify({ event: "premium_search_cache_read_failed", error: String(error?.message || error) }));
   }
   try {
-    const model = aiSetting.modelId;
-    const result = await env.AI.run(model, {
+    const result = await runAiWithFallback(env, aiSetting, {
       messages: [
         { role: "system", content: "Você reranqueia resultados da SHOPLAB para assinantes SHOPLAB+. Considere primeiro a intenção e a finalidade declaradas na busca. Depois avalie aderência técnica, qualidade editorial, avaliações com sua quantidade, preço, desconto e custo-benefício. Produto mais barato não é automaticamente melhor; produto caro precisa justificar a diferença com dados fornecidos. Campo ausente não significa desempenho ruim. Não invente especificações, benchmarks ou benefícios. Use somente os slugs fornecidos, sem repetir, e escreva motivos curtos em português brasileiro. Retorne primeiro os produtos realmente mais adequados." },
         { role: "user", content: JSON.stringify({ query, intent, personalContext, products: baseline.slice(0, 30).map((product) => ({ slug: product.slug, name: product.name, category: product.category, brand: product.brand, priceCents: product.price, oldPriceCents: product.oldPrice, editorialScore: product.editorialScore, ratingAverage: product.ratingAverage, ratingTotal: product.ratingTotal, baselineValueScore: product.premiumValueScore, shortDescription: String(product.shortDescription || "").slice(0, 500), specifications: parse(product.specificationsJson, []).slice(0, 16) })) }) },
@@ -4166,9 +4224,9 @@ async function adminAiProductDraft(req, env, id) {
     const aiSetting = await aiFeatureSetting(env, "product_draft");
     if (!aiSetting.isEnabled)
       return fail(req, env, "AI_FEATURE_DISABLED", "O assistente de cadastro está desativado", 409, id);
-    const result = await env.AI.run(aiSetting.modelId, {
+    const result = await runAiWithFallback(env, aiSetting, {
       messages: [
-        { role: "system", content: `Você auxilia o cadastro editorial de produtos da SHOPLAB. Gere português brasileiro claro, objetivo e sem exageros. Preserve marca, modelo, capacidade e medidas. Nunca invente especificações, avaliações, preços, garantias ou benefícios. Se um dado não estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hífen. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro físico, digital para produto digital e affiliate nos demais casos. A descrição curta deve ter até 300 caracteres. imageAlt deve descrever o produto de forma curta.` },
+        { role: "system", content: `Você é o editor-chefe de catálogo e SEO da SHOPLAB. Transforme dados reais de produto em uma página que seja encontrada, entendida e confiável. Escreva em português brasileiro natural; SEO é precisão de intenção, não repetição de palavras-chave. Para name, crie um título de alta intenção: comece pelo tipo de produto que o comprador pesquisa, inclua marca e modelo, depois somente o principal diferencial verificável (capacidade, tamanho, padrão, compatibilidade ou uso). Prefira 55 a 90 caracteres, sem caixa-alta, emojis, hype, preço, frete ou termos vazios como “imperdível”, “premium” e “melhor”. Preserve exatamente marca, modelo, capacidade, medidas e padrões técnicos fornecidos. Para shortDescription, entregue uma síntese convincente de 2 frases: o que é, para quem serve e o diferencial concreto; inclua naturalmente termos de busca relevantes. Para fullDescription, escreva uma descrição escaneável com abertura clara, benefícios ancorados em fatos e características úteis; não invente avaliações, desempenho, garantias, certificações, compatibilidade, preço ou benefícios. Especificações só podem conter dados explícitos na entrada. Se um dado não estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hífen e refletir o título. imageAlt deve ser descritivo e acessível, sem SEO forçado. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro físico, digital para produto digital e affiliate nos demais casos. Retorne somente o JSON solicitado.` },
         { role: "user", content: JSON.stringify({ source, current }).slice(0, 16000) },
       ],
       response_format: { type: "json_schema", json_schema: ADMIN_PRODUCT_DRAFT_SCHEMA },
@@ -4256,7 +4314,7 @@ async function interpretSearchIntent(env, originalQuery) {
     ]);
     const categoryList = (categories.results || []).map((item) => `${item.name}=${item.slug}`).join(", ");
     const brandList = (brands.results || []).map((item) => item.name).join(", ");
-    const result = await env.AI.run(aiSetting.modelId, {
+    const result = await runAiWithFallback(env, aiSetting, {
       messages: [
         {
           role: "system",
@@ -7207,7 +7265,7 @@ async function updateAdminAiSettings(req, env, id) {
   const validModel = (value, optional = false) => {
     const model = String(value || "").trim();
     if (!model && optional) return null;
-    return /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(model) && model.length <= 180 ? model : false;
+    return /^(?:@cf\/[a-z0-9._-]+\/[a-z0-9._-]+|deepseek\/deepseek-v4-pro)$/i.test(model) && model.length <= 180 ? model : false;
   };
   const statements = [];
   for (const row of rows) {
