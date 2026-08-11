@@ -247,7 +247,7 @@ html[data-seasonal-theme] .header .header-brand,html[data-seasonal-theme] .heade
 @media(max-width:760px){.filters{position:static;top:auto}.filters-title,.price-filter{grid-column:1/-1}.check-filter{align-self:end}.clear-filters{margin-top:6px}.price-values{max-width:360px}.range-track{max-width:360px}}
 @media(max-width:480px){.filters{padding:16px}.sort-control{width:100%;justify-content:space-between}.sort-control select{min-width:0;flex:1}.price-values{max-width:none}.range-track{max-width:none}}
 .listing-section .filters{display:block}
-@media(max-width:760px){.listing-section .filters{display:grid}}
+@media(max-width:760px){.listing-section .filters{display:none!important}}
 .card-score{font-size:13px;line-height:1.25}
 .card-promotion{margin:7px 0 6px;padding:6px 7px;min-height:36px}
 .card-actions{margin-top:8px}
@@ -5355,3 +5355,29 @@ body[data-page="home"] .product-card h3{
   html body[data-page="home"] .mobile-home-category-media{width:56px!important;height:56px!important}
   html body[data-page="home"] .mobile-home-categories strong{width:72px!important;max-width:72px!important;font-size:10.5px!important}
 }
+/* public-controls-admin-typography */
+body:not([data-admin-page]) button,body:not([data-admin-page]) .btn,body:not([data-admin-page]) .icon-btn,body:not([data-admin-page]) [role="button"],body:not([data-admin-page]) .pwa-bottom-nav a,body:not([data-admin-page]) .mobile-product-dock a{font-family:var(--site-font-family,Arial,Helvetica,sans-serif)!important;font-weight:400!important}
+body:not([data-admin-page]) button strong,body:not([data-admin-page]) button b,body:not([data-admin-page]) .btn strong,body:not([data-admin-page]) .btn b,body:not([data-admin-page]) [role="button"] strong,body:not([data-admin-page]) [role="button"] b{font-family:inherit!important;font-weight:400!important}
+
+/* offer-button-larger-admin-font */
+body:not([data-admin-page]) .detail .offer .btn.primary{font-size:22px!important}
+@media(max-width:480px){body:not([data-admin-page]) .detail .offer .btn.primary{font-size:21px!important}}
+
+/* public-site-no-arrows */
+body:not([data-admin-page]) :is(.home-banner-arrow,.product-rail-arrow,.suggestion-arrow,.smart-search-arrow,.history-icon,.account-chevron,.header-highlight i){display:none!important}
+body:not([data-admin-page]) .product-card .share-product::before{content:none!important}
+
+/* remove-remaining-css-arrow */
+body:not([data-admin-page])[data-page=compare] .comparison-shell::before{content:none!important;display:none!important}
+
+/* product-specifications-admin-typography */
+body:not([data-admin-page]) .product-specifications-section,body:not([data-admin-page]) .product-specifications-section *{font-family:var(--site-font-family,Arial,Helvetica,sans-serif)!important}
+
+/* Busca mobile: foco direto nos produtos. */
+@media(max-width:760px){
+  body[data-page="search"] .page-hero{padding-bottom:8px}
+  body[data-page="search"] .page-title{font-size:24px;line-height:1.08}
+  body[data-page="search"] #listing-summary,
+  body[data-page="search"] .listing-section .toolbar{display:none!important}
+}
+@media(max-width:760px){body[data-page="search"] .page-hero>.eyebrow{display:none}}
