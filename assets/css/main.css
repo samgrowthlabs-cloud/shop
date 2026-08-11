@@ -5294,3 +5294,18 @@ h1,h2,h3,h4,h5,h6,.page-title,.section-head strong{font-weight:var(--site-headin
     font-size:11px!important;
   }
 }
+/* Preserve the established visual hierarchy of home titles on mobile. */
+body[data-page="home"] .simple-head h2,
+body[data-page="home"] .product-card h3{
+  font-family:Arial,Helvetica,sans-serif;
+  font-weight:700!important;
+}
+
+/* Keep product specification labels and values legible when site typography changes. */
+.detail .specs .spec small,
+.detail .specs .spec strong{
+  font-family:Arial,Helvetica,sans-serif;
+}
+.detail .specs .spec strong{
+  font-weight:700!important;
+}

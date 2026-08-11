@@ -22,18 +22,12 @@ function enhanceRails(){
     const track=rail.querySelector(':scope>.products');
     if(!track)return;
     rail.dataset.mobileEnhanced='true';
-    const progress=document.createElement('div');
-    progress.className='mobile-rail-progress';
-    progress.setAttribute('aria-hidden','true');
-    progress.innerHTML='<i></i>';
-    rail.append(progress);
     let frame=0;
     const update=()=>{
       cancelAnimationFrame(frame);
       frame=requestAnimationFrame(()=>{
         const max=Math.max(0,track.scrollWidth-track.clientWidth);
         const ratio=max?Math.min(1,Math.max(0,track.scrollLeft/max)):0;
-        progress.style.setProperty('--rail-progress',String(ratio));
         rail.classList.toggle('is-at-start',ratio<.015);
         rail.classList.toggle('is-at-end',ratio>.985||max===0);
       });
