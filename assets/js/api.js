@@ -26,11 +26,11 @@ export const searchProducts=async({q='',category='',categorySlug='',sort='',stor
   if(C.USE_MOCK_DATA&&category)products=products.filter(product=>product.category===category);
   return products.sort((a,b)=>sort==='price-asc'?a.price-b.price:sort==='discount'?b.discount-a.discount:0);
 };
-export const searchProductsWithMeta=async({q='',categorySlug='',sort=''}={})=>{
+export const searchProductsWithMeta=async({q='',categorySlug='',sort='',smart=false}={})=>{
   if(C.USE_MOCK_DATA)return{data:await searchProducts({q,categorySlug,sort}),meta:{intent:{understood:false}}};
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),C.REQUEST_TIMEOUT);
   try{
-    const response=await fetch(`${C.API_BASE_URL}/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort})}`,{credentials:'include',headers:userAuthorization(),signal:ctrl.signal});
+    const response=await fetch(`${C.API_BASE_URL}/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort,smart:smart?"1":""})}`,{credentials:'include',headers:userAuthorization(),signal:ctrl.signal});
     if(!response.ok)throw new Error(`Falha na busca (${response.status})`);
     const json=await response.json();
     return{data:json.data||[],meta:json.meta||{}};
