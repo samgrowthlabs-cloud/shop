@@ -1,0 +1,27 @@
+2026-08-11 02:53:27.824: [INFO] CurrentProfilePath: C:\Users\bidjo_lhk3c4v\Documents\CODE\SITES\shop\tmp\edge-debug-profile\Default
+2026-08-11 02:53:27.824: [INFO] Profiles total count: 1
+2026-08-11 02:53:27.824: [INFO] Profile: name=Perfil 1 path=C:\Users\bidjo_lhk3c4v\Documents\CODE\SITES\shop\tmp\edge-debug-profile\Default lastActive=null
+2026-08-11 02:53:27.824: [INFO] LastUsedProfileDir: C:\Users\bidjo_lhk3c4v\Documents\CODE\SITES\shop\tmp\edge-debug-profile\Default
+2026-08-11 02:53:27.824: [INFO] VisibilityChanged: 0
+2026-08-11 02:53:27.832: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.833: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.833: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.834: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.834: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.834: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.835: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.835: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.835: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.836: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:27.840: [INFO] OnDoneLoading sync enabled: 0
+2026-08-11 02:53:27.840: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-08-11 02:53:27.840: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-08-11 02:53:27.840: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-08-11 02:53:27.870: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:28.956: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-08-11 02:53:28.957: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2026-08-11 02:53:28.958: [INFO] Primary account changed.
+2026-08-11 02:53:28.958: [INFO] OnPrimaryAccountChanged PrimaryAccountChangeEvent::Type::kSet
+2026-08-11 02:53:28.961: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2026-08-11 02:53:28.972: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2026-08-11 02:53:31.334: [INFO] Sync initialization duration: 2331ms

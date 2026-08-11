@@ -1,0 +1,5 @@
+2026/08/10-23:54:58.003 8698 Creating DB C:\Users\bidjo_lhk3c4v\Documents\CODE\SITES\shop\tmp\edge-layout-profile\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/08/10-23:54:58.008 8698 Reusing MANIFEST C:\Users\bidjo_lhk3c4v\Documents\CODE\SITES\shop\tmp\edge-layout-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/08/10-23:54:58.323 8f08 Level-0 table #5: started
+2026/08/10-23:54:58.325 8f08 Level-0 table #5: 683172 bytes OK
+2026/08/10-23:54:58.327 8f08 Delete type=0 #3

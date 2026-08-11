@@ -714,7 +714,14 @@ async function route(request, env, ctx, requestId) {
     return updateBanner(request, env, path.split("/").pop(), requestId);
   if (request.method === "DELETE" && path.startsWith("/api/v1/admin/banners/"))
     return deleteBanner(request, env, path.split("/").pop(), requestId);
-  if (request.method === "GET" && path === "/api/v1/admin/themes")
+  if (request.method === "GET" && path === "/api/v1/admin/typography")
+    return adminTypography(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/typography")
+    return updateTypography(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/typography/font")
+    return uploadTypographyFont(request, env, requestId);
+  if (request.method === "DELETE" && path === "/api/v1/admin/typography/font")
+    return removeTypographyFont(request, env, requestId);  if (request.method === "GET" && path === "/api/v1/admin/themes")
     return adminThemes(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/themes")
     return createTheme(request, env, requestId);
@@ -787,6 +794,7 @@ async function publicSiteConfig(req, env, id) {
       `SELECT id,name,storage_key storageKey,link_url linkUrl,alt_text altText,image_position_x imagePositionX,image_position_y imagePositionY,image_scale imageScale,mobile_position_x mobilePositionX,mobile_position_y mobilePositionY,mobile_scale mobileScale,image_rotation imageRotation,animation_preset animationPreset,animation_duration animationDuration,animation_delay animationDelay,placement,display_duration_ms displayDurationMs,style_json styleJson FROM header_ad_strips WHERE is_active=1 AND (storage_key IS NOT NULL OR style_json<>'{}') AND (starts_at IS NULL OR datetime(starts_at)<=CURRENT_TIMESTAMP) AND (ends_at IS NULL OR datetime(ends_at)>=CURRENT_TIMESTAMP) ORDER BY sort_order,created_at LIMIT 48`,
     ),
   ]);
+  const typography = await typographyRecord(env);
   const origin = new URL(req.url).origin;
   const rankedBanners=await personalizeBanners(req,env,banners.results||[]);
   const mediaUrl = (key) =>
@@ -806,6 +814,11 @@ async function publicSiteConfig(req, env, id) {
           banner.mobileStorageKey || banner.desktopStorageKey,
         ),
       })),
+      typography: {
+        ...typography,
+        fontUrl: typography.fontStorageKey ? mediaUrl(typography.fontStorageKey) : null,
+        fontStorageKey: undefined,
+      },
       theme: theme.results?.[0]
         ? {
             ...theme.results[0],
@@ -6143,6 +6156,86 @@ async function deleteBanner(req, env, bannerId, id) {
   return ok(req, env, { deleted: true }, id);
 }
 
+const TYPOGRAPHY_DEFAULTS = { fontFamily: "Arial", bodyWeight: 400, headingWeight: 700, priceWeight: 600, fontStorageKey: null, fontFormat: null };
+
+async function ensureTypographySchema(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS site_typography (
+    id TEXT PRIMARY KEY,
+    font_family TEXT NOT NULL DEFAULT 'Arial',
+    body_weight INTEGER NOT NULL DEFAULT 400,
+    heading_weight INTEGER NOT NULL DEFAULT 700,
+    price_weight INTEGER NOT NULL DEFAULT 600,
+    font_storage_key TEXT,
+    font_format TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+  await env.DB.prepare(`INSERT OR IGNORE INTO site_typography(id,font_family,body_weight,heading_weight,price_weight) VALUES('global','Arial',400,700,600)`).run();
+}
+
+function typographyWeight(value, fallback) {
+  const number = Math.round(Number(value) / 100) * 100;
+  return number >= 100 && number <= 900 ? number : fallback;
+}
+
+function typographyFamily(value) {
+  const family = String(value || "Arial").trim().slice(0, 80);
+  return /^[\p{L}\p{N} _-]+$/u.test(family) ? family : "Arial";
+}
+
+async function typographyRecord(env) {
+  try {
+    const row = await env.DB.prepare(`SELECT font_family fontFamily,body_weight bodyWeight,heading_weight headingWeight,price_weight priceWeight,font_storage_key fontStorageKey,font_format fontFormat FROM site_typography WHERE id='global'`).first();
+    return row ? { ...TYPOGRAPHY_DEFAULTS, ...row } : { ...TYPOGRAPHY_DEFAULTS };
+  } catch { return { ...TYPOGRAPHY_DEFAULTS }; }
+}
+
+async function adminTypography(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  await ensureTypographySchema(env);
+  const typography = await typographyRecord(env);
+  const origin = new URL(req.url).origin;
+  return ok(req, env, { ...typography, fontUrl: typography.fontStorageKey ? `${origin}/media/${encodeURIComponent(typography.fontStorageKey)}` : null }, id);
+}
+
+async function updateTypography(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  await ensureTypographySchema(env);
+  const body = await readJson(req, 10000);
+  const values = [typographyFamily(body.fontFamily), typographyWeight(body.bodyWeight, 400), typographyWeight(body.headingWeight, 700), typographyWeight(body.priceWeight, 600)];
+  await env.DB.prepare(`UPDATE site_typography SET font_family=?,body_weight=?,heading_weight=?,price_weight=?,updated_at=CURRENT_TIMESTAMP WHERE id='global'`).bind(...values).run();
+  return ok(req, env, { fontFamily: values[0], bodyWeight: values[1], headingWeight: values[2], priceWeight: values[3] }, id);
+}
+
+async function storeTypographyFont(env, file) {
+  const extension = String(file?.name || "").split(".").pop().toLowerCase();
+  const formats = { woff2: "woff2", woff: "woff", ttf: "truetype", otf: "opentype" };
+  if (!(file instanceof File) || !formats[extension] || file.size > 8 * 1024 * 1024) throw new Error("Envie uma fonte WOFF2, WOFF, TTF ou OTF de até 8 MB");
+  const key = `site/fonts/${crypto.randomUUID()}.${extension}`;
+  await env.MEDIA.put(key, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream", cacheControl: "public, max-age=31536000, immutable" }, customMetadata: { originalName: file.name.slice(0, 120) } });
+  return { key, format: formats[extension] };
+}
+
+async function uploadTypographyFont(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  if (!env.MEDIA) return fail(req, env, "R2_NOT_CONFIGURED", "O binding R2 MEDIA não foi configurado", 503, id);
+  await ensureTypographySchema(env);
+  const current = await typographyRecord(env);
+  let stored;
+  try { stored = await storeTypographyFont(env, (await req.formData()).get("file")); }
+  catch (error) { return fail(req, env, "INVALID_FONT", error.message, 422, id); }
+  await env.DB.prepare(`UPDATE site_typography SET font_storage_key=?,font_format=?,updated_at=CURRENT_TIMESTAMP WHERE id='global'`).bind(stored.key, stored.format).run();
+  if (current.fontStorageKey) await env.MEDIA.delete(current.fontStorageKey);
+  return ok(req, env, { fontStorageKey: stored.key, fontFormat: stored.format }, id);
+}
+
+async function removeTypographyFont(req, env, id) {
+  if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  await ensureTypographySchema(env);
+  const current = await typographyRecord(env);
+  await env.DB.prepare(`UPDATE site_typography SET font_storage_key=NULL,font_format=NULL,updated_at=CURRENT_TIMESTAMP WHERE id='global'`).run();
+  if (current.fontStorageKey && env.MEDIA) await env.MEDIA.delete(current.fontStorageKey);
+  return ok(req, env, { removed: true }, id);
+}
 const THEME_COLORS = [
   "headerBackground",
   "headerTextColor",
@@ -6772,6 +6865,7 @@ function adminPermissionForRequest(method, path) {
   if (path.includes("/header-spotlights")) return "header_spotlights.manage";
   if (path.includes("/header-ads") || path.includes("/shoplab-ads") || path.includes("/shoplab-ad-assignments")) return "header_ads.manage";
   if (path.includes("/banners")) return "banners.manage";
+  if (path.includes("/typography")) return "themes.manage";
   if (path.includes("/themes")) return "themes.manage";
   return "dashboard.view";
 }
