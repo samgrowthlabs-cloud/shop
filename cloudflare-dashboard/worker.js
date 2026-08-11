@@ -3326,6 +3326,34 @@ function buildIntentFtsQuery(query) {
     .join(" OR ");
 }
 
+// FTS finds the candidate set in D1. We then favour candidates that also
+// contain the meaningful details extracted from the person's request; the
+// model never chooses or invents products itself.
+function contextualSearchScore(product, query) {
+  const terms = correctedSearch(query)
+    .split(" ")
+    .filter((term) => term.length >= 2 && !SEARCH_STOP_WORDS.has(term));
+  if (!terms.length) return 0;
+  const name = normalizeSearch(product.name);
+  const identity = normalizeSearch([product.brand, product.category].filter(Boolean).join(" "));
+  const details = normalizeSearch([product.shortDescription, product.specificationsJson].filter(Boolean).join(" "));
+  return terms.reduce((score, term, index) => {
+    const weight = index === 0 ? 8 : 3;
+    if (name.includes(term)) return score + weight + 4;
+    if (identity.includes(term)) return score + weight + 2;
+    return details.includes(term) ? score + weight : score;
+  }, 0);
+}
+
+function rankContextualCandidates(products, query) {
+  return [...products].sort((left, right) => {
+    const difference = contextualSearchScore(right, query) - contextualSearchScore(left, query);
+    if (difference) return difference;
+    return Number(right.editorialScore || 0) - Number(left.editorialScore || 0) ||
+      Number(right.viewCount || 0) - Number(left.viewCount || 0);
+  });
+}
+
 const PREMIUM_SEARCH_RANK_SCHEMA = {
   type: "object",
   properties: {
@@ -3440,7 +3468,9 @@ async function searchV2(req, env, url, ctx, id) {
   const searchUser = req.headers.has("authorization") ? await activeUser(req, env) : null;
   const premium = searchUser ? await premiumSubscriptionData(env, searchUser.id) : null;
   const premiumEnabled = Boolean(premium?.premium);
-  const intent = premiumEnabled ? await cachedSearchIntent(env, originalQuery, ctx) : null;
+  // One small, cached intent call is enough for natural-language searches.
+  // Simple product-name searches go straight to D1 without invoking AI.
+  const intent = await cachedSearchIntent(env, originalQuery, ctx);
   const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
   const ftsQuery = intent
     ? buildIntentFtsQuery(correctedQuery)
@@ -3505,7 +3535,7 @@ async function searchV2(req, env, url, ctx, id) {
   )
     .bind(...args)
     .all();
-  if (!results.length && !intent) {
+  if (!results.length) {
     const fallback = await env.DB.prepare(
       `${PRODUCT_CARD_SELECT} WHERE p.status='published' ORDER BY p.view_count DESC,p.editorial_score DESC LIMIT 200`,
     ).all();
@@ -3537,6 +3567,7 @@ async function searchV2(req, env, url, ctx, id) {
       )
       .slice(0, 20);
   }
+  if (intent && results.length && !sort) results = rankContextualCandidates(results, intent.searchTerms);
   let premiumRanking = null;
   if (premiumEnabled && results.length)
     premiumRanking = await premiumSearchRank(env, ctx, originalQuery, intent, results);
@@ -4159,15 +4190,13 @@ function toPriceCents(value) {
 
 function shouldInterpretSearch(query) {
   const normalized = normalizeSearch(query);
-  return normalized.split(" ").filter(Boolean).length >= 3 ||
-    /\b(ate|acima|abaixo|menos|mais|barato|melhor|para|por|entre|reais)\b/.test(normalized);
+  return normalized.length >= 4 && normalized.split(" ").filter(Boolean).length >= 2;
 }
 
 function shouldEnhanceSuggestions(query) {
   const normalized = normalizeSearch(query);
   const words = normalized.split(" ").filter(Boolean);
-  return normalized.length >= 12 && words.length >= 3 &&
-    /\b(ate|acima|abaixo|menos|mais|barato|melhor|para|por|entre|reais|estudar|trabalhar|jogar|correr|presente)\b/.test(normalized);
+  return normalized.length >= 4 && words.length >= 2;
 }
 
 async function cachedSearchIntent(env, originalQuery, ctx) {
@@ -4218,7 +4247,7 @@ async function interpretSearchIntent(env, originalQuery) {
       messages: [
         {
           role: "system",
-          content: `Interprete buscas de um comparador brasileiro. searchTerms deve comecar pelo tipo canonico de produto que a pessoa quer, mesmo quando ela descreve apenas a finalidade. Exemplos: "dispositivo para ler" vira "leitor ereader"; "computador para faculdade" vira "notebook estudar"; "fone para correr" vira "fone esporte". Depois mantenha modelo e caracteristicas uteis, removendo conectivos, orcamento e ordenacao. Extraia apenas filtros pedidos ou inequivocos. Use somente um slug de categoria ou null: ${categoryList || "nenhuma"}. Use somente uma marca desta lista, em minusculas, ou null: ${brandList || "nenhuma"}. Precos sao em reais. sort: price-asc para menor preco, discount para desconto, ou null. Nunca invente dados. explanation deve ser uma frase curta em portugues.`,
+          content: `Interprete qualquer busca de produto de um comparador brasileiro, inclusive consultas curtas, erros de digitacao, abreviacoes e linguagem informal. Corrija silenciosamente grafias provaveis (por exemplo, "blutuf" deve ser entendido como bluetooth) e identifique o tipo canonico, marca, modelo, recursos e finalidade, sem depender de frases-modelo. searchTerms deve iniciar pelo tipo de produto e conter somente termos que ajudem a recuperar produtos reais. Remova conectivos, orcamento e ordenacao. Extraia filtros apenas quando forem pedidos ou inequivocos. Use somente um slug de categoria ou null: ${categoryList || "nenhuma"}. Use somente uma marca desta lista, em minusculas, ou null: ${brandList || "nenhuma"}. Precos sao em reais. sort: price-asc para menor preco, discount para desconto, ou null. Nunca invente dados, especificacoes ou marcas. explanation deve ser uma frase curta em portugues.`,
         },
         { role: "user", content: originalQuery },
       ],
@@ -4275,9 +4304,7 @@ async function suggestionsV2(req, env, url, ctx, id) {
     ftsQuery = buildFtsQuery(correctedQuery);
   const regular = await suggestionProducts(env, ftsQuery);
   const aiRequested = url.searchParams.get("ai") === "1";
-  const user = aiRequested && req.headers.has("authorization") ? await activeUser(req, env) : null;
-  const premium = user ? await premiumSubscriptionData(env, user.id) : null;
-  if (!aiRequested || !premium?.premium || !shouldEnhanceSuggestions(query))
+  if (!aiRequested || !shouldEnhanceSuggestions(query))
     return ok(req, env, regular, id, { aiUsed: false });
   const intent = await cachedSearchIntent(env, query, ctx);
   if (!intent?.searchTerms)

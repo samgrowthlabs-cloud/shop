@@ -64,7 +64,7 @@ function productDock(){
   const dock=document.createElement('aside');
   dock.className='mobile-product-dock';
   dock.setAttribute('aria-label','Oferta do produto');
-  dock.innerHTML='<div class="mobile-product-dock-price"><small>Melhor preço</small><strong></strong><span hidden>Antes <s></s></span></div><a class="btn primary">Ver oferta <span aria-hidden="true">→</span></a>';
+  dock.innerHTML='<div class="mobile-product-dock-price"><small>Melhor preço</small><strong></strong><span hidden>Antes <s></s></span></div><a class="btn primary">Ver oferta <span aria-hidden="true"></span></a>';
   const current=dock.querySelector('.mobile-product-dock-price>strong'),before=dock.querySelector('.mobile-product-dock-price>span'),beforeValue=before.querySelector('s');
   const syncPrice=()=>{
     const price=offer.querySelector(':scope>.price,.price'),old=offer.querySelector('.offer-price-top .old,.price .old');
