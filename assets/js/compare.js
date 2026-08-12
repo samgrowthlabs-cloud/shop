@@ -2,10 +2,10 @@ import { getComparisonAnalysis, getProductBySlug } from './api.js';
 import { SHOPLAB_CONFIG as C } from './config.js';
 
 const STORAGE_KEY = 'shoplab-compare-products';
-const ANALYSIS_CACHE_TTL=1000*60*60*12;
-const analysisCacheKey=slugs=>`shoplab:comparison:${[...slugs].sort().join(',')}`;
+const ANALYSIS_CACHE_TTL=1000*60*60*24*30;
+const analysisCacheKey=slugs=>`shoplab:comparison:v26:${[...slugs].sort().join(',')}`;
 function readComparisonCache(slugs){try{const item=JSON.parse(sessionStorage.getItem(analysisCacheKey(slugs))||'null');return item&&Date.now()-item.savedAt<ANALYSIS_CACHE_TTL?item.value:null}catch{return null}}
-function writeComparisonCache(slugs,value){if(!value||value.processing)return;try{sessionStorage.setItem(analysisCacheKey(slugs),JSON.stringify({savedAt:Date.now(),value}))}catch{}}
+function writeComparisonCache(slugs,value){if(!value||value.processing||!value.aiUsed)return;try{sessionStorage.setItem(analysisCacheKey(slugs),JSON.stringify({savedAt:Date.now(),value}))}catch{}}
 let activeComparison = null;
 let comparisonRunId = 0;
 const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '\x26amp;', '<': '\x26lt;', '>': '\x26gt;', '"': '\x26quot;', "'": '\x26#39;' })[char]);

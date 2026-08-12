@@ -2,9 +2,13 @@ import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 import{session,userApi}from'./auth.js';
 
 const cache=new Map();
-const INSIGHT_CACHE_TTL=1000*60*60*12;
+const INSIGHT_CACHE_TTL=1000*60*60*24*30;
+const insightPreferenceKey=()=>'shoplab:ai-product-insight:auto';
+const isInsightAutoEnabled=()=>{try{return localStorage.getItem(insightPreferenceKey())!=='off'}catch{return true}};
+const setInsightAutoEnabled=enabled=>{try{localStorage.setItem(insightPreferenceKey(),enabled?'on':'off')}catch{}};
+const aiToggleIcon=enabled=>enabled?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3m0 12v3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12M3 12h3m12 0h3M5.64 18.36l2.12-2.12m8.48-8.48 2.12-2.12"/><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M12 3v3m0 12v3M3 12h3m12 0h3M18.36 5.64l-2.12 2.12M5.64 18.36l2.12-2.12"/><path d="M8.8 8.8A3.5 3.5 0 0 0 15.2 15.2"/></svg>';
 function cachedInsight(slug){
-  const key=`shoplab:product-insight:${slug}`;
+  const key=`shoplab:product-insight:v6:${slug}`;
   try{const item=JSON.parse(sessionStorage.getItem(key)||'null');if(item&&Date.now()-item.savedAt<INSIGHT_CACHE_TTL)return Promise.resolve(item.value)}catch{}
   return userApi(`products/${encodeURIComponent(slug)}/plus-insight`).then(value=>{if(value?.conclusion?.length)try{sessionStorage.setItem(key,JSON.stringify({savedAt:Date.now(),value}))}catch{}return value});
 }
@@ -132,7 +136,7 @@ function arrangeMobileOffer(){
   }
 }
 
-async function renderPremiumProductInsight(data,insightPromise){
+async function renderPremiumProductInsight(data,insightPromise,force=false){
   if(!data||document.querySelector('.premium-product-insight'))return;
   const anchor=document.querySelector('.product-description-section')||document.querySelector('.product-information-sections')||document.querySelector('#conteudo > .section.alt');
   if(!anchor)return;
@@ -142,6 +146,12 @@ async function renderPremiumProductInsight(data,insightPromise){
     section.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Crie sua conta ou faça login para usar comparação inteligente e análises personalizadas. Você começa com 5 créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar e usar meus créditos</a></div>`;
     anchor.insertAdjacentElement('afterend',section);
     return;
+  }
+if(!force){
+    section.className='section premium-product-insight is-ready';
+    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A análise só é gerada quando você pedir. Se preferir, é só continuar vendo o produto.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiToggleIcon(true)}Analisar produto</button></div>`;
+    section.querySelector('[data-ai-insight-generate]').onclick=()=>{section.remove();renderPremiumProductInsight(data,null,true)};
+    anchor.insertAdjacentElement('afterend',section);return;
   }
   section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';
   anchor.insertAdjacentElement('afterend',section);
@@ -182,7 +192,7 @@ function openGallery(items,startIndex,name){
 
 async function detailMedia(){
   const box=document.querySelector('.detail-media');if(!box||box.dataset.mediaReady)return;box.dataset.mediaReady='1';
-  const slug=new URLSearchParams(location.search).get('slug'),insightPromise=slug&&session()?cachedInsight(slug).catch(()=>null):null,data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data,insightPromise);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
+  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
   const main=items.find(x=>x.isPrimary)||items[0],mainIndex=items.indexOf(main),visible=items.slice(0,4);
   const responsiveImage=(item)=>({src:url(item,960),srcset:[320,640,960,1280].map(width=>`${url(item,width)} ${width}w`).join(', ')});
   const mainSource=responsiveImage(main);
