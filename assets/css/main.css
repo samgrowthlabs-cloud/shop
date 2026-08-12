@@ -5459,3 +5459,35 @@ body[data-page="compare"] .comparison-verdict p,.comparison-summary{font-size:15
   .product-carousel-track{gap:12px!important;margin-right:0!important;padding-right:0!important}
   .product-carousel-track>.product-card{flex:0 0 calc((100vw - 56px)/2)!important;min-width:calc((100vw - 56px)/2)!important;max-width:calc((100vw - 56px)/2)!important}
 }
+/* Regra final: nenhum texto do card ignora a tipografia definida no Admin. */
+.product-card,.product-card .product-body{font-family:var(--site-font-family,Arial,Helvetica,sans-serif)!important;font-weight:var(--site-body-weight,400)!important}
+.product-card .meta,.product-card .public-rating,.product-card .public-rating small{font-weight:var(--site-body-weight,400)!important}
+.product-card h3,.product-card .premium-relation strong{font-weight:var(--site-heading-weight,700)!important}
+.product-card .price .old,.product-card .premium-relation span{font-weight:var(--site-body-weight,400)!important}
+.product-card .price .current-price,.product-card .badge,.product-card .card-saving{font-weight:var(--site-price-weight,600)!important}
+/* Relacionados: cards mais compactos e sem ação de comparar. */
+body[data-page="product"] #product-related .product-card .card-compare{display:none!important}
+body[data-page="product"] #product-related .product-card .product-media{min-height:210px!important;height:210px!important;padding:24px 16px 12px!important}
+body[data-page="product"] #product-related .product-card .product-media img{max-height:178px!important}
+body[data-page="product"] #product-related .product-card .product-body{min-height:190px!important;padding:16px 17px 18px!important}
+body[data-page="product"] #product-related .product-card h3{min-height:44px!important;margin-bottom:10px!important;font-size:17px!important;line-height:1.28!important}
+body[data-page="product"] #product-related .product-card .meta{min-height:14px;margin-bottom:8px!important;font-size:9px!important}
+body[data-page="product"] #product-related .product-card .public-rating{min-height:18px;margin-bottom:10px!important}
+body[data-page="product"] #product-related .product-card .price{padding-top:11px!important}
+body[data-page="product"] #product-related .product-card .price .current-price{font-size:24px!important}
+body[data-page="product"] #product-related .related-products-plain{padding:8px 0 22px!important}
+@media(max-width:760px){
+  body[data-page="product"] #product-related .section{padding-top:20px!important;padding-bottom:22px!important}
+  body[data-page="product"] #product-related .product-card{border-radius:15px!important}
+  body[data-page="product"] #product-related .product-card .product-media{min-height:138px!important;height:138px!important;padding:10px!important}
+  body[data-page="product"] #product-related .product-card .product-media img{max-height:118px!important}
+  body[data-page="product"] #product-related .product-card .product-body{min-height:154px!important;padding:10px 11px 12px!important}
+  body[data-page="product"] #product-related .product-card h3{min-height:34px!important;margin-bottom:7px!important;font-size:12px!important;line-height:1.3!important}
+  body[data-page="product"] #product-related .product-card .meta{min-height:12px;margin-bottom:6px!important;font-size:8px!important}
+  body[data-page="product"] #product-related .product-card .public-rating{min-height:16px;margin-bottom:7px!important}
+  body[data-page="product"] #product-related .product-card .public-rating .rating-stars{font-size:12px!important}
+  body[data-page="product"] #product-related .product-card .public-rating small{font-size:9px!important}
+  body[data-page="product"] #product-related .product-card .price{padding-top:8px!important}
+  body[data-page="product"] #product-related .product-card .price .old{font-size:9px!important}
+  body[data-page="product"] #product-related .product-card .price .current-price{font-size:18px!important}
+}

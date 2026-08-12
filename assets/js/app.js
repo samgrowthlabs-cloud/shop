@@ -232,6 +232,9 @@ app.innerHTML=header()+`<div class="page-content-pending" aria-hidden="true">${l
   if(page==='product')loadProductRecommendations();
   document.addEventListener('click',e=>{const a=e.target.closest('[data-offer]');if(a){e.preventDefault();trackEvent({type:'offer_click',slug:a.dataset.offer});alert('Oferta demonstrativa. O redirecionamento será ativado pela futura API.') }});
 }
+function homeProductRail(items=[]){
+  return `<div class="product-rail"><div class="products home-product-rail">${(items||[]).map(card).join('')}</div></div>`;
+}
 home = async function () {
   const [products, trending, campaigns, personalized, categories, collections] = await Promise.all([getProducts({limit:50}), getTrendingProducts(16), getPromotions(),authSession()?getPersonalizedRecommendations().catch(()=>[]):Promise.resolve([]),getCategories(),getFeaturedCollections().catch(()=>[])]);
   const productsBySlug=new Map(products.map(product=>[product.slug,product]));

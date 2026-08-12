@@ -13,6 +13,7 @@
 - Reutilize funções de `app.js` e `api.js`; não copie lógica de fetch entre páginas.
 - Todo texto vindo da API deve passar pelas funções de escape existentes antes de entrar em HTML.
 - Teste em largura mobile e desktop. Cards, cabeçalho fixo e navegação inferior têm regras específicas no celular.
+- Nunca fixe `font-family` ou `font-weight` nos textos dos cards públicos. Nome, categoria, marca, avaliação, preços, selos e demais textos devem obedecer exclusivamente às variáveis tipográficas configuradas no Admin (`--site-font-family`, `--site-body-weight`, `--site-heading-weight` e `--site-price-weight`), inclusive nas regras mobile e nos overrides finais do CSS.
 - Quando alterar arquivos estáticos cacheados, atualize a versão `?v=` dos HTMLs e revise `sw.js`.
 
 ## Mudanças de API e Worker
