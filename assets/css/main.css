@@ -5491,3 +5491,13 @@ body[data-page="product"] #product-related .related-products-plain{padding:8px 0
   body[data-page="product"] #product-related .product-card .price .old{font-size:9px!important}
   body[data-page="product"] #product-related .product-card .price .current-price{font-size:18px!important}
 }
+/* Acabamento suave para textos truncados em todos os tipos de cards. */
+:is(.product-card h3,.home-price-drop-copy strong,.quick-comparison-copy strong,.comparison-table thead strong,.comparison-mobile-teaser strong,.account-product-copy strong,.suggestion-main){
+  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - .8em),transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - .8em),transparent 100%);
+}
+:is(.product-card .meta,.product-card .public-rating small,.store-marquee-card strong,.home-price-drop-copy small,.suggestion-copy small,.mobile-profile-card>div strong,.mobile-profile-card>div small){
+  -webkit-mask-image:linear-gradient(to right,#000 0,#000 calc(100% - 18px),transparent 100%);
+  mask-image:linear-gradient(to right,#000 0,#000 calc(100% - 18px),transparent 100%);
+  text-overflow:clip!important;
+}
