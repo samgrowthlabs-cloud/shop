@@ -5783,3 +5783,116 @@ body[data-page="home"] .product-rail>.products>.product-card{
     text-overflow:ellipsis!important;
   }
 }
+/* Home desktop marketplace cards: compact, aligned and fade-free. */
+@media(min-width:1000px){
+  body[data-page="home"] .product-rail>.products{
+    align-items:stretch!important;
+    padding-bottom:8px!important;
+  }
+  body[data-page="home"] .product-rail>.products>.product-card{
+    height:334px!important;
+    margin-bottom:6px!important;
+    border-radius:8px!important;
+    border-color:#e5e8e7!important;
+    box-shadow:0 1px 2px rgba(22,47,42,.05)!important;
+  }
+  body[data-page="home"] .product-rail>.products>.product-card:hover{
+    transform:translateY(-2px);
+    box-shadow:0 8px 20px rgba(22,47,42,.10)!important;
+  }
+  body[data-page="home"] .product-rail .product-card .product-media{
+    flex:0 0 152px!important;
+    height:152px!important;
+    min-height:152px!important;
+    padding:16px 12px 8px!important;
+    background:#f7f9f8!important;
+  }
+  body[data-page="home"] .product-rail .product-card .product-media img{
+    max-height:128px!important;
+  }
+  body[data-page="home"] .product-rail .product-card .product-body{
+    flex:0 0 181px!important;
+    height:181px!important;
+    min-height:181px!important;
+    padding:10px 11px 11px!important;
+    overflow:hidden!important;
+  }
+  body[data-page="home"] .product-rail .product-card .meta{
+    min-height:11px!important;
+    margin-bottom:6px!important;
+  }
+  body[data-page="home"] .product-rail .product-card h3{
+    min-height:34px!important;
+    max-height:34px!important;
+    margin:0 0 5px!important;
+    line-height:1.35!important;
+  }
+  body[data-page="home"] .product-rail .product-card .public-rating{
+    flex:0 0 18px!important;
+    width:100%!important;
+    min-height:18px!important;
+    margin:0 0 5px!important;
+    overflow:hidden!important;
+    white-space:nowrap!important;
+  }
+  body[data-page="home"] .product-rail .product-card .public-rating>small,
+  body[data-page="home"] .product-rail .product-card .public-rating>small>b{
+    max-width:none!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    -webkit-mask-image:none!important;
+    mask-image:none!important;
+  }
+  body[data-page="home"] .product-rail .product-card .price{
+    flex:0 0 78px!important;
+    width:100%!important;
+    height:78px!important;
+    min-height:78px!important;
+    margin-top:auto!important;
+    padding-top:8px!important;
+    overflow:hidden!important;
+    border-top:1px solid #e2e7e5!important;
+    align-content:start!important;
+  }
+  body[data-page="home"] .product-rail .product-card .price .old{
+    min-height:11px!important;
+    margin-bottom:1px!important;
+  }
+  body[data-page="home"] .product-rail .product-card .price .current-price{
+    font-size:20px!important;
+    line-height:1.1!important;
+  }
+  body[data-page="home"] .product-rail .product-card .card-saving{
+    margin-top:5px!important;
+    padding:4px 6px!important;
+    border-radius:5px!important;
+    font-size:8px!important;
+    line-height:1.15!important;
+  }
+  body[data-page="home"] .product-rail .product-card .badge{
+    top:10px!important;
+    left:10px!important;
+    padding:6px 10px!important;
+    font-size:11px!important;
+  }
+  body[data-page="home"] .product-rail .product-card .card-actions{
+    top:9px!important;
+    right:9px!important;
+  }
+  body[data-page="home"] .product-rail .product-card .card-actions .card-compare{
+    width:30px!important;
+    height:30px!important;
+  }
+  body[data-page="home"] .product-rail .product-card .card-actions .card-compare img{
+    width:15px!important;
+    height:15px!important;
+  }
+}
+/* Centraliza o criativo do SHOPLAB Adsense no cabeçalho mobile. */
+@media(max-width:760px){
+  .shoplab-public-ad-below_menu img,
+  .shoplab-public-ad-below_menu video{
+    object-position:center!important;
+  }
+}
