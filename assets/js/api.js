@@ -28,7 +28,8 @@ export const searchProducts=async({q='',category='',categorySlug='',sort='',stor
 };
 export const searchProductsWithMeta=async({q='',categorySlug='',sort=''}={})=>{
   if(C.USE_MOCK_DATA)return{data:await searchProducts({q,categorySlug,sort}),meta:{intent:{understood:false}}};
-  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),C.REQUEST_TIMEOUT);
+  // Smart searches may wait for the AI to interpret the query before querying the catalog.
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),Math.max(C.REQUEST_TIMEOUT,30000));
   try{
     const response=await fetch(`${C.API_BASE_URL}/api/v1/search?${new URLSearchParams({q,category:categorySlug,sort})}`,{credentials:'include',headers:userAuthorization(),signal:ctrl.signal});
     if(!response.ok)throw new Error(`Falha na busca (${response.status})`);

@@ -2,6 +2,17 @@ import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 import{session,userApi}from'./auth.js';
 
 const cache=new Map();
+const INSIGHT_CACHE_TTL=1000*60*60*24*30;
+const insightPreferenceKey=()=>'shoplab:ai-product-insight:auto';
+const isInsightAutoEnabled=()=>{try{return localStorage.getItem(insightPreferenceKey())!=='off'}catch{return true}};
+const setInsightAutoEnabled=enabled=>{try{localStorage.setItem(insightPreferenceKey(),enabled?'on':'off')}catch{}};
+const aiToggleIcon=enabled=>enabled?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3m0 12v3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12M3 12h3m12 0h3M5.64 18.36l2.12-2.12m8.48-8.48 2.12-2.12"/><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M12 3v3m0 12v3M3 12h3m12 0h3M18.36 5.64l-2.12 2.12M5.64 18.36l2.12-2.12"/><path d="M8.8 8.8A3.5 3.5 0 0 0 15.2 15.2"/></svg>';
+const aiAnalyzeIcon=()=>'<svg class="ai-analyze-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.25 3.25L16.5 8l-3.25 1.25L12 12.5l-1.25-3.25L7.5 8l3.25-1.25L12 3.5Z"/><path d="M18.5 12.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/><path d="M6 14.5l.7 1.8 1.8.7-1.8.7L6 19.5l-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>';
+function cachedInsight(slug){
+  const key=`shoplab:product-insight:v6:${slug}`;
+  try{const item=JSON.parse(sessionStorage.getItem(key)||'null');if(item&&Date.now()-item.savedAt<INSIGHT_CACHE_TTL)return Promise.resolve(item.value)}catch{}
+  return userApi(`products/${encodeURIComponent(slug)}/plus-insight`).then(value=>{if(value?.conclusion?.length)try{sessionStorage.setItem(key,JSON.stringify({savedAt:Date.now(),value}))}catch{}return value});
+}
 async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=fetch(`${C.API_BASE_URL}/api/v1/products/${encodeURIComponent(slug)}?mediaVersion=2`,{cache:'default'}).then(r=>r.ok?r.json():null).then(j=>j?.data||null).catch(()=>null);cache.set(slug,promise);return promise}
 const url=(m,width=0)=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}${width?`?w=${width}&q=78`:''}`:m?.externalUrl||'';
 const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -62,9 +73,6 @@ function renderProductInformation(data){
   const shareButton=detailCopy?.querySelector('.detail-share'),compareSvg='<img src="assets/icons/compare.svg" alt="">';if(shareButton&&!detailCopy.querySelector('.detail-favorite')){shareButton.innerHTML='<img src="assets/icons/share.svg" alt=""><span>Compartilhar</span>';shareButton.insertAdjacentHTML('beforebegin',`<button class="btn ghost detail-favorite icon-compare compare-product" type="button" data-compare-product="${safe(data.slug)}" data-compare-name="${safe(data.name)}" data-compare-category="${safe(data.category||'Sem categoria')}" aria-pressed="false">${compareSvg}<span>Comparar</span></button>`)}
   const currentPrice=Number(data.price||0),oldPrice=Number(data.oldPrice||0),discount=oldPrice>currentPrice&&currentPrice>0?Math.round((1-currentPrice/oldPrice)*100):Number(data.discount||0);
   if(offer){const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),logo=data.storeLogoUrl?`<img src="${safe(data.storeLogoUrl)}" alt="Logo ${safe(data.store||'da loja')}">`:'<span aria-hidden="true">🤝</span>';offer.innerHTML=`<small class="offer-label">Melhor preço encontrado</small><div class="offer-price-top">${oldPrice>currentPrice?`<span class="old">${money(oldPrice)}</span>`:''}${discount>0?`<span class="detail-discount">-${discount}%</span>`:''}</div><div class="price">${money(currentPrice)}</div><div class="offer-seller">${logo}<p>Vendido por <strong>${safe(data.store||'loja parceira')}</strong> · parceiro verificado</p><img class="offer-verified" src="assets/icons/verified.svg" alt="Verificado"></div><a class="btn primary" href="#" data-offer="${safe(data.slug)}">Ir para oferta <span aria-hidden="true"></span></a><small class="offer-redirect"><img src="assets/icons/shield-check.svg" alt=""> Você será redirecionado para a loja parceira.</small>`}
-  const priority=['Processador','Memória RAM','Armazenamento','Tamanho da tela','Tela','Placa de vídeo','Bateria','Resolução','Capacidade','Tipo'];
-  const highlights=[...priority.map(name=>specifications.find(item=>item.name.toLocaleLowerCase('pt-BR')===name.toLocaleLowerCase('pt-BR'))).filter(Boolean),...specifications].filter((item,index,list)=>list.findIndex(other=>other.name===item.name)===index).slice(0,4);
-  if(offer&&highlights.length)offer.insertAdjacentHTML('beforebegin',`<div class="product-tech-highlights">${highlights.map(item=>`<div><span>${specificationIcon(item.name)}</span><strong>${safe(item.value)}</strong><small>${safe(item.name)}</small></div>`).join('')}</div>`);
   const oldAnalysis=document.querySelector('#conteudo > .section.alt'),information=document.createElement('div');information.className='product-information-sections';
   information.innerHTML=specifications.length?`<section class="product-specifications-section"><div class="container"><div class="product-section-title"><span class="eyebrow">FICHA TÉCNICA</span><h2>Especificações completas</h2></div><dl class="product-specifications-grid">${specifications.map(item=>`<div><dt>${safe(item.name)}</dt><dd>${safe(item.value)}</dd></div>`).join('')}</dl></div></section>`:'';
   if(oldAnalysis)oldAnalysis.replaceWith(information);else document.querySelector('#conteudo')?.append(information);
@@ -91,6 +99,7 @@ function arrangeMobileOffer(){
     title.insertAdjacentElement('beforebegin',titleAnchor);
   }
   const actions=detail.querySelector('.user-product-actions');
+  const insight=detail.querySelector('.premium-product-insight');
   let actionsAnchor=copy.querySelector('[data-actions-position]');
   if(actions&&!actionsAnchor){
     actionsAnchor=document.createElement('span');
@@ -115,35 +124,79 @@ function arrangeMobileOffer(){
     }
     slot.append(offer);
     if(disclaimer)slot.append(disclaimer);
+    if(insight)slot.append(insight);
     if(actions)slot.append(actions);
   }else{
     if(title&&titleAnchor)titleAnchor.insertAdjacentElement('afterend',title);
     detail.querySelector(':scope > .mobile-product-title-slot')?.remove();
     anchor.insertAdjacentElement('afterend',offer);
     if(disclaimer)offer.insertAdjacentElement('afterend',disclaimer);
+    if(insight)(disclaimer||offer).insertAdjacentElement('afterend',insight);
     if(actions&&actionsAnchor)actionsAnchor.insertAdjacentElement('afterend',actions);
     detail.querySelector(':scope > .mobile-offer-slot')?.remove();
   }
 }
 
-async function renderPremiumProductInsight(data,insightPromise){
-  if(!data||document.querySelector('.premium-product-insight'))return;
-  const anchor=document.querySelector('.product-description-section')||document.querySelector('.product-information-sections')||document.querySelector('#conteudo > .section.alt');
+async function renderPremiumProductInsight(data,insightPromise,force=false){
+  if(!data||document.querySelector('.premium-product-insight')||document.querySelector('.product-ai-trigger'))return;
+  const offerBox=document.querySelector('.product-page-hero .offer'),priceBox=offerBox?.querySelector('.price');
+  if(!force&&matchMedia('(min-width:761px)').matches){
+    if(!offerBox||!priceBox)return;
+    const trigger=document.createElement('section');
+    trigger.className='product-ai-trigger premium-product-insight is-ready';
+    trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A IA vai interpretar a ficha técnica e seus interesses para explicar se este produto combina com seu perfil.</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled>${aiAnalyzeIcon()}<span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>`;
+    priceBox.insertAdjacentElement('afterend',trigger);
+    if(!session()){
+      trigger.className='product-ai-trigger premium-product-insight is-locked free-ai-login';
+      trigger.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Use a IA para interpretar a ficha técnica e entender como este produto combina com seu perfil.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar e usar meus créditos</a></div>`;
+    }else{
+      const subscription=await userApi('subscription').catch(()=>null),freeUser=!subscription?.premium;
+      const credits=freeUser?(subscription?.freeCredits||{remaining:5,limit:5}):(subscription?.usage||{});
+      const remaining=Math.max(0,Number(credits.remaining||0));
+      const formattedRemaining=remaining.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2});
+      const creditLabel=freeUser?`${formattedRemaining} ${remaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${remaining===1?'análise disponível':'análises disponíveis'}`;
+      const canUseFree=freeUser&&remaining>0;
+      const buttonLabel=canUseFree?'Analisar grátis com IA':freeUser?'Conhecer o SHOPLAB+':'Analisar com IA';
+      trigger.className='product-ai-trigger premium-product-insight is-ready';
+      trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A IA vai interpretar a ficha técnica e seus interesses para explicar se este produto combina com seu perfil.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
+      trigger.querySelector('[data-ai-insight-generate]').onclick=()=>{if(freeUser&&!remaining){location.href='conta.html?aba=plus';return}trigger.remove();renderPremiumProductInsight(data,null,true)};
+    }
+    return;
+  }  // Keep the action attached to the offer itself. The offer moves on mobile, so
+  // using it as the anchor preserves the same order on every screen size.
+  const offer=document.querySelector('.product-page-hero .offer');
+  const offerDisclaimer=offer?.nextElementSibling?.matches('small.muted')?offer.nextElementSibling:null;
+  const information=document.querySelector('.product-information-sections');
+  const desktop=matchMedia('(min-width:761px)').matches;
+  const anchor=desktop?(information?.previousElementSibling||document.querySelector('.product-description-section')||document.querySelector('.product-page-hero')):(offerDisclaimer||offer||document.querySelector('.product-page-hero'));
   if(!anchor)return;
   const section=document.createElement('section');section.className='section premium-product-insight is-loading';
+  section.innerHTML='<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A análise interpreta a ficha técnica e seus interesses para explicar se este produto combina com você.</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled><span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>';
+  anchor.insertAdjacentElement('afterend',section);arrangeMobileOffer();
+  if(force&&matchMedia('(min-width:761px)').matches)requestAnimationFrame(()=>section.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));
   if(!session()){
     section.className='section premium-product-insight is-locked free-ai-login';
     section.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Crie sua conta ou faça login para usar comparação inteligente e análises personalizadas. Você começa com 5 créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar e usar meus créditos</a></div>`;
-    anchor.insertAdjacentElement('afterend',section);
     return;
   }
-  section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Preparando uma conclusão personalizada…</p></div>';
-  anchor.insertAdjacentElement('afterend',section);
+if(!force){
+    const subscription=await userApi('subscription').catch(()=>null),freeUser=!subscription?.premium;
+    const credits=freeUser?(subscription?.freeCredits||{remaining:5,limit:5}):(subscription?.usage||{});
+    const remaining=Math.max(0,Number(credits.remaining||0));
+    const formattedRemaining=remaining.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2});
+    const creditLabel=freeUser?`${formattedRemaining} ${remaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${remaining===1?'análise disponível':'análises disponíveis'}`;
+    const canUseFree=freeUser&&remaining>0;
+    const buttonLabel=canUseFree?'Analisar grátis com IA':freeUser?'Conhecer o SHOPLAB+':'Analisar com IA';
+    section.className='section premium-product-insight is-ready';
+    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A análise só é gerada quando você pedir. Se preferir, é só continuar vendo o produto.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
+    section.querySelector('[data-ai-insight-generate]').onclick=()=>{if(freeUser&&!remaining){location.href='conta.html?aba=plus';return}section.remove();renderPremiumProductInsight(data,null,true)};return;
+  }
+  section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';
   try{
-    const insight=await(insightPromise||userApi(`products/${encodeURIComponent(data.slug)}/plus-insight`));
+    const insight=await(insightPromise||cachedInsight(data.slug));
     if(insight.freeCreditsExhausted){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SEUS 5 CRÉDITOS FORAM USADOS</span><h2>Continue analisando com SHOPLAB+</h2><p>Você já aproveitou suas análises gratuitas. Assine para receber novas análises inteligentes todos os meses.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>';return}
     if(insight.premiumRequired){section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>`;return}
-    if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+</span><h2>Limite mensal de novas análises atingido</h2><p>Análises já salvas em cache continuam disponíveis. Consulte seu plano para acompanhar a renovação da cota.</p><a class="btn ghost" href="conta.html?aba=plus">Ver meu plano</a></div>';return}
+    if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';return}
     if(insight.generationFailed){section.className='section premium-product-insight is-unavailable';section.innerHTML='<div class="container"><span class="eyebrow">ANÁLISE INDISPONÍVEL</span><h2>Não foi possível gerar a análise agora</h2><p>A análise personalizada não ficou pronta desta vez. Tente novamente em alguns instantes ou confira os dados do produto abaixo.</p></div>';return}
     if(!insight.conclusion?.length){section.remove();return}
     const lines=value=>`<div>${(value||[]).map(item=>`<p>${safe(item)}</p>`).join('')}</div>`;
@@ -176,29 +229,32 @@ function openGallery(items,startIndex,name){
 
 async function detailMedia(){
   const box=document.querySelector('.detail-media');if(!box||box.dataset.mediaReady)return;box.dataset.mediaReady='1';
-  const slug=new URLSearchParams(location.search).get('slug'),insightPromise=slug&&session()?userApi(`products/${encodeURIComponent(slug)}/plus-insight`).catch(()=>null):null,data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data,insightPromise);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
+  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
   const main=items.find(x=>x.isPrimary)||items[0],mainIndex=items.indexOf(main),visible=items.slice(0,4);
   const responsiveImage=(item)=>({src:url(item,960),srcset:[320,640,960,1280].map(width=>`${url(item,width)} ${width}w`).join(', ')});
   const mainSource=responsiveImage(main);
   const thumbs=visible.map((item,index)=>{const remaining=items.length-3,isMore=items.length>4&&index===3;return `<button type="button" class="${item.id===main.id?'active':''} ${isMore?'more-images':''}" data-index="${index}" aria-label="${isMore?`Ver mais ${remaining} imagens`:`Ver imagem ${index+1}`}"><img src="${url(item,160)}" alt="" width="72" height="72" loading="lazy" decoding="async">${isMore?`<span>+${remaining}</span>`:''}</button>`}).join('');
-  box.innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${mainSource.src}" srcset="${mainSource.srcset}" sizes="(max-width:760px) calc(100vw - 44px), (max-width:1200px) 56vw, 720px" alt="${safe(main.altText||data.name||'Produto')}" fetchpriority="high" decoding="async" style="display:block;width:100%;height:100%;max-width:100%;max-height:100%;padding:24px;object-fit:contain;object-position:center;transform:none"><span class="detail-image-magnifier" aria-hidden="true"></span></button>${items.length>1?`<div class="detail-thumbs">${thumbs}</div>`:''}`;
+  const dots=items.map((item,index)=>`<span class="${index===mainIndex?'active':''}" aria-hidden="true"></span>`).join('');
+  box.innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${mainSource.src}" srcset="${mainSource.srcset}" sizes="(max-width:760px) calc(100vw - 44px), (max-width:1200px) 56vw, 720px" alt="${safe(main.altText||data.name||'Produto')}" fetchpriority="high" decoding="async" style="display:block;width:100%;height:100%;max-width:100%;max-height:100%;padding:24px;object-fit:contain;object-position:center;transform:none"><span class="detail-image-magnifier" aria-hidden="true"></span></button>${items.length>1?`<div class="detail-gallery-dots" aria-label="Imagem ${mainIndex+1} de ${items.length}">${dots}</div><div class="detail-thumbs">${thumbs}</div>`:''}`;
   const mainButton=box.querySelector('.detail-main-image'),mainImage=mainButton.querySelector('img'),magnifier=mainButton.querySelector('.detail-image-magnifier'),syncMagnifier=()=>{magnifier.style.backgroundImage=`url("${String(mainImage.currentSrc||mainImage.src).replaceAll('"','%22')}")`};
-  syncMagnifier();
-  mainImage.addEventListener('load',syncMagnifier);
+  const syncDesktopGalleryRatio=()=>{if(matchMedia('(min-width:761px)').matches&&mainImage.naturalWidth&&mainImage.naturalHeight)mainButton.style.setProperty('--detail-image-ratio',String(mainImage.naturalWidth/mainImage.naturalHeight))};
+  syncMagnifier();syncDesktopGalleryRatio();
+  mainImage.addEventListener('load',()=>{syncMagnifier();syncDesktopGalleryRatio()});
   if(matchMedia('(hover:hover) and (pointer:fine)').matches){
     mainButton.addEventListener('pointerenter',syncMagnifier);
     mainButton.addEventListener('pointermove',event=>{const rect=mainButton.getBoundingClientRect(),styles=getComputedStyle(mainImage),paddingX=parseFloat(styles.paddingLeft||0)+parseFloat(styles.paddingRight||0),paddingY=parseFloat(styles.paddingTop||0)+parseFloat(styles.paddingBottom||0),availableWidth=Math.max(1,rect.width-paddingX),availableHeight=Math.max(1,rect.height-paddingY),ratio=(mainImage.naturalWidth||1)/(mainImage.naturalHeight||1),renderedWidth=Math.min(availableWidth,availableHeight*ratio),renderedHeight=renderedWidth/ratio,imageLeft=(rect.width-renderedWidth)/2,imageTop=(rect.height-renderedHeight)/2,x=event.clientX-rect.left,y=event.clientY-rect.top;if(x<imageLeft||x>imageLeft+renderedWidth||y<imageTop||y>imageTop+renderedHeight){mainButton.classList.remove('is-magnifying');return}const lens=156,zoom=2.15,lensX=Math.max(lens/2+8,Math.min(rect.width-lens/2-8,x)),lensY=Math.max(lens/2+8,Math.min(rect.height-lens/2-8,y)),sourceX=x-imageLeft,sourceY=y-imageTop;mainButton.style.setProperty('--magnifier-x',`${lensX}px`);mainButton.style.setProperty('--magnifier-y',`${lensY}px`);magnifier.style.backgroundSize=`${renderedWidth*zoom}px ${renderedHeight*zoom}px`;magnifier.style.backgroundPosition=`${lens/2-sourceX*zoom}px ${lens/2-sourceY*zoom}px`;mainButton.classList.add('is-magnifying')});
     mainButton.addEventListener('pointerleave',()=>mainButton.classList.remove('is-magnifying'));
   }
-  const showMain=index=>{index=(index+items.length)%items.length;const item=items[index],source=responsiveImage(item);mainImage.src=source.src;mainImage.srcset=source.srcset;mainImage.alt=item.altText||data.name||'Produto';mainButton.dataset.index=String(index);mainButton.classList.remove('is-magnifying');box.querySelectorAll('.detail-thumbs button').forEach(thumb=>thumb.classList.toggle('active',Number(thumb.dataset.index)===index));};
+  const showMain=index=>{index=(index+items.length)%items.length;const item=items[index],source=responsiveImage(item);mainImage.src=source.src;mainImage.srcset=source.srcset;mainImage.alt=item.altText||data.name||'Produto';mainButton.dataset.index=String(index);mainButton.classList.remove('is-magnifying');box.querySelectorAll('.detail-thumbs button').forEach(thumb=>thumb.classList.toggle('active',Number(thumb.dataset.index)===index));const dots=box.querySelector('.detail-gallery-dots');dots?.setAttribute('aria-label',`Imagem ${index+1} de ${items.length}`);dots?.querySelectorAll('span').forEach((dot,dotIndex)=>dot.classList.toggle('active',dotIndex===index));};
   let swipeStartX=null,swiped=false;
-  if(matchMedia('(hover:none),(pointer:coarse)').matches){
+  const mobileGallery=()=>matchMedia('(max-width:760px)').matches;
+  if(mobileGallery()||matchMedia('(hover:none),(pointer:coarse)').matches){
     mainButton.style.touchAction='pan-y pinch-zoom';
     mainButton.addEventListener('pointerdown',event=>{swipeStartX=event.clientX;swiped=false},{passive:true});
     mainButton.addEventListener('pointerup',event=>{if(swipeStartX==null)return;const distance=event.clientX-swipeStartX;swipeStartX=null;if(Math.abs(distance)<42)return;swiped=true;showMain(Number(mainButton.dataset.index||0)+(distance<0?1:-1))},{passive:true});
     mainButton.addEventListener('pointercancel',()=>{swipeStartX=null},{passive:true});
   }
-  mainButton.addEventListener('click',event=>{if(swiped){swiped=false;event.preventDefault();return}openGallery(items,Number(event.currentTarget.dataset.index)||0,data.name)});
+  mainButton.addEventListener('click',event=>{if(swiped||mobileGallery()){swiped=false;event.preventDefault();return}openGallery(items,Number(event.currentTarget.dataset.index)||0,data.name)});
   box.querySelector('.detail-thumbs')?.addEventListener('click',event=>{const button=event.target.closest('[data-index]');if(!button)return;const index=Number(button.dataset.index);if(button.classList.contains('more-images')){openGallery(items,index,data.name);return}showMain(index)});
 }
 
