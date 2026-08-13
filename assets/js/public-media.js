@@ -153,8 +153,8 @@ async function renderPremiumProductInsight(data,insightPromise,force=false){
       const subscription=await userApi('subscription').catch(()=>null),freeUser=!subscription?.premium;
       const credits=freeUser?(subscription?.freeCredits||{remaining:5,limit:5}):(subscription?.usage||{});
       const remaining=Math.max(0,Number(credits.remaining||0));
-      const formattedRemaining=remaining.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2});
-      const creditLabel=freeUser?`${formattedRemaining} ${remaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${remaining===1?'análise disponível':'análises disponíveis'}`;
+      const displayRemaining=Math.round(remaining); const formattedRemaining=displayRemaining.toLocaleString('pt-BR');
+      const creditLabel=freeUser?`${formattedRemaining} ${displayRemaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`;
       const canUseFree=freeUser&&remaining>0;
       const buttonLabel=canUseFree?'Analisar grátis com IA':freeUser?'Conhecer o SHOPLAB+':'Analisar com IA';
       trigger.className='product-ai-trigger premium-product-insight is-ready';
@@ -183,8 +183,8 @@ if(!force){
     const subscription=await userApi('subscription').catch(()=>null),freeUser=!subscription?.premium;
     const credits=freeUser?(subscription?.freeCredits||{remaining:5,limit:5}):(subscription?.usage||{});
     const remaining=Math.max(0,Number(credits.remaining||0));
-    const formattedRemaining=remaining.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2});
-    const creditLabel=freeUser?`${formattedRemaining} ${remaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${remaining===1?'análise disponível':'análises disponíveis'}`;
+    const displayRemaining=Math.round(remaining); const formattedRemaining=displayRemaining.toLocaleString('pt-BR');
+    const creditLabel=freeUser?`${formattedRemaining} ${displayRemaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`;
     const canUseFree=freeUser&&remaining>0;
     const buttonLabel=canUseFree?'Analisar grátis com IA':freeUser?'Conhecer o SHOPLAB+':'Analisar com IA';
     section.className='section premium-product-insight is-ready';
