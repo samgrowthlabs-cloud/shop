@@ -3622,6 +3622,20 @@ async function premiumSearchRank(env, ctx, query, intent, products, personalCont
   }
 }
 
+async function searchIntentWithinBudget(intentTask, ctx, budgetMs = 350) {
+  const result = await Promise.race([
+    intentTask,
+    new Promise((resolve) => setTimeout(() => resolve(null), budgetMs)),
+  ]);
+  // The first answer must not wait for an AI cold start. Keep processing the
+  // interpretation so the cached intent improves this and future searches.
+  if (!result && ctx?.waitUntil)
+    ctx.waitUntil(intentTask.catch((error) =>
+      console.warn(JSON.stringify({ event: "ai_search_background_failed", error: String(error?.message || error) })),
+    ));
+  return result;
+}
+
 async function searchV2(req, env, url, ctx, id) {
   const originalQuery = (url.searchParams.get("q") || "").trim().slice(0, 100);
   const normalizedQuery = normalizeSearch(originalQuery);
@@ -3630,7 +3644,8 @@ async function searchV2(req, env, url, ctx, id) {
   const searchUser = req.headers.has("authorization") ? await activeUser(req, env) : null;
   const premium = searchUser ? await premiumSubscriptionData(env, searchUser.id) : null;
   const premiumEnabled = Boolean(premium?.premium);
-  const intent = await cachedSearchIntent(env, originalQuery, ctx);
+  const aiIntentTask = cachedSearchIntent(env, originalQuery, ctx);
+  const intent = await searchIntentWithinBudget(aiIntentTask, ctx);
   const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
   const ftsQuery = intent
     ? buildIntentFtsQuery(correctedQuery)
@@ -3647,6 +3662,8 @@ async function searchV2(req, env, url, ctx, id) {
   const order =
     sort === "price-asc"
       ? "COALESCE(o.current_price_cents,2147483647) ASC,rank ASC"
+      : sort === "price-desc"
+        ? "COALESCE(o.current_price_cents,p.base_price_cents,0) DESC,rank ASC"
       : sort === "discount"
         ? "CASE WHEN o.previous_price_cents>o.current_price_cents THEN (o.previous_price_cents-o.current_price_cents)*1.0/o.previous_price_cents ELSE 0 END DESC,rank ASC"
         : "rank ASC,COALESCE(p.editorial_score,0) DESC,p.is_featured DESC,p.view_count DESC";
@@ -3786,7 +3803,7 @@ const SEARCH_INTENT_SCHEMA = {
     brand: { type: ["string", "null"] },
     minPrice: { type: ["number", "null"] },
     maxPrice: { type: ["number", "null"] },
-    sort: { type: ["string", "null"], enum: ["price-asc", "discount", null] },
+    sort: { type: ["string", "null"], enum: ["price-asc", "price-desc", "discount", null] },
     explanation: { type: "string" },
   },
   required: ["searchTerms", "category", "brand", "minPrice", "maxPrice", "sort", "explanation"],
@@ -4436,7 +4453,7 @@ async function interpretSearchIntent(env, originalQuery) {
       messages: [
         {
           role: "system",
-          content: `Interprete qualquer busca de produto de um comparador brasileiro, inclusive consultas curtas, erros de digitacao, abreviacoes e linguagem informal. Corrija silenciosamente grafias provaveis (por exemplo, "blutuf" deve ser entendido como bluetooth) e identifique o tipo canonico, marca, modelo, recursos e finalidade, sem depender de frases-modelo. searchTerms deve iniciar pelo tipo de produto e conter somente termos que ajudem a recuperar produtos reais. Remova conectivos, orcamento e ordenacao. Extraia filtros apenas quando forem pedidos ou inequivocos. Use somente um slug de categoria ou null: ${categoryList || "nenhuma"}. Use somente uma marca desta lista, em minusculas, ou null: ${brandList || "nenhuma"}. Precos sao em reais. sort: price-asc para menor preco, discount para desconto, ou null. Nunca invente dados, especificacoes ou marcas. explanation deve ser uma frase curta em portugues.`,
+          content: `Interprete qualquer busca de produto de um comparador brasileiro, inclusive consultas curtas, erros de digitacao, abreviacoes e linguagem informal. Corrija silenciosamente grafias provaveis (por exemplo, "blutuf" deve ser entendido como bluetooth) e identifique o tipo canonico, marca, modelo, recursos e finalidade, sem depender de frases-modelo. searchTerms deve iniciar pelo tipo de produto e conter somente termos que ajudem a recuperar produtos reais. Remova conectivos, orcamento e ordenacao. Extraia filtros apenas quando forem pedidos ou inequivocos. Use somente um slug de categoria ou null: ${categoryList || "nenhuma"}. Use somente uma marca desta lista, em minusculas, ou null: ${brandList || "nenhuma"}. Precos sao em reais. sort: price-asc para menor preco, price-desc para maior preco, discount para desconto, ou null. Nunca invente dados, especificacoes ou marcas. explanation deve ser uma frase curta em portugues.`,
         },
         { role: "user", content: originalQuery },
       ],
@@ -4457,7 +4474,7 @@ async function interpretSearchIntent(env, originalQuery) {
       brand: validBrands.has(normalizeSearch(parsed.brand)) ? normalizeSearch(parsed.brand) : null,
       minPrice: parsed.minPrice != null && Number(parsed.minPrice) > 0 ? Number(parsed.minPrice) : null,
       maxPrice: parsed.maxPrice != null && Number(parsed.maxPrice) > 0 ? Number(parsed.maxPrice) : null,
-      sort: ["price-asc", "discount"].includes(parsed.sort) ? parsed.sort : null,
+      sort: ["price-asc", "price-desc", "discount"].includes(parsed.sort) ? parsed.sort : null,
       explanation: String(parsed.explanation || "").slice(0, 180),
     };
   } catch (error) {
@@ -7993,7 +8010,10 @@ async function userPremiumSubscription(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
   const data = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
-  const response = ok(req, env, data, id);
+  const freeCreditLimit = await resolvedFreeAiCreditLimit(env);
+  const freeCreditUsage = await env.DB.prepare(`SELECT COUNT(*) used FROM free_ai_credit_usage WHERE user_id=?`).bind(user.id).first();
+  const freeCreditsUsed = Math.min(freeCreditLimit, Number(freeCreditUsage?.used || 0));
+  const response = ok(req, env, { ...data, freeCredits: { used: freeCreditsUsed, limit: freeCreditLimit, remaining: Math.max(0, freeCreditLimit - freeCreditsUsed) } }, id);
   response.headers.set("cache-control", "private, no-store, max-age=0");
   return response;
 }
