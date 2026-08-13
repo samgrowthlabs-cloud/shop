@@ -65,14 +65,13 @@ const AI_FEATURES = {
   product_insight: { label: "Análise do produto", model: "@cf/mistralai/mistral-small-3.1-24b-instruct", fallback: "@cf/qwen/qwen3-30b-a3b-fp8" },
   premium_related: { label: "Alternativas SHOPLAB+", model: "@cf/openai/gpt-oss-120b", fallback: "@cf/qwen/qwen3-30b-a3b-fp8" },
   related_ranking: { label: "Produtos relacionados", model: "@cf/mistralai/mistral-small-3.1-24b-instruct" },
-  product_draft: { label: "Assistente de cadastro", model: "deepseek/deepseek-v4-pro", fallback: "@cf/openai/gpt-oss-120b" },
+  product_draft: { label: "Assistente de cadastro", model: "@cf/mistralai/mistral-small-3.1-24b-instruct", fallback: "@cf/qwen/qwen3-30b-a3b-fp8" },
 };
 const WORKERS_AI_MODELS = [
   { id: "@cf/qwen/qwen3-30b-a3b-fp8", name: "Qwen3 30B A3B FP8" },
   { id: "@cf/qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" },
   { id: "@cf/mistralai/mistral-small-3.1-24b-instruct", name: "Mistral Small 3.1 24B" },
   { id: "@cf/openai/gpt-oss-20b", name: "GPT-OSS 20B" },
-  { id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
   { id: "@cf/openai/gpt-oss-120b", name: "GPT-OSS 120B" },
   { id: "@cf/nvidia/nemotron-3-120b-a12b", name: "Nemotron 3 120B A12B" },
 ];
@@ -7400,7 +7399,7 @@ async function updateAdminAiSettings(req, env, id) {
   const validModel = (value, optional = false) => {
     const model = String(value || "").trim();
     if (!model && optional) return null;
-    return /^(?:@cf\/[a-z0-9._-]+\/[a-z0-9._-]+|deepseek\/deepseek-v4-pro)$/i.test(model) && model.length <= 180 ? model : false;
+    return /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(model) && model.length <= 180 ? model : false;
   };
   const statements = [];
   for (const row of rows) {
