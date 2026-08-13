@@ -5896,3 +5896,37 @@ body[data-page="home"] .product-rail>.products>.product-card{
     object-position:center!important;
   }
 }
+/* Convite SHOPLAB+ compacto e orientado à análise do produto. */
+@media(min-width:761px){
+  body[data-page="product"] .product-ai-trigger{
+    margin:8px 0 12px!important;
+  }
+  body[data-page="product"] .product-ai-trigger>.container{
+    gap:8px!important;
+    padding:14px 16px!important;
+  }
+  body[data-page="product"] .product-ai-trigger .eyebrow{
+    font-size:10px!important;
+    line-height:1.2!important;
+  }
+  body[data-page="product"] .product-ai-trigger .premium-insight-head h2{
+    margin:3px 0 5px!important;
+    font-size:18px!important;
+    line-height:1.12!important;
+    letter-spacing:-.02em!important;
+    white-space:nowrap;
+  }
+  body[data-page="product"] .product-ai-trigger .premium-insight-head p{
+    font-size:11px!important;
+    line-height:1.35!important;
+  }
+  body[data-page="product"] .product-ai-trigger .ai-insight-generate{
+    min-height:44px!important;
+    padding:10px 14px!important;
+  }
+  body[data-page="product"] .product-ai-trigger .ai-credit-pill{
+    min-height:26px!important;
+    padding:4px 11px!important;
+    font-size:11px!important;
+  }
+}

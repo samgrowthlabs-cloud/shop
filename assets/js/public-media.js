@@ -144,21 +144,21 @@ async function renderPremiumProductInsight(data,insightPromise,force=false){
     if(!offerBox||!priceBox)return;
     const trigger=document.createElement('section');
     trigger.className='product-ai-trigger premium-product-insight is-ready';
-    trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A IA vai interpretar a ficha técnica e seus interesses para explicar se este produto combina com seu perfil.</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled>${aiAnalyzeIcon()}<span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>`;
+    trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled>${aiAnalyzeIcon()}<span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>`;
     priceBox.insertAdjacentElement('afterend',trigger);
     if(!session()){
-      trigger.className='product-ai-trigger premium-product-insight is-locked free-ai-login';
-      trigger.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Use a IA para interpretar a ficha técnica e entender como este produto combina com seu perfil.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar e usar meus créditos</a></div>`;
+      trigger.className='product-ai-trigger premium-product-insight is-ready free-ai-login';
+      trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><a class="btn primary ai-insight-generate" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">${aiAnalyzeIcon()}<span>Analisar grátis</span></a><span class="ai-credit-pill is-free">5 análises grátis</span></div>`;
     }else{
       const subscription=await userApi('subscription').catch(()=>null),freeUser=!subscription?.premium;
       const credits=freeUser?(subscription?.freeCredits||{remaining:5,limit:5}):(subscription?.usage||{});
       const remaining=Math.max(0,Number(credits.remaining||0));
       const displayRemaining=Math.round(remaining); const formattedRemaining=displayRemaining.toLocaleString('pt-BR');
-      const creditLabel=freeUser?`${formattedRemaining} ${displayRemaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`;
+      const creditLabel=remaining>0?(freeUser?`${formattedRemaining} ${displayRemaining===1?'análise grátis':'análises grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`):'Análise disponível no Plus';
       const canUseFree=freeUser&&remaining>0;
-      const buttonLabel=canUseFree?'Analisar grátis com IA':freeUser?'Conhecer o SHOPLAB+':'Analisar com IA';
+      const buttonLabel=remaining>0?'Analisar agora':'Desbloquear análise';
       trigger.className='product-ai-trigger premium-product-insight is-ready';
-      trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A IA vai interpretar a ficha técnica e seus interesses para explicar se este produto combina com seu perfil.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
+      trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
       trigger.querySelector('[data-ai-insight-generate]').onclick=()=>{if(freeUser&&!remaining){location.href='conta.html?aba=plus';return}trigger.remove();renderPremiumProductInsight(data,null,true)};
     }
     return;
@@ -171,12 +171,12 @@ async function renderPremiumProductInsight(data,insightPromise,force=false){
   const anchor=desktop?(information?.previousElementSibling||document.querySelector('.product-description-section')||document.querySelector('.product-page-hero')):(offerDisclaimer||offer||document.querySelector('.product-page-hero'));
   if(!anchor)return;
   const section=document.createElement('section');section.className='section premium-product-insight is-loading';
-  section.innerHTML='<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A análise interpreta a ficha técnica e seus interesses para explicar se este produto combina com você.</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled><span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>';
+  section.innerHTML='<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled><span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>';
   anchor.insertAdjacentElement('afterend',section);arrangeMobileOffer();
   if(force&&matchMedia('(min-width:761px)').matches)requestAnimationFrame(()=>section.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));
   if(!session()){
-    section.className='section premium-product-insight is-locked free-ai-login';
-    section.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Crie sua conta ou faça login para usar comparação inteligente e análises personalizadas. Você começa com 5 créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar e usar meus créditos</a></div>`;
+    section.className='section premium-product-insight is-ready free-ai-login';
+    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><a class="btn primary ai-insight-generate" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">${aiAnalyzeIcon()}<span>Analisar grátis</span></a><span class="ai-credit-pill is-free">5 análises grátis</span></div>`;
     return;
   }
 if(!force){
@@ -184,18 +184,18 @@ if(!force){
     const credits=freeUser?(subscription?.freeCredits||{remaining:5,limit:5}):(subscription?.usage||{});
     const remaining=Math.max(0,Number(credits.remaining||0));
     const displayRemaining=Math.round(remaining); const formattedRemaining=displayRemaining.toLocaleString('pt-BR');
-    const creditLabel=freeUser?`${formattedRemaining} ${displayRemaining===1?'crédito grátis':'créditos grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`;
+    const creditLabel=remaining>0?(freeUser?`${formattedRemaining} ${displayRemaining===1?'análise grátis':'análises grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`):'Análise disponível no Plus';
     const canUseFree=freeUser&&remaining>0;
-    const buttonLabel=canUseFree?'Analisar grátis com IA':freeUser?'Conhecer o SHOPLAB+':'Analisar com IA';
+    const buttonLabel=remaining>0?'Analisar agora':'Desbloquear análise';
     section.className='section premium-product-insight is-ready';
-    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Quer uma análise personalizada?</h2><p>A análise só é gerada quando você pedir. Se preferir, é só continuar vendo o produto.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
+    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
     section.querySelector('[data-ai-insight-generate]').onclick=()=>{if(freeUser&&!remaining){location.href='conta.html?aba=plus';return}section.remove();renderPremiumProductInsight(data,null,true)};return;
   }
   section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';
   try{
     const insight=await(insightPromise||cachedInsight(data.slug));
-    if(insight.freeCreditsExhausted){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SEUS 5 CRÉDITOS FORAM USADOS</span><h2>Continue analisando com SHOPLAB+</h2><p>Você já aproveitou suas análises gratuitas. Assine para receber novas análises inteligentes todos os meses.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>';return}
-    if(insight.premiumRequired){section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso.</p><a class="btn primary" href="conta.html?aba=plus">Conhecer o SHOPLAB+</a></div>`;return}
+    if(insight.freeCreditsExhausted){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SEUS 5 CRÉDITOS FORAM USADOS</span><h2>Continue analisando com SHOPLAB+</h2><p>Você já aproveitou suas análises gratuitas. Assine para receber novas análises inteligentes todos os meses.</p><a class="btn primary" href="conta.html?aba=plus">Desbloquear análise</a></div>';return}
+    if(insight.premiumRequired){section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso.</p><a class="btn primary" href="conta.html?aba=plus">Desbloquear análise</a></div>`;return}
     if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';return}
     if(insight.generationFailed){section.className='section premium-product-insight is-unavailable';section.innerHTML='<div class="container"><span class="eyebrow">ANÁLISE INDISPONÍVEL</span><h2>Não foi possível gerar a análise agora</h2><p>A análise personalizada não ficou pronta desta vez. Tente novamente em alguns instantes ou confira os dados do produto abaixo.</p></div>';return}
     if(!insight.conclusion?.length){section.remove();return}
@@ -205,7 +205,7 @@ if(!force){
     if(insight.freeAccess){
       const label=section.querySelector('.premium-insight-head .eyebrow'),status=section.querySelector('.premium-insight-head small');
       if(label)label.textContent='CRÉDITO GRÁTIS · ANÁLISE PARA VOCÊ';
-      if(status)status.textContent=`${Number(insight.freeCredits?.remaining||0)} créditos grátis restantes`;
+      if(status){const remainingCredits=Math.max(0,Number(insight.freeCredits?.remaining||0));if(remainingCredits>0)status.textContent=remainingCredits+' '+(remainingCredits===1?'análise grátis':'análises grátis');else status.remove()}
     }
   }catch(error){
     if(/entre na sua conta/i.test(String(error?.message||''))){
