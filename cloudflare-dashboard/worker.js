@@ -627,6 +627,10 @@ async function route(request, env, ctx, requestId) {
     return adminAiSettings(request, env, requestId);
   if (request.method === "PUT" && path === "/api/v1/admin/ai-settings")
     return updateAdminAiSettings(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/catalog-settings")
+    return adminCatalogSettings(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/catalog-settings")
+    return updateAdminCatalogSettings(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/users")
     return adminUsers(request, env, url, requestId);
   if (request.method === "GET" && /^\/api\/v1\/admin\/users\/[^/]+\/events$/.test(path))
@@ -829,6 +833,23 @@ async function listCategories(req, env, id) {
   return ok(req, env, (results||[]).map(category=>({...category,imageUrl:category.imageStorageKey?`${origin}/media/${encodeURIComponent(category.imageStorageKey)}`:null})), id);
 }
 
+async function adminCatalogSettings(req,env,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
+  const row=await env.DB.prepare("SELECT novelty_days noveltyDays,updated_at updatedAt FROM catalog_settings WHERE id='default'").first();
+  return ok(req,env,row||{noveltyDays:30},id);
+}
+async function updateAdminCatalogSettings(req,env,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
+  const body=await readJson(req,4096),days=Number(body.noveltyDays);
+  if(!Number.isInteger(days)||days<1||days>3650)return fail(req,env,"VALIDATION_ERROR","Informe entre 1 e 3650 dias",422,id);
+  await env.DB.prepare("INSERT INTO catalog_settings(id,novelty_days,updated_at) VALUES('default',?,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET novelty_days=excluded.novelty_days,updated_at=CURRENT_TIMESTAMP").bind(days).run();
+  return ok(req,env,{noveltyDays:days},id);
+}
+async function resolvedCatalogSettings(env){
+  try{const row=await env.DB.prepare("SELECT novelty_days noveltyDays FROM catalog_settings WHERE id='default'").first();return{noveltyDays:clamp(row?.noveltyDays,1,3650,30)}}
+  catch(error){if(/no such table/i.test(String(error?.message||error)))return{noveltyDays:30};throw error}
+}
+
 async function publicSiteConfig(req, env, id) {
   const [banners, theme, stores, brands, headerPromotions, headerSpotlights, headerAds] = await env.DB.batch([
     env.DB.prepare(
@@ -859,6 +880,7 @@ async function publicSiteConfig(req, env, id) {
   const mediaUrl = (key) =>
     key ? `${origin}/media/${encodeURIComponent(key)}` : null;
   const publicBannerStyle=banner=>{const style=parse(banner.styleJson||"{}",{});return JSON.stringify({...style,overlays:(Array.isArray(style.overlays)?style.overlays:[]).map(layer=>({...layer,imageUrl:mediaUrl(layer.storageKey),storageKey:undefined}))})};
+  const catalogSettings=await resolvedCatalogSettings(env);
   const response = ok(
     req,
     env,
@@ -899,6 +921,7 @@ async function publicSiteConfig(req, env, id) {
       }).filter(Boolean),
       stores: stores.results || [],
       brands: brands.results || [],
+      catalog: catalogSettings,
       headerPromotions: (headerPromotions.results || []).map((promotion) => ({
         ...promotion,
         ...parse(promotion.rulesJson, {}),
@@ -1026,7 +1049,7 @@ async function listProducts(req, env, url, id) {
     where += ` AND EXISTS (SELECT 1 FROM offers store_offer JOIN partners store_partner ON store_partner.id=store_offer.partner_id WHERE store_offer.product_id=p.id AND store_offer.availability='available' AND store_partner.slug=? AND store_partner.is_active=1)`;
     args.push(store);
   }
-  const query = `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.updated_at updatedAt,c.name category,b.name brand,o.current_price_cents price,o.previous_price_cents oldPrice,pa.name store,o.id offerId FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id WHERE ${where} ORDER BY p.is_featured DESC,p.updated_at DESC LIMIT ? OFFSET ?`;
+  const query = `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.published_at publishedAt,p.updated_at updatedAt,c.name category,b.name brand,o.current_price_cents price,o.previous_price_cents oldPrice,pa.name store,o.id offerId FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id WHERE ${where} ORDER BY p.is_featured DESC,p.updated_at DESC LIMIT ? OFFSET ?`;
   const { results } = await env.DB.prepare(query)
     .bind(...args, limit, offset)
     .all();
@@ -1044,7 +1067,7 @@ async function listProductsV2(req, env, url, id) {
     args.push(category);
   }
   const { results } = await env.DB.prepare(
-    `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id LEFT JOIN product_media pm ON pm.id=(SELECT selected_media.id FROM product_media selected_media WHERE selected_media.product_id=p.id AND selected_media.type='image' ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at LIMIT 1) WHERE ${where} ORDER BY p.is_featured DESC,p.updated_at DESC LIMIT ? OFFSET ?`,
+    `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.published_at publishedAt,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id LEFT JOIN product_media pm ON pm.id=(SELECT selected_media.id FROM product_media selected_media WHERE selected_media.product_id=p.id AND selected_media.type='image' ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at LIMIT 1) WHERE ${where} ORDER BY p.is_featured DESC,p.updated_at DESC LIMIT ? OFFSET ?`,
   )
     .bind(...args, limit, offset)
     .all();
@@ -1052,12 +1075,15 @@ async function listProductsV2(req, env, url, id) {
 }
 
 async function publicPromotions(req, env, id) {
-  const [campaigns, products] = await env.DB.batch([
+  const [campaigns, products, automaticDeals] = await env.DB.batch([
     env.DB.prepare(
       `SELECT id,name,slug,description,coupon_code couponCode,starts_at startsAt,ends_at endsAt,rules_json rulesJson FROM promotions WHERE is_active=1 AND datetime(starts_at)<=CURRENT_TIMESTAMP AND datetime(ends_at)>=CURRENT_TIMESTAMP ORDER BY datetime(ends_at),name`,
     ),
     env.DB.prepare(
       `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.view_count viewCount,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt,pp.promotion_id promotionId FROM promotion_products pp JOIN products p ON p.id=pp.product_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id LEFT JOIN product_media pm ON pm.id=(SELECT selected_media.id FROM product_media selected_media WHERE selected_media.product_id=p.id AND selected_media.type='image' ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at LIMIT 1) JOIN promotions pr ON pr.id=pp.promotion_id WHERE p.status='published' AND pr.is_active=1 AND datetime(pr.starts_at)<=CURRENT_TIMESTAMP AND datetime(pr.ends_at)>=CURRENT_TIMESTAMP ORDER BY p.is_featured DESC,p.editorial_score DESC`,
+    ),
+    env.DB.prepare(
+      `SELECT p.id,p.name,p.slug,p.product_type productType,p.short_description shortDescription,p.editorial_score editorialScore,p.is_featured isFeatured,p.view_count viewCount,p.published_at publishedAt,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,pm.storage_key primaryStorageKey,pm.external_url primaryExternalUrl,pm.alt_text primaryImageAlt FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN partners pa ON pa.id=o.partner_id LEFT JOIN product_media pm ON pm.id=(SELECT selected_media.id FROM product_media selected_media WHERE selected_media.product_id=p.id AND selected_media.type='image' ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at LIMIT 1) WHERE p.status='published' AND COALESCE(o.current_price_cents,p.base_price_cents)>0 AND COALESCE(o.previous_price_cents,p.compare_at_price_cents)>COALESCE(o.current_price_cents,p.base_price_cents) ORDER BY ((COALESCE(o.previous_price_cents,p.compare_at_price_cents)-COALESCE(o.current_price_cents,p.base_price_cents))*1.0/COALESCE(o.previous_price_cents,p.compare_at_price_cents)) DESC,p.updated_at DESC`,
     ),
   ]);
   const items = (campaigns.results || []).map((campaign) => {
@@ -1075,6 +1101,18 @@ async function publicPromotions(req, env, id) {
           promotionCouponCode: campaign.couponCode,
         })),
     };
+  });
+  const automaticProducts=(automaticDeals.results||[]).map(normalizeProduct).map(product=>{const oldPrice=Number(product.oldPrice||0),price=Number(product.price||0),discount=oldPrice>price&&oldPrice>0?Math.round((1-price/oldPrice)*100):0;return{...product,discount,tag:`${discount}% OFF`,automaticPromotion:true}}).sort((a,b)=>b.discount-a.discount);
+  if(automaticProducts.length)items.unshift({
+    id:"automatic-price-drops",
+    name:"Ofertas por redução de preço",
+    slug:"ofertas-automaticas",
+    description:"Todos os produtos cujo preço atual está abaixo do preço normal, do maior desconto para o menor.",
+    automatic:true,
+    startsAt:new Date().toISOString(),
+    endsAt:null,
+    discountType:"automatic",
+    products:automaticProducts,
   });
   return ok(req, env, items, id);
 }
@@ -1270,7 +1308,7 @@ async function relatedProducts(req, env, ctx, slug, id) {
   const premium = user ? await premiumSubscriptionData(env, user.id) : null;
   let premiumRanked = null;
   let premiumAiRanked = false;
-  if (premium?.premium && relatedMode !== "standard" && candidates.length) {
+  if (relatedMode !== "standard" && candidates.length) {
     const placeholders = candidates.map(() => "?").join(",");
     const details = await env.DB.prepare(
       `SELECT id,full_description fullDescription,target_audience targetAudience,
@@ -1280,23 +1318,23 @@ async function relatedProducts(req, env, ctx, slug, id) {
     candidates = candidates.map((product) => ({ ...product, ...(detailById.get(product.id) || {}) }));
     const eligible = premiumRelatedCandidatePool(source, candidates);
     const safeRecommendations = fallbackPremiumRelatedProducts(source, eligible);
-    const preferenceContext = await relatedUserPreferenceContext(env, user?.id);
-    const aiTask = rankPremiumRelatedProductsWithAi(env, source, eligible, preferenceContext);
+    const preferenceContext = premium?.premium ? await relatedUserPreferenceContext(env, user?.id) : null;
+    const aiTask = premium?.premium ? rankPremiumRelatedProductsWithAi(env, source, eligible, preferenceContext) : Promise.resolve(null);
     if (ctx?.waitUntil) ctx.waitUntil(aiTask.catch(() => null));
     const aiRecommendations = await Promise.race([
       aiTask,
       new Promise((resolve) => setTimeout(() => resolve(null), 1400)),
     ]);
     premiumAiRanked = Boolean(aiRecommendations?.length);
-    const mergedRecommendations = mergePremiumRelatedProducts(aiRecommendations || [], safeRecommendations).slice(0, 4);
-    premiumRanked = mergedRecommendations.length ? mergedRecommendations : null;
+    const mergedRecommendations = mergePremiumRelatedProducts(aiRecommendations || [], safeRecommendations).slice(0, 9);
+    premiumRanked = mergedRecommendations.length ? mergedRecommendations : safeRecommendations.slice(0, 9);
   }
-  const responseProducts = premium?.premium && relatedMode !== "standard" ? (premiumRanked || []) : candidates;
-  const response = ok(req, env, responseProducts.slice(0, premium?.premium && relatedMode !== "standard" ? 8 : 10), id, {
+  const responseProducts = relatedMode !== "standard" ? (premiumRanked || candidates) : candidates;
+  const response = ok(req, env, responseProducts.slice(0, 9), id, {
     strategy: premiumRanked?.length
       ? premiumAiRanked
-        ? "shoplab-plus-direct-alternatives-ai"
-        : "shoplab-plus-direct-alternatives-safe"
+        ? "shoplab-direct-alternatives-ai"
+        : "shoplab-direct-alternatives-safe"
       : "manual+category+brand+type+score+activity",
     aiRanked: premiumAiRanked,
     premiumRecommendations: relatedMode !== "standard" && Boolean(premiumRanked?.length),
@@ -1311,7 +1349,7 @@ const RELATED_PRODUCTS_SCHEMA = {
   properties: {
     productIds: {
       type: "array",
-      maxItems: 8,
+      maxItems: 9,
       items: { type: "string" },
     },
   },
@@ -1326,7 +1364,7 @@ const PREMIUM_RELATED_PRODUCTS_SCHEMA = {
     recommendations: {
       type: "array",
       minItems: 1,
-      maxItems: 8,
+      maxItems: 9,
       items: {
         type: "object",
         additionalProperties: false,
@@ -7087,6 +7125,7 @@ function adminPermissionForRequest(method, path) {
   if (path === "/api/v1/admin/dashboard") return "dashboard.view";
   if (path === "/api/v1/admin/logs") return "logs.view";
   if (path.includes("premium-settings")) return "premium.manage";
+  if (path.includes("catalog-settings")) return "promotions.manage";
   if (path.includes("ai-settings")) return "ai.manage";
   if (path.includes("/ai/product-draft")) return "products.ai";
   if (/\/products\/[^/]+\/(?:sync-price|price)$/.test(path)) return "prices.edit";
