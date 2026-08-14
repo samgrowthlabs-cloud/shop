@@ -1,0 +1,15 @@
+ALTER TABLE premium_settings ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1 CHECK (is_enabled IN (0,1));
+ALTER TABLE premium_settings ADD COLUMN comparison_enabled INTEGER NOT NULL DEFAULT 1 CHECK (comparison_enabled IN (0,1));
+ALTER TABLE premium_settings ADD COLUMN analysis_enabled INTEGER NOT NULL DEFAULT 1 CHECK (analysis_enabled IN (0,1));
+ALTER TABLE premium_settings ADD COLUMN coming_soon_message TEXT NOT NULL DEFAULT 'Em breve';
+ALTER TABLE premium_settings ADD COLUMN monthly_analysis_limit INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE premium_settings ADD COLUMN monthly_comparison_limit INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE premium_settings ADD COLUMN pass_credit_limit INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE premium_settings ADD COLUMN pass_analysis_limit INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE premium_settings ADD COLUMN pass_comparison_limit INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE premium_settings ADD COLUMN new_user_trial_enabled INTEGER NOT NULL DEFAULT 0 CHECK (new_user_trial_enabled IN (0,1));
+ALTER TABLE premium_settings ADD COLUMN new_user_trial_days INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE premium_settings ADD COLUMN new_user_trial_credits INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE premium_settings ADD COLUMN new_user_trial_analysis_limit INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE premium_settings ADD COLUMN new_user_trial_comparison_limit INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE premium_settings ADD COLUMN packages_json TEXT NOT NULL DEFAULT '[]';

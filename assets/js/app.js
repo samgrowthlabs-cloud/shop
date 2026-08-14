@@ -1,7 +1,7 @@
 import'./favicon.js?v=20260808-mobile-compact-2';import{getProducts,getTrendingProducts,getCategories,getPromotions,getCollection,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,cachedSiteConfig,trackEvent}from'./api.js?v=20260808-collections-1';
 import'./search-ui.js?v=20260803-media-domain-38';
-import'./public-media.js?v=20260813-product-analysis-1';
-import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260811-json-contract-8';
+import'./public-media.js?v=20260814-coming-soon-1';
+import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260814-coming-soon-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260807-card-compare-1';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
