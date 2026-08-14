@@ -430,6 +430,21 @@ CREATE TABLE IF NOT EXISTS premium_settings (
   promotion_pass_price_cents INTEGER,
   promotion_starts_at TEXT,
   promotion_ends_at TEXT,
+  is_enabled INTEGER NOT NULL DEFAULT 1 CHECK (is_enabled IN (0,1)),
+  comparison_enabled INTEGER NOT NULL DEFAULT 1 CHECK (comparison_enabled IN (0,1)),
+  analysis_enabled INTEGER NOT NULL DEFAULT 1 CHECK (analysis_enabled IN (0,1)),
+  coming_soon_message TEXT NOT NULL DEFAULT 'Em breve',
+  monthly_analysis_limit INTEGER NOT NULL DEFAULT 50,
+  monthly_comparison_limit INTEGER NOT NULL DEFAULT 50,
+  pass_credit_limit INTEGER NOT NULL DEFAULT 50,
+  pass_analysis_limit INTEGER NOT NULL DEFAULT 50,
+  pass_comparison_limit INTEGER NOT NULL DEFAULT 50,
+  new_user_trial_enabled INTEGER NOT NULL DEFAULT 0 CHECK (new_user_trial_enabled IN (0,1)),
+  new_user_trial_days INTEGER NOT NULL DEFAULT 0,
+  new_user_trial_credits INTEGER NOT NULL DEFAULT 0,
+  new_user_trial_analysis_limit INTEGER NOT NULL DEFAULT 0,
+  new_user_trial_comparison_limit INTEGER NOT NULL DEFAULT 0,
+  packages_json TEXT NOT NULL DEFAULT '[]',
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 INSERT OR IGNORE INTO premium_settings(id) VALUES('default');

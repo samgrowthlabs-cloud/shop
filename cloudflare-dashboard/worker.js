@@ -1973,6 +1973,9 @@ async function generateAndPersistProductComparison(env, ctx, { version, cacheKey
 }
 
 async function premiumProductInsight(req, env, ctx, slug, id) {
+  const commercialPlan = await resolvedPremiumPlan(env);
+  if (!commercialPlan.enabled || !commercialPlan.features.analysis)
+    return ok(req, env, {disabled:true,comingSoonMessage:commercialPlan.enabled?"A análise está temporariamente desativada":commercialPlan.comingSoonMessage,plan:commercialPlan}, id);
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para acessar a análise SHOPLAB+", 401, id);
   const premium = await premiumSubscriptionData(env, user.id);
@@ -2106,6 +2109,8 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
 
 async function reservePremiumAiGeneration(env, userId, cost = 1) {
   const plan = await resolvedPremiumPlan(env);
+  if (!plan.enabled)
+    return { allowed:false,disabled:true,used:0,limit:0,remaining:0,period:premiumPeriodKey(),cost:0 };
   const period = premiumPeriodKey(), normalizedCost = clamp(cost, 0.01, 100, 1);
   const row = await env.DB.prepare(
     `INSERT INTO premium_ai_usage(user_id,period_key,generations) VALUES(?,?,?)
@@ -2165,6 +2170,9 @@ async function refundFreeAiCredit(env, userId, featureKey) {
 }
 
 async function analyzeProductComparison(req, env, ctx, id) {
+  const commercialPlan = await resolvedPremiumPlan(env);
+  if (!commercialPlan.enabled || !commercialPlan.features.comparison)
+    return ok(req, env, {disabled:true,comingSoonMessage:commercialPlan.enabled?"A comparação inteligente está temporariamente desativada":commercialPlan.comingSoonMessage,plan:commercialPlan}, id);
   const body = await readJson(req, 4096);
   const slugs = [...new Set((Array.isArray(body.slugs) ? body.slugs : []).map((slug) => String(slug).trim()).filter((slug) => /^[a-z0-9-]{2,160}$/.test(slug)))].slice(0, 3);
   if (slugs.length < 2) return fail(req, env, "VALIDATION_ERROR", "Escolha pelo menos dois produtos para comparar", 422, id);
@@ -7222,8 +7230,17 @@ async function userProfile(req, env, id) {
   const user = await authenticatedUser(req);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
   const suggestedName = String(user.user_metadata?.display_name || "").trim().slice(0, 80);
+  const existingProfile = await env.DB.prepare(`SELECT 1 found FROM user_profiles WHERE user_id=?`).bind(user.id).first();
   await env.DB.prepare(`INSERT INTO user_profiles(user_id,email,display_name,last_seen_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,updated_at=CURRENT_TIMESTAMP`)
     .bind(user.id, user.email, suggestedName).run();
+  if (!existingProfile) {
+    const plan = await resolvedPremiumPlan(env);
+    if (plan.newUserTrial.enabled && plan.newUserTrial.days > 0) {
+      const paidAt=new Date().toISOString(),accessExpiresAt=new Date(Date.now()+plan.newUserTrial.days*86400000).toISOString();
+      await env.DB.prepare(`INSERT OR IGNORE INTO premium_pass_payments(id,user_id,provider_payment_id,status,payer_email,amount_cents,currency,paid_at,access_expires_at,provider_updated_at) VALUES(?,?,?,'approved',?,0,'BRL',?,?,?)`)
+        .bind(`trial:${user.id}`,user.id,`trial:${user.id}`,user.email,paidAt,accessExpiresAt,paidAt).run();
+    }
+  }
   await claimReferral(req,env,user.id);
   const profile = await env.DB.prepare(`SELECT user_id userId,email,display_name displayName,status,created_at createdAt FROM user_profiles WHERE user_id=?`).bind(user.id).first();
   return ok(req, env, profile, id);
@@ -7280,6 +7297,12 @@ async function resolvedPremiumPlan(env) {
   const row = await env.DB.prepare(
     `SELECT plan_name planName,monthly_price_cents monthlyPriceCents,pass_price_cents passPriceCents,
       pass_days passDays,ai_monthly_limit aiMonthlyLimit,promotion_enabled promotionEnabled,
+      is_enabled isEnabled,comparison_enabled comparisonEnabled,analysis_enabled analysisEnabled,
+      coming_soon_message comingSoonMessage,monthly_analysis_limit monthlyAnalysisLimit,
+      monthly_comparison_limit monthlyComparisonLimit,pass_credit_limit passCreditLimit,
+      pass_analysis_limit passAnalysisLimit,pass_comparison_limit passComparisonLimit,
+      new_user_trial_enabled newUserTrialEnabled,new_user_trial_days newUserTrialDays,new_user_trial_credits newUserTrialCredits,
+      new_user_trial_analysis_limit newUserTrialAnalysisLimit,new_user_trial_comparison_limit newUserTrialComparisonLimit,packages_json packagesJson,
       promotion_label promotionLabel,promotion_monthly_price_cents promotionMonthlyPriceCents,
       promotion_pass_price_cents promotionPassPriceCents,promotion_starts_at promotionStartsAt,
       promotion_ends_at promotionEndsAt,updated_at updatedAt FROM premium_settings WHERE id='default'`,
@@ -7306,6 +7329,24 @@ async function resolvedPremiumPlan(env) {
     currency: "BRL",
     interval: "month",
     aiMonthlyLimit: clamp(row.aiMonthlyLimit, 1, 100000, fallback.aiMonthlyLimit),
+    enabled: Number(row.isEnabled) === 1,
+    features: {
+      comparison: Number(row.comparisonEnabled) === 1,
+      analysis: Number(row.analysisEnabled) === 1,
+    },
+    comingSoonMessage: String(row.comingSoonMessage || "Em breve").trim().slice(0, 160),
+    limits: {
+      monthly: { credits: clamp(row.aiMonthlyLimit, 0, 100000, 100), analysis: clamp(row.monthlyAnalysisLimit, 0, 100000, 50), comparisons: clamp(row.monthlyComparisonLimit, 0, 100000, 50) },
+      pass: { credits: clamp(row.passCreditLimit, 0, 100000, 50), analysis: clamp(row.passAnalysisLimit, 0, 100000, 50), comparisons: clamp(row.passComparisonLimit, 0, 100000, 50) },
+    },
+    newUserTrial: {
+      enabled: Number(row.newUserTrialEnabled) === 1,
+      days: clamp(row.newUserTrialDays, 0, 3650, 0),
+      credits: clamp(row.newUserTrialCredits, 0, 100000, 0),
+      analysis: clamp(row.newUserTrialAnalysisLimit, 0, 100000, 0),
+      comparisons: clamp(row.newUserTrialComparisonLimit, 0, 100000, 0),
+    },
+    packages: (() => { try { const value=JSON.parse(row.packagesJson || "[]"); return Array.isArray(value) ? value.slice(0,50) : []; } catch { return []; } })(),
     promotion: promotionActive ? {
       label: String(row.promotionLabel || "Oferta por tempo limitado").trim().slice(0, 100),
       startsAt,
@@ -7436,7 +7477,11 @@ async function updateAdminAiSettings(req, env, id) {
 async function updateAdminPremiumSettings(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
-  const body = await readJson(req, 12000);
+  const body = await readJson(req, 50000);
+  const nonNegativeFields = ["monthlyAnalysisLimit","monthlyComparisonLimit","passCreditLimit","passAnalysisLimit","passComparisonLimit","newUserTrialDays","newUserTrialCredits","newUserTrialAnalysisLimit","newUserTrialComparisonLimit"];
+  if (nonNegativeFields.some((key) => !Number.isFinite(Number(body[key])) || Number(body[key]) < 0))
+    return fail(req, env, "VALIDATION_ERROR", "Os limites e dias devem ser números iguais ou maiores que zero", 422, id);
+  const packages = Array.isArray(body.packages) ? body.packages.slice(0,50).map((item,index)=>({id:String(item.id||crypto.randomUUID()).slice(0,80),name:String(item.name||`Pacote ${index+1}`).trim().slice(0,100),mode:item.mode==="monthly"?"monthly":"pass",priceCents:clamp(item.priceCents,300,10000000,300),days:clamp(item.days,1,3650,30),credits:clamp(item.credits,0,100000,0),analysis:clamp(item.analysis,0,100000,0),comparisons:clamp(item.comparisons,0,100000,0),active:item.active!==false})) : [];
   const requiredNumbers = [
     [body.monthlyPriceCents, "Informe um valor mensal válido"],
     [body.passPriceCents, "Informe um valor válido para o acesso avulso"],
@@ -7470,18 +7515,30 @@ async function updateAdminPremiumSettings(req, env, id) {
   await env.DB.prepare(
     `INSERT INTO premium_settings(id,plan_name,monthly_price_cents,pass_price_cents,pass_days,ai_monthly_limit,
       promotion_enabled,promotion_label,promotion_monthly_price_cents,promotion_pass_price_cents,
-      promotion_starts_at,promotion_ends_at,updated_at) VALUES('default',?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+      promotion_starts_at,promotion_ends_at,is_enabled,comparison_enabled,analysis_enabled,coming_soon_message,
+      monthly_analysis_limit,monthly_comparison_limit,pass_credit_limit,pass_analysis_limit,pass_comparison_limit,
+      new_user_trial_enabled,new_user_trial_days,new_user_trial_credits,new_user_trial_analysis_limit,new_user_trial_comparison_limit,
+      packages_json,updated_at) VALUES('default',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
      ON CONFLICT(id) DO UPDATE SET plan_name=excluded.plan_name,monthly_price_cents=excluded.monthly_price_cents,
       pass_price_cents=excluded.pass_price_cents,pass_days=excluded.pass_days,ai_monthly_limit=excluded.ai_monthly_limit,
       promotion_enabled=excluded.promotion_enabled,promotion_label=excluded.promotion_label,
       promotion_monthly_price_cents=excluded.promotion_monthly_price_cents,
       promotion_pass_price_cents=excluded.promotion_pass_price_cents,promotion_starts_at=excluded.promotion_starts_at,
-      promotion_ends_at=excluded.promotion_ends_at,updated_at=CURRENT_TIMESTAMP`,
+      promotion_ends_at=excluded.promotion_ends_at,is_enabled=excluded.is_enabled,comparison_enabled=excluded.comparison_enabled,
+      analysis_enabled=excluded.analysis_enabled,coming_soon_message=excluded.coming_soon_message,
+      monthly_analysis_limit=excluded.monthly_analysis_limit,monthly_comparison_limit=excluded.monthly_comparison_limit,
+      pass_credit_limit=excluded.pass_credit_limit,pass_analysis_limit=excluded.pass_analysis_limit,pass_comparison_limit=excluded.pass_comparison_limit,
+      new_user_trial_enabled=excluded.new_user_trial_enabled,new_user_trial_days=excluded.new_user_trial_days,new_user_trial_credits=excluded.new_user_trial_credits,
+      new_user_trial_analysis_limit=excluded.new_user_trial_analysis_limit,new_user_trial_comparison_limit=excluded.new_user_trial_comparison_limit,
+      packages_json=excluded.packages_json,updated_at=CURRENT_TIMESTAMP`,
   ).bind(
     visiblePremiumPlanName(body.planName), monthly, pass,
     clamp(body.passDays, 1, 3650, 30), clamp(body.aiMonthlyLimit, 1, 100000, 100),
     body.promotionEnabled ? 1 : 0, String(body.promotionLabel || "Oferta por tempo limitado").trim().slice(0, 100),
     promoMonthly, promoPass, startsAt, endsAt,
+    body.isEnabled?1:0,body.comparisonEnabled?1:0,body.analysisEnabled?1:0,String(body.comingSoonMessage||"Em breve").trim().slice(0,160),
+    ...nonNegativeFields.slice(0,5).map(key=>clamp(body[key],0,100000,0)),body.newUserTrialEnabled?1:0,
+    ...nonNegativeFields.slice(5).map(key=>clamp(body[key],0,key==="newUserTrialDays"?3650:100000,0)),JSON.stringify(packages),
   ).run();
   return ok(req, env, { saved: true, effectivePlan: await resolvedPremiumPlan(env) }, id);
 }
@@ -8020,6 +8077,9 @@ async function userPremiumSubscription(req, env, id) {
 async function premiumPaymentConfig(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para comprar o acesso", 401, id);
+  const commercialPlan = await resolvedPremiumPlan(env);
+  if (!commercialPlan.enabled)
+    return fail(req, env, "SHOPLAB_COMING_SOON", commercialPlan.comingSoonMessage || "SHOPLAB+ em breve", 409, id);
   if (!stripeConfigured(env))
     return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O Stripe ainda não foi configurado", 503, id);
   const subscription = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
@@ -8182,13 +8242,19 @@ async function createPremiumPassPayment(req, env, id) {
 async function createPremiumCheckout(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para assinar", 401, id);
+  const commercialPlan = await resolvedPremiumPlan(env);
+  if (!commercialPlan.enabled)
+    return fail(req, env, "SHOPLAB_COMING_SOON", commercialPlan.comingSoonMessage || "SHOPLAB+ em breve", 409, id);
+  const checkoutBody=await req.json().catch(()=>({}));
+  const selectedPackage=commercialPlan.packages.find(item=>item.active!==false&&item.mode==="monthly"&&item.id===String(checkoutBody.packageId||""));
+  if(checkoutBody.packageId&&!selectedPackage)return fail(req,env,"PACKAGE_NOT_FOUND","Este pacote mensal não está disponível",404,id);
   if (!stripeConfigured(env))
     return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento SHOPLAB+ ainda não foi configurado", 503, id);
   const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
   if (current.premium) return ok(req, env, current, id);
-  if (current.status === "pending" && current.subscription?.provider === "stripe" && current.subscription?.checkoutUrl)
+  if (!selectedPackage && current.status === "pending" && current.subscription?.provider === "stripe" && current.subscription?.checkoutUrl)
     return ok(req, env, { ...current, checkoutUrl: current.subscription.checkoutUrl }, id);
-  const plan = await resolvedPremiumPlan(env);
+  const plan = selectedPackage ? {...commercialPlan,name:selectedPackage.name,amountCents:selectedPackage.priceCents,regularAmountCents:selectedPackage.priceCents,aiMonthlyLimit:selectedPackage.credits,selectedPackage} : commercialPlan;
   const siteOrigin = String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "");
   if (!/^https:\/\//i.test(siteOrigin))
     return fail(req, env, "PUBLIC_SITE_URL_REQUIRED", "Configure PUBLIC_SITE_URL com o endereço HTTPS do site", 503, id);
@@ -8211,6 +8277,8 @@ async function createPremiumCheckout(req, env, id) {
         "subscription_data[metadata][shoplab_user_id]": user.id,
         "line_items[0][quantity]": "1",
         "line_items[0][price_data][currency]": plan.currency.toLowerCase(),
+        "metadata[shoplab_package_id]": selectedPackage?.id||"default",
+        "subscription_data[metadata][shoplab_package_id]": selectedPackage?.id||"default",
         "line_items[0][price_data][unit_amount]": String(plan.amountCents),
         "line_items[0][price_data][recurring][interval]": "month",
         "line_items[0][price_data][product_data][name]": plan.name,
@@ -8239,13 +8307,19 @@ async function createPremiumCheckout(req, env, id) {
 async function createPremiumPassCheckout(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta para comprar o acesso", 401, id);
+  const commercialPlan = await resolvedPremiumPlan(env);
+  if (!commercialPlan.enabled)
+    return fail(req, env, "SHOPLAB_COMING_SOON", commercialPlan.comingSoonMessage || "SHOPLAB+ em breve", 409, id);
+  const checkoutBody=await req.json().catch(()=>({}));
+  const selectedPackage=commercialPlan.packages.find(item=>item.active!==false&&item.mode==="pass"&&item.id===String(checkoutBody.packageId||""));
+  if(checkoutBody.packageId&&!selectedPackage)return fail(req,env,"PACKAGE_NOT_FOUND","Este pacote avulso não está disponível",404,id);
   if (!stripeConfigured(env))
     return fail(req, env, "PAYMENTS_NOT_CONFIGURED", "O pagamento SHOPLAB+ ainda não foi configurado", 503, id);
   const current = await premiumSubscriptionData(env, user.id, { reconcilePending: true });
   if (current.premium) return ok(req, env, current, id);
-  if (current.pendingPass?.providerPreferenceId?.startsWith("cs_") && current.pendingPass?.checkoutUrl)
+  if (!selectedPackage && current.pendingPass?.providerPreferenceId?.startsWith("cs_") && current.pendingPass?.checkoutUrl)
     return ok(req, env, { ...current, checkoutUrl: current.pendingPass.checkoutUrl }, id);
-  const plan = await resolvedPremiumPlan(env);
+  const plan = selectedPackage ? {...commercialPlan,name:selectedPackage.name,passAmountCents:selectedPackage.priceCents,regularPassAmountCents:selectedPackage.priceCents,passDays:selectedPackage.days,aiMonthlyLimit:selectedPackage.credits,selectedPackage} : commercialPlan;
   const siteOrigin = String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "");
   if (!/^https:\/\//i.test(siteOrigin))
     return fail(req, env, "PUBLIC_SITE_URL_REQUIRED", "Configure PUBLIC_SITE_URL com o endereço HTTPS do site", 503, id);
@@ -8270,6 +8344,7 @@ async function createPremiumPassCheckout(req, env, id) {
         allow_promotion_codes: "true",
         "metadata[shoplab_kind]": "pass",
         "metadata[shoplab_user_id]": user.id,
+        "metadata[shoplab_package_id]": selectedPackage?.id||"default",
         "metadata[purchase_id]": purchaseId,
         "payment_intent_data[metadata][shoplab_user_id]": user.id,
         "payment_intent_data[metadata][purchase_id]": purchaseId,

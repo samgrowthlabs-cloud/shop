@@ -210,6 +210,11 @@ function renderSpecificationRows(criteria, products) {
 function applyAnalysisToUI(analysis, products) {
   const insight = document.querySelector('#comparison-intelligence-slot');
   if (!insight) return;
+  if (analysis.disabled) {
+    const text=safe(analysis.comingSoonMessage||'Em breve');
+    insight.innerHTML=`<section class="container comparison-premium-gate"><span class="eyebrow">SHOPLAB+ · EM BREVE</span><h2>${text}</h2><p>A comparação inteligente ainda não está disponível.</p><button class="btn primary" type="button" disabled>${text}</button></section>`;
+    return;
+  }
 
   if (analysis.loginRequired) {
     insight.innerHTML = `<section class="container comparison-premium-gate free-ai-login"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para começar a comparação inteligente</h2><p>Faça login para liberar a análise completa por IA. Sua conta começa com 5 créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname + location.search)}">Entrar e usar meus créditos</a></section>`;
