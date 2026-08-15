@@ -6175,3 +6175,20 @@ body[data-page="home"] .price-drops-section .simple-head h2:hover .price-drop-he
     color:#fff!important;
   }
 }
+/* Galeria de produto aberta, sem caixa ao redor da imagem principal. */
+body[data-page="product"] .detail>.detail-media,
+body[data-page="product"] .detail-media:has(.detail-main-image){
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+body[data-page="product"] .detail-media:has(.detail-main-image){
+  padding:0!important;
+}
+body[data-page="product"] .detail-media:has(.detail-main-image) .detail-main-image{
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
