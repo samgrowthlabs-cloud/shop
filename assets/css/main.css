@@ -6424,3 +6424,274 @@ body[data-page="home"] .home-price-drop-card.has-alternate-image .home-product-t
   body[data-page="home"] .home-price-drop-card .home-price-drop-copy>b{font-size:clamp(17px,5.2vw,21px)!important}
   body[data-page="home"] .home-price-drop-card .home-price-drop-copy .old{font-size:11px!important}
 }
+
+/* Preview mobile: cabecalho verde compacto, busca clara e acoes legiveis. */
+@media(max-width:760px){
+  html body .header .mobile-home-header{
+    min-height:138px!important;
+    padding:max(7px,env(safe-area-inset-top)) 14px 13px!important;
+    background:linear-gradient(135deg,#087f70 0%,#079b89 100%)!important;
+    box-shadow:0 5px 16px rgba(5,91,79,.2)!important;
+    backdrop-filter:none!important;
+    -webkit-backdrop-filter:none!important;
+  }
+  html body .header .mobile-home-header-top{height:66px!important}
+  html body .header .mobile-home-logo{
+    left:0!important;
+    width:min(47vw,182px)!important;
+    height:38px!important;
+    transform:none!important;
+  }
+  html body .header .mobile-home-logo img{
+    width:100%!important;
+    height:100%!important;
+    max-height:38px!important;
+    object-fit:contain!important;
+    object-position:left center!important;
+    filter:brightness(0) invert(1)!important;
+  }
+  html body .header .mobile-home-header-actions{top:max(13px,env(safe-area-inset-top))!important;right:0!important;gap:5px!important}
+  html body .header .mobile-home-header-actions :is(.nav-cart,.nav-login,.account-menu>summary,.account-avatar){
+    width:40px!important;
+    min-width:40px!important;
+    height:40px!important;
+    min-height:40px!important;
+    border:1px solid rgba(255,255,255,.24)!important;
+    background:rgba(255,255,255,.12)!important;
+    color:#fff!important;
+  }
+  html body .header .mobile-home-header-actions :is(.nav-cart,.nav-login)>img{filter:brightness(0) invert(1)!important}
+  html body .header .mobile-home-header-actions .nav-cart b{border-color:#087f70!important}
+  html body .header .mobile-home-search{
+    height:50px!important;
+    min-height:50px!important;
+    overflow:visible!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:#fff!important;
+    box-shadow:0 7px 20px rgba(2,62,54,.19)!important;
+  }
+  html body .header .mobile-home-search>input{
+    height:50px!important;
+    min-height:50px!important;
+    padding:0 58px 0 15px!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:#fff!important;
+    color:#172b27!important;
+    font-size:15px!important;
+  }
+  html body .header .mobile-home-search>button[type="submit"]{
+    right:4px!important;
+    width:42px!important;
+    min-width:42px!important;
+    height:42px!important;
+    min-height:42px!important;
+    border-radius:8px!important;
+    background:#076f64!important;
+    box-shadow:none!important;
+  }
+  html body .header.is-app-compact .mobile-home-header{
+    height:66px!important;
+    min-height:66px!important;
+    max-height:66px!important;
+    padding:8px 12px!important;
+    background:#087f70!important;
+  }
+}
+/* Correcao final da busca mobile: uma unica barra, sem camadas sobrepostas. */
+@media(max-width:760px){
+  html body .header .mobile-home-search{
+    position:relative!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 50px!important;
+    align-items:stretch!important;
+    width:100%!important;
+    height:50px!important;
+    min-height:50px!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:#fff!important;
+    box-shadow:0 5px 14px rgba(2,62,54,.15)!important;
+  }
+  html body .header .mobile-home-search::before,
+  html body .header .mobile-home-search::after{display:none!important;content:none!important}
+  html body .header .mobile-home-search>input{
+    position:static!important;
+    grid-column:1!important;
+    display:block!important;
+    width:100%!important;
+    height:50px!important;
+    min-height:50px!important;
+    margin:0!important;
+    padding:0 14px!important;
+    border:0!important;
+    border-radius:0!important;
+    background:#fff!important;
+    box-shadow:none!important;
+    outline:0!important;
+  }
+  html body .header .mobile-home-search>button[type="submit"]{
+    position:static!important;
+    grid-column:2!important;
+    display:grid!important;
+    place-items:center!important;
+    width:50px!important;
+    min-width:50px!important;
+    height:50px!important;
+    min-height:50px!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:#076f64!important;
+    box-shadow:none!important;
+    line-height:0!important;
+    transform:none!important;
+  }
+  html body .header .mobile-home-search>button[type="submit"] img,
+  html body .header .mobile-home-search>button[type="submit"] svg{
+    position:static!important;
+    display:block!important;
+    width:20px!important;
+    height:20px!important;
+    margin:auto!important;
+    transform:none!important;
+  }
+  html body .header .mobile-home-search:focus-within{
+    box-shadow:0 0 0 2px rgba(255,255,255,.35),0 6px 16px rgba(2,62,54,.17)!important;
+  }
+}
+/* Mobile acompanha o verde escuro do desktop; busca volta ao botao interno arredondado. */
+@media(max-width:760px){
+  html body .header .mobile-home-header{
+    background:var(--season-header-background,var(--season-header-bg,#063c36))!important;
+    box-shadow:0 5px 16px rgba(2,38,34,.24)!important;
+  }
+  html body .header.is-app-compact .mobile-home-header{
+    background:var(--season-header-background,var(--season-header-bg,#063c36))!important;
+  }
+  html body .header .mobile-home-search{
+    position:relative!important;
+    display:block!important;
+    width:100%!important;
+    height:50px!important;
+    min-height:50px!important;
+    overflow:hidden!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:#fff!important;
+    box-shadow:0 5px 14px rgba(0,25,22,.2)!important;
+  }
+  html body .header .mobile-home-search>input{
+    position:static!important;
+    display:block!important;
+    width:100%!important;
+    height:50px!important;
+    min-height:50px!important;
+    padding:0 60px 0 14px!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:#fff!important;
+  }
+  html body .header .mobile-home-search>button[type="submit"]{
+    position:absolute!important;
+    top:4px!important;
+    right:4px!important;
+    bottom:auto!important;
+    left:auto!important;
+    display:grid!important;
+    place-items:center!important;
+    width:42px!important;
+    min-width:42px!important;
+    height:42px!important;
+    min-height:42px!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:8px!important;
+    background:#087f70!important;
+    box-shadow:none!important;
+    transform:none!important;
+  }
+  html body .header .mobile-home-search>button[type="submit"] :is(img,svg){
+    width:20px!important;
+    height:20px!important;
+    margin:auto!important;
+  }
+}
+/* Avatar mobile: contraste claro sobre o cabecalho verde escuro. */
+@media(max-width:760px){
+  html body .header .mobile-home-header-actions .nav-login,
+  html body .header .mobile-home-header-actions .account-menu>summary{
+    border-color:rgba(255,255,255,.34)!important;
+    background:transparent!important;
+  }
+  html body .header .mobile-home-header-actions .account-avatar{
+    display:grid!important;
+    place-items:center!important;
+    width:40px!important;
+    min-width:40px!important;
+    height:40px!important;
+    min-height:40px!important;
+    overflow:hidden!important;
+    border:2px solid rgba(255,255,255,.72)!important;
+    border-radius:50%!important;
+    background:#e8f7f3!important;
+    color:#075f56!important;
+    box-shadow:0 2px 8px rgba(0,25,22,.18)!important;
+  }
+  html body .header .mobile-home-header-actions .account-avatar>b{
+    display:block!important;
+    color:#075f56!important;
+    font-size:14px!important;
+    font-weight:700!important;
+    line-height:1!important;
+  }
+  html body .header .mobile-home-header-actions .account-avatar>img{
+    display:block!important;
+    width:100%!important;
+    height:100%!important;
+    max-width:none!important;
+    object-fit:cover!important;
+    object-position:center!important;
+    opacity:1!important;
+    filter:none!important;
+    transform:none!important;
+  }
+}
+/* O perfil usa um disco branco real, inclusive quando o link externo recebe tema. */
+@media(max-width:760px){
+  html body[data-page="home"] .header .mobile-home-header-actions a.nav-login.account-profile-link{
+    display:grid!important;
+    place-items:center!important;
+    width:42px!important;
+    min-width:42px!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:0!important;
+    overflow:visible!important;
+    border:1px solid rgba(255,255,255,.72)!important;
+    border-radius:50%!important;
+    background:#fff!important;
+    box-shadow:0 2px 8px rgba(0,25,22,.2)!important;
+  }
+  html body[data-page="home"] .header .mobile-home-header-actions a.nav-login.account-profile-link>.account-avatar{
+    width:38px!important;
+    min-width:38px!important;
+    height:38px!important;
+    min-height:38px!important;
+    border:0!important;
+    background:#fff!important;
+    color:#06685d!important;
+    box-shadow:none!important;
+  }
+  html body[data-page="home"] .header .mobile-home-header-actions a.nav-login.account-profile-link>.account-avatar>b{
+    color:#06685d!important;
+    font-size:15px!important;
+    font-weight:700!important;
+  }
+}
