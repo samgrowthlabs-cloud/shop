@@ -5665,38 +5665,24 @@ body[data-page="product"] .premium-product-insight.is-ready .ai-insight-generate
   }
 }
 
-/* Shoplab Adsense: suaviza as bordas de criativos centralizados em slots largos. */
+/* Shoplab Adsense: a propria cor do criativo desvanece nas bordas. */
 .shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a{
   position:relative;
   overflow:hidden;
   isolation:isolate;
 }
-.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::before,
-.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::after{
-  content:"";
-  position:absolute;
-  z-index:1;
-  top:0;
-  bottom:0;
-  width:36%;
-  pointer-events:none;
-}
-.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::before{
-  left:0;
-  background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,.98) 68%,rgba(255,255,255,0) 100%);
-}
-.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::after{
-  right:0;
-  background:linear-gradient(270deg,#fff 0%,rgba(255,255,255,.98) 68%,rgba(255,255,255,0) 100%);
+.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a>img,
+.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a>video{
+  width:auto;
+  max-width:100%;
+  height:100%;
+  margin-inline:auto;
+  object-fit:contain;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.18) 3%,rgba(0,0,0,.72) 10%,#000 18%,#000 82%,rgba(0,0,0,.72) 90%,rgba(0,0,0,.18) 97%,transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.18) 3%,rgba(0,0,0,.72) 10%,#000 18%,#000 82%,rgba(0,0,0,.72) 90%,rgba(0,0,0,.18) 97%,transparent 100%);
 }
 .shoplab-public-ad-price-chip{
   z-index:3;
-}
-@media(max-width:760px){
-  .shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::before,
-  .shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::after{
-    width:28%;
-  }
 }
 /* Home desktop carousel: clean retail layout inspired by the supplied reference. */
 @media(min-width:901px){
@@ -6716,7 +6702,7 @@ body[data-page="home"] .home-price-drop-card.has-alternate-image .home-product-t
 }
 /* O perfil usa um disco branco real, inclusive quando o link externo recebe tema. */
 @media(max-width:760px){
-  html body[data-page="home"] .header .mobile-home-header-actions a.nav-login.account-profile-link{
+  html body .header .mobile-home-header-actions a.nav-login.account-profile-link{
     display:grid!important;
     place-items:center!important;
     width:42px!important;
@@ -6730,7 +6716,7 @@ body[data-page="home"] .home-price-drop-card.has-alternate-image .home-product-t
     background:#fff!important;
     box-shadow:0 2px 8px rgba(0,25,22,.2)!important;
   }
-  html body[data-page="home"] .header .mobile-home-header-actions a.nav-login.account-profile-link>.account-avatar{
+  html body .header .mobile-home-header-actions a.nav-login.account-profile-link>.account-avatar{
     width:38px!important;
     min-width:38px!important;
     height:38px!important;
@@ -6740,9 +6726,31 @@ body[data-page="home"] .home-price-drop-card.has-alternate-image .home-product-t
     color:#06685d!important;
     box-shadow:none!important;
   }
-  html body[data-page="home"] .header .mobile-home-header-actions a.nav-login.account-profile-link>.account-avatar>b{
+  html body .header .mobile-home-header-actions a.nav-login.account-profile-link>.account-avatar>b{
     color:#06685d!important;
     font-size:15px!important;
     font-weight:700!important;
+  }
+}
+
+/* Busca mobile: o painel de sugestoes deve sair da caixa da barra de pesquisa. */
+@media(max-width:760px){
+  html body .header .mobile-home-search.search-enhanced{
+    overflow:visible!important;
+  }
+  html body .header .mobile-home-search.search-enhanced>.search-panel{
+    z-index:200!important;
+    display:none;
+    width:100%!important;
+    max-width:100%!important;
+    max-height:min(62dvh,520px)!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    border-radius:10px!important;
+    background:#fff!important;
+    box-shadow:0 18px 42px rgba(5,38,33,.28)!important;
+  }
+  html body .header .mobile-home-search.search-enhanced>.search-panel.open{
+    display:block!important;
   }
 }
