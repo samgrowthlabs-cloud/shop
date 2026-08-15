@@ -6231,3 +6231,90 @@ body[data-page="product"] .detail-media:has(.detail-main-image) .detail-main-ima
     pointer-events:none;
   }
 }
+/* Carrosseis limpos: navegacao por setas, sem barra de rolagem visivel. */
+body:not([data-admin-page]) :is(.product-carousel-track,.home-product-rail,.product-rail>.products){
+  -ms-overflow-style:none!important;
+  scrollbar-width:none!important;
+}
+body:not([data-admin-page]) :is(.product-carousel-track,.home-product-rail,.product-rail>.products)::-webkit-scrollbar{
+  display:none!important;
+  width:0!important;
+  height:0!important;
+}
+
+/* Cards integrados ao fundo, sem contorno de caixa. */
+body:not([data-admin-page]) .product-card,
+body:not([data-admin-page]) .product-card:hover,
+body:not([data-admin-page]) .product-card[data-card-url]:hover{
+  border:0!important;
+  box-shadow:none!important;
+}
+body:not([data-admin-page]) :is(.product-rail,.product-carousel-viewport,.product-carousel-track){
+  border:0!important;
+  box-shadow:none!important;
+  outline:0!important;
+}
+/* Precos dos cards no computador seguem o tamanho da vitrine de ofertas. */
+@media(min-width:761px){
+  body:not([data-admin-page]) .product-card .price .current-price{
+    font-size:19px!important;
+    line-height:1.08!important;
+    letter-spacing:-.02em!important;
+  }
+}
+/* Busca desktop compacta, com titulo de resultados menor. */
+@media(min-width:761px){
+  body[data-page="search"] .page-hero{
+    padding:28px 0 18px;
+  }
+  body[data-page="search"] .page-hero .page-title{
+    margin-top:4px;
+    font-size:22px!important;
+    line-height:1.2;
+    letter-spacing:-.015em;
+  }
+  body[data-page="search"] #listing-summary{
+    margin:8px 0 0;
+    font-size:13px;
+  }
+}
+/* Card corners: compact across the public interface without changing circular controls. */
+[class$="-card"],[class*="-card "],[class="card"],[class*=" card "]{border-radius:4px!important}
+@media(max-width:760px){[class$="-card"],[class*="-card "],[class="card"],[class*=" card "]{border-radius:3px!important}}
+
+/* Force compact corners on components with specific legacy rules. */
+.product-card.product-card,.category.category,.home-category-card.home-category-card,
+.home-price-drop-card.home-price-drop-card,.quick-comparison-item.quick-comparison-item,
+.store-marquee-card.store-marquee-card,.contact-card.contact-card,.contact-direct.contact-direct,
+.partner-strip.partner-strip,.filters.filters,.detail-media.detail-media,.offer.offer,
+.comparison-intelligence.comparison-intelligence,.comparison-recommendation.comparison-recommendation,
+.comparison-profile-scores.comparison-profile-scores,.comparison-score-products article,
+.account-panel.account-panel,.account-settings-card.account-settings-card,
+.premium-search-insight.premium-search-insight,.premium-insight-grid article,
+.premium-insight-conclusion.premium-insight-conclusion,.product-summary-card.product-summary-card,
+.lab-card.lab-card,.notice.notice,.stat.stat,.table-wrap.table-wrap{border-radius:4px!important}
+@media(max-width:760px){
+.product-card.product-card,.category.category,.home-category-card.home-category-card,
+.home-price-drop-card.home-price-drop-card,.quick-comparison-item.quick-comparison-item,
+.store-marquee-card.store-marquee-card,.contact-card.contact-card,.contact-direct.contact-direct,
+.partner-strip.partner-strip,.filters.filters,.detail-media.detail-media,.offer.offer,
+.comparison-intelligence.comparison-intelligence,.comparison-recommendation.comparison-recommendation,
+.comparison-profile-scores.comparison-profile-scores,.comparison-score-products article,
+.account-panel.account-panel,.account-settings-card.account-settings-card,
+.premium-search-insight.premium-search-insight,.premium-insight-grid article,
+.premium-insight-conclusion.premium-insight-conclusion,.product-summary-card.product-summary-card,
+.lab-card.lab-card,.notice.notice,.stat.stat,.table-wrap.table-wrap{border-radius:3px!important}
+}
+.product-card.product-card.product-card.product-card.product-card{border-radius:4px!important}
+@media(max-width:760px){.product-card.product-card.product-card.product-card.product-card{border-radius:3px!important}}
+
+/* Rating summary: stars, numeric average and number of people. */
+.public-rating .rating-average{flex:0 0 auto;color:var(--text);font-size:12px!important;font-weight:400!important;line-height:1}
+.public-rating>small{max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
+@media(max-width:760px){.product-card .public-rating .rating-average{font-size:9px!important}.product-card .public-rating>small{font-size:8px!important}}
+/* Ratings stay readable and use ordinary clipping instead of faded masks. */
+body .product-card.product-card .public-rating.public-rating{gap:5px!important;overflow:visible!important}
+body .product-card.product-card .public-rating.public-rating .rating-average{font-size:12px!important;font-weight:400!important}
+body .product-card.product-card .public-rating.public-rating>small{max-width:none!important;overflow:visible!important;-webkit-mask-image:none!important;mask-image:none!important;color:#5f6f6b!important;font-size:11px!important;text-overflow:clip!important}
+body .product-card.product-card :is(h3,.meta){-webkit-mask-image:none!important;mask-image:none!important}
+@media(max-width:760px){body .product-card.product-card .public-rating.public-rating .rating-average{font-size:11px!important}body .product-card.product-card .public-rating.public-rating>small{font-size:10px!important}}
