@@ -6192,3 +6192,42 @@ body[data-page="product"] .detail-media:has(.detail-main-image) .detail-main-ima
   background:transparent!important;
   box-shadow:none!important;
 }
+/* Setas leves e circulares nos carrosseis de produtos. */
+@media(min-width:761px){
+  body:not([data-admin-page]) .product-carousel-section.has-carousel-overflow .product-carousel-controls{
+    display:block!important;
+  }
+  body:not([data-admin-page]) .product-carousel-controls button{
+    display:grid!important;
+    place-items:center;
+    width:42px;
+    height:42px;
+    padding:0!important;
+    border:0!important;
+    border-radius:50%;
+    background:#079b89!important;
+    color:#fff!important;
+    box-shadow:0 7px 18px rgba(7,112,98,.24);
+    opacity:1;
+  }
+  body:not([data-admin-page]) .product-carousel-controls [data-product-carousel="previous"]{left:-21px}
+  body:not([data-admin-page]) .product-carousel-controls [data-product-carousel="next"]{right:-21px}
+  body:not([data-admin-page]) .product-carousel-controls button svg{
+    display:block;
+    width:22px;
+    height:22px;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:1.35;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+  body:not([data-admin-page]) .product-carousel-controls button:hover{
+    background:#057d70!important;
+    box-shadow:0 9px 22px rgba(5,125,112,.34);
+  }
+  body:not([data-admin-page]) .product-carousel-controls button:disabled{
+    opacity:0!important;
+    pointer-events:none;
+  }
+}
