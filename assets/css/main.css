@@ -5647,6 +5647,57 @@ body[data-page="product"] .premium-product-insight.is-ready .ai-insight-generate
     object-fit:contain!important;
   }
 }
+
+/* Cabecalho mobile: permanece preso ao topo e usa a safe area apenas uma vez. */
+@media(max-width:760px){
+  html body .header,
+  html body[data-page="home"] .header{
+    position:sticky!important;
+    top:0!important;
+    z-index:120!important;
+    padding-top:0!important;
+    transform:none!important;
+  }
+  html.mobile-app-ui .header,
+  html.is-standalone-app .header{
+    padding-top:0!important;
+    background:var(--season-header-background,var(--season-header-bg,#063c36))!important;
+  }
+}
+
+/* Shoplab Adsense: suaviza as bordas de criativos centralizados em slots largos. */
+.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a{
+  position:relative;
+  overflow:hidden;
+  isolation:isolate;
+}
+.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::before,
+.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::after{
+  content:"";
+  position:absolute;
+  z-index:1;
+  top:0;
+  bottom:0;
+  width:36%;
+  pointer-events:none;
+}
+.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::before{
+  left:0;
+  background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,.98) 68%,rgba(255,255,255,0) 100%);
+}
+.shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::after{
+  right:0;
+  background:linear-gradient(270deg,#fff 0%,rgba(255,255,255,.98) 68%,rgba(255,255,255,0) 100%);
+}
+.shoplab-public-ad-price-chip{
+  z-index:3;
+}
+@media(max-width:760px){
+  .shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::before,
+  .shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a::after{
+    width:28%;
+  }
+}
 /* Home desktop carousel: clean retail layout inspired by the supplied reference. */
 @media(min-width:901px){
   body[data-page="home"] .home-banner-section{
