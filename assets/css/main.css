@@ -1723,6 +1723,37 @@ body[data-page="home"] .home-banner-arrow:focus-visible{opacity:1}
 }
 @media(max-width:380px){body[data-page="home"] .home-banner{height:300px}}
 
+/*
+ * Mantem a mesma composicao panoramica do hero em qualquer computador.
+ * A variante compacta continua reservada a tablets e celulares (ate 900px).
+ */
+@media(min-width:901px){
+  body[data-page="home"] .home-banner-section{padding:18px 0 24px!important}
+  body[data-page="home"] .home-banner-section>.container{
+    width:min(1410px,calc(100% - 40px));
+    max-width:none;
+    margin:0 auto;
+    padding:0;
+  }
+  body[data-page="home"] .home-banner{
+    width:100%;
+    height:auto;
+    aspect-ratio:47/9;
+    border-radius:0;
+  }
+  body[data-page="home"] .home-banner-copy{
+    width:min(46%,620px);
+    max-width:620px;
+    padding:clamp(22px,3.1vw,48px);
+  }
+  body[data-page="home"] .home-banner-copy strong{
+    font-size:clamp(24px,2.7vw,43px);
+  }
+  body[data-page="home"] .home-banner-copy>span{
+    font-size:clamp(12px,1.05vw,16px);
+  }
+}
+
 /* Home mobile: navegação por categorias e vitrines pensadas primeiro para toque. */
 @media(max-width:760px){
   body[data-page="home"] .subnav{
@@ -5261,7 +5292,7 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
 html[data-seasonal-theme] svg{color:var(--season-icon-color,var(--accent))}
 html[data-seasonal-theme] .nav-cart{color:var(--season-icon-color,var(--accent))!important}
 html[data-seasonal-theme] .nav-cart img{display:none!important}
-html[data-seasonal-theme] .nav-cart::before{content:"";display:block;flex:0 0 auto;width:24px;height:24px;background:var(--season-icon-color,var(--accent));mask:url("../icons/list.svg") center/contain no-repeat;-webkit-mask:url("../icons/list.svg") center/contain no-repeat}
+html[data-seasonal-theme] .nav-cart::before{content:"";display:block;flex:0 0 auto;width:24px;height:24px;background:var(--season-icon-color,var(--accent));mask:url("../icons/list.svg?v=20260815-thin-1") center/contain no-repeat;-webkit-mask:url("../icons/list.svg?v=20260815-thin-1") center/contain no-repeat}
 @media(max-width:760px){html[data-seasonal-theme] .mobile-home-header-actions .nav-cart::before{width:27px;height:27px}}
 
 
@@ -5617,7 +5648,7 @@ body[data-page="product"] .premium-product-insight.is-ready .ai-insight-generate
   }
 }
 /* Home desktop carousel: clean retail layout inspired by the supplied reference. */
-@media(min-width:1101px){
+@media(min-width:901px){
   body[data-page="home"] .home-banner-section{
     padding:24px 0 38px!important;
     background:#f4f8fb;
@@ -5942,4 +5973,205 @@ body[data-page="home"] .product-rail>.products>.product-card{
   body[data-page="home"] .home-price-drop-card .home-price-drop-copy .old{grid-column:1/-1!important;grid-row:4!important;margin-top:4px!important;padding-top:12px!important;border-top:1px solid #e6eeeb!important}
   body[data-page="home"] .home-price-drop-card .home-price-drop-copy b{grid-column:1/-1!important;grid-row:5!important;font-size:24px!important}
   body[data-page="home"] .home-price-drop-card>.btn{grid-column:1/-1!important;grid-row:6!important}
+}
+/* Titulos curtos e leves nas vitrines da home. */
+body[data-page="home"] :is(.simple-head,.section-head) h2{
+  font-size:clamp(16px,1.45vw,19px)!important;
+  font-weight:400!important;
+  line-height:1.15!important;
+  letter-spacing:-.02em!important;
+}
+@media(max-width:760px){
+  body[data-page="home"] :is(.simple-head,.section-head) h2{
+    font-size:16px!important;
+  }
+}
+/* Exibe a navegacao lateral do banner somente em telas de computador. */
+@media(min-width:901px){
+  body[data-page="home"] .home-banner-arrow{
+    display:grid!important;
+  }
+}
+/* Mantem todas as categorias da home na mesma fileira no computador. */
+@media(min-width:901px){
+  body[data-page="home"] .home-category-strip{
+    display:flex;
+    flex-wrap:nowrap;
+    gap:12px;
+  }
+  body[data-page="home"] .home-category-item{
+    flex:1 1 0;
+    min-width:0;
+  }
+}
+/* Alinha todas as secoes da home pelo mesmo eixo do banner. */
+@media(min-width:901px){
+  body[data-page="home"] :is(.home-category-section,.home-section,.section)>.container{
+    width:min(1410px,calc(100% - 48px));
+    max-width:none;
+    margin-inline:auto;
+  }
+}
+/* No hover, o card fica parado; somente a imagem alternativa muda. */
+@media(hover:hover) and (pointer:fine){
+  body:not([data-admin-page]) .product-card:hover,
+  body:not([data-admin-page]) .product-card[data-card-url]:hover{
+    transform:none!important;
+  }
+}
+/* Rotulos verdes das vitrines: mais visiveis, com peso leve. */
+body[data-page="home"] :is(.simple-head,.section-head) .eyebrow{
+  color:#087c70!important;
+  font-size:clamp(11px,.9vw,13px)!important;
+  font-weight:400!important;
+  line-height:1.25!important;
+  letter-spacing:.08em!important;
+}
+/* Identidade publica sem negrito: destaques usam cor, tamanho e espacamento. */
+body:not([data-admin-page]),
+body:not([data-admin-page]) *,
+body:not([data-admin-page]) *::before,
+body:not([data-admin-page]) *::after{
+  font-weight:400!important;
+}
+/* Cabecalhos dos carrosseis no celular: apenas titulo e acao, lado a lado. */
+@media(max-width:760px){
+  body[data-page="home"] .product-carousel-section .section-head{
+    align-items:center!important;
+    justify-content:space-between;
+    gap:12px;
+  }
+  body[data-page="home"] .product-carousel-section .section-head>div{
+    min-width:0;
+  }
+  body[data-page="home"] .product-carousel-section .section-head .eyebrow,
+  body[data-page="home"] .product-carousel-section .section-head>p{
+    display:none!important;
+  }
+  body[data-page="home"] .product-carousel-section .section-head h2{
+    overflow:hidden;
+    font-size:16px!important;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  body[data-page="home"] .product-carousel-section .section-head>a{
+    flex:0 0 auto;
+    font-size:0!important;
+    white-space:nowrap;
+  }
+  body[data-page="home"] .product-carousel-section .section-head>a::after{
+    content:"Ver tudo";
+    font-size:12px;
+  }
+}
+/* O avatar da conta deve permanecer visivel no cabecalho do celular. */
+@media(max-width:760px){
+  body[data-page="home"] .mobile-home-header-actions .nav-login>.account-avatar{
+    display:grid!important;
+    place-items:center;
+    color:#087c70!important;
+  }
+  body[data-page="home"] .mobile-home-header-actions .account-avatar>img{
+    display:block!important;
+    width:22px!important;
+    height:22px!important;
+    object-fit:contain!important;
+  }
+}
+/* Inicial do usuario proporcional ao avatar do cabecalho movel. */
+@media(max-width:760px){
+  body[data-page="home"] .mobile-home-header-actions .account-avatar>b{
+    color:#087c70!important;
+    font-size:17px!important;
+    font-weight:400!important;
+    line-height:1!important;
+    text-transform:uppercase;
+  }
+}
+/* Vitrines objetivas: uma unica frase, sem rotulo ou explicacao adicional. */
+body[data-page="home"] :is(.simple-head,.section-head) .eyebrow,
+body[data-page="home"] .simple-head p,
+body[data-page="home"] .section-head>p{
+  display:none!important;
+}
+/* Etiqueta animada destaca a vitrine de queda de preco. */
+body[data-page="home"] .price-drops-section .simple-head h2{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  color:#087c70;
+}
+body[data-page="home"] .price-drop-heading-icon{
+  display:grid;
+  place-items:center;
+  flex:0 0 34px;
+  width:34px;
+  height:34px;
+  color:#00a889;
+  filter:drop-shadow(0 0 5px rgba(0,168,137,.55)) drop-shadow(0 0 11px rgba(0,168,137,.25));
+  transform-origin:72% 25%;
+  animation:price-drop-tag 2.4s ease-in-out infinite;
+}
+body[data-page="home"] .price-drop-heading-icon svg{
+  display:block;
+  width:100%;
+  height:100%;
+  fill:#e6fff8;
+  stroke:currentColor;
+  stroke-width:1.5;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+@keyframes price-drop-tag{
+  0%,58%,100%{transform:rotate(0deg) translateY(0)}
+  66%{transform:rotate(-12deg) translateY(-2px)}
+  76%{transform:rotate(9deg) translateY(0)}
+  86%{transform:rotate(-5deg)}
+}
+@media(prefers-reduced-motion:reduce){
+  body[data-page="home"] .price-drop-heading-icon{animation:none}
+}
+body[data-page="home"] .price-drop-heading-icon svg text{
+  fill:currentColor;
+  stroke:none;
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:7px;
+  font-weight:400;
+}
+body[data-page="home"] .price-drops-section .simple-head h2:hover .price-drop-heading-icon{
+  color:#00c7a3;
+  filter:drop-shadow(0 0 7px rgba(0,199,163,.85)) drop-shadow(0 0 16px rgba(0,199,163,.5));
+  animation:price-drop-tag-hover .42s ease-in-out infinite alternate;
+}
+@keyframes price-drop-tag-hover{
+  from{transform:rotate(-8deg) scale(1.04)}
+  to{transform:rotate(8deg) scale(1.14)}
+}
+/* Barra principal do desktop em verde escuro, com navegacao branca. */
+@media(min-width:761px){
+  body:not([data-admin-page]) .subnav{
+    border-color:#063c35!important;
+    background:#06483f!important;
+    color:#fff!important;
+    box-shadow:0 3px 10px rgba(3,42,36,.16);
+  }
+  body:not([data-admin-page]) .subnav>.container{
+    background:#06483f!important;
+  }
+  body:not([data-admin-page]) .subnav :is(a,summary,[data-account-name]){
+    color:#fff!important;
+  }
+  body:not([data-admin-page]) .subnav .desktop-nav-links>a:hover,
+  body:not([data-admin-page]) .subnav .desktop-nav-links>a:focus-visible,
+  body:not([data-admin-page]) .subnav :is(.nav-cart,.nav-login):hover{
+    background:#0a5d52!important;
+    color:#fff!important;
+  }
+  body:not([data-admin-page]) .subnav :is(.nav-cart,.nav-login)>img{
+    filter:brightness(0) invert(1);
+  }
+  body:not([data-admin-page]) .subnav .account-avatar{
+    background:rgba(255,255,255,.16)!important;
+    color:#fff!important;
+  }
 }
