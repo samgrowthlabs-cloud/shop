@@ -20,9 +20,9 @@ const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'
 async function cardMedia(card){
   if(card.dataset.mediaSwapReady||card.dataset.mediaSwapLoading)return;
   card.dataset.mediaSwapLoading='1';
-  const link=card.querySelector('.product-media');
+  const link=card.querySelector('.product-media,.home-product-thumb');
   if(!link){delete card.dataset.mediaSwapLoading;return}
-  const slug=new URL(link.href,location.href).searchParams.get('slug'),data=slug?await getProduct(slug):null,items=(data?.media||[]).filter(item=>url(item));
+  const slug=card.dataset.productSlug||(link.href?new URL(link.href,location.href).searchParams.get('slug'):''),data=slug?await getProduct(slug):null,items=(data?.media||[]).filter(item=>url(item));
   const primary=items.find(item=>item.isPrimary)||items[0],currentImage=link.querySelector('img'),currentUrl=currentImage?.src||'';
   if(!currentImage&&primary){
     link.querySelector('.product-symbol')?.remove();
@@ -288,7 +288,7 @@ document.addEventListener('click',async event=>{
 /* Midia alternativa sob demanda: evita uma requisicao de produto para cada card no carregamento. */
 document.addEventListener('pointerover',event=>{
   if(matchMedia('(hover:none),(pointer:coarse)').matches)return;
-  const card=event.target.closest?.('.product-card');
+  const card=event.target.closest?.('.product-card,.home-price-drop-card');
   if(card)cardMedia(card);
 },{passive:true});
 document.addEventListener('click',async event=>{
