@@ -6888,3 +6888,10 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   translate:none!important;
   transition-property:opacity!important;
 }
+
+/* Catalogo desktop: esta posicao e uma faixa antes da grade, nao um card. */
+@media(min-width:761px){
+  .catalog-results>.shoplab-public-ad-grid_sidebar{width:100%;margin:0 0 12px}
+  .catalog-results>.shoplab-public-ad-grid_sidebar>a{height:auto;min-height:0;aspect-ratio:728/90}
+  .catalog-results>.shoplab-public-ad-grid_sidebar .shoplab-public-ad-head{background:linear-gradient(90deg,rgba(255,255,255,.72) 0%,rgba(255,255,255,.28) 44%,transparent 68%)}
+}
