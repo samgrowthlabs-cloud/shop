@@ -1415,15 +1415,14 @@ async function relatedProducts(req, env, ctx, slug, id) {
     const eligible = premiumRelatedCandidatePool(source, candidates);
     const safeRecommendations = fallbackPremiumRelatedProducts(source, eligible);
     const preferenceContext = premium?.premium ? await relatedUserPreferenceContext(env, user?.id) : null;
-    const aiTask = premium?.premium ? rankPremiumRelatedProductsWithAi(env, source, eligible, preferenceContext) : Promise.resolve(null);
+    const aiTask = rankPremiumRelatedProductsWithAi(env, source, eligible, preferenceContext);
     if (ctx?.waitUntil) ctx.waitUntil(aiTask.catch(() => null));
     const aiRecommendations = await Promise.race([
       aiTask,
-      new Promise((resolve) => setTimeout(() => resolve(null), 1400)),
+      new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
     ]);
     premiumAiRanked = Boolean(aiRecommendations?.length);
-    const mergedRecommendations = mergePremiumRelatedProducts(aiRecommendations || [], safeRecommendations).slice(0, 9);
-    premiumRanked = mergedRecommendations.length ? mergedRecommendations : safeRecommendations.slice(0, 9);
+    premiumRanked = aiRecommendations?.length ? aiRecommendations.slice(0, 9) : safeRecommendations.slice(0, 9);
   }
   const responseProducts = relatedMode !== "standard" ? (premiumRanked || candidates) : candidates;
   const response = ok(req, env, responseProducts.slice(0, 9), id, {
@@ -1466,7 +1465,7 @@ const PREMIUM_RELATED_PRODUCTS_SCHEMA = {
         additionalProperties: false,
         properties: {
           productId: { type: "string" },
-          relationType: { type: "string", enum: ["cheaper_equivalent", "more_performance", "best_value", "very_similar"] },
+          relationType: { type: "string", enum: ["cheaper_equivalent", "more_performance", "better_rated", "best_value", "very_similar"] },
           reason: { type: "string" },
         },
         required: ["productId", "relationType", "reason"],
@@ -2509,15 +2508,26 @@ async function relatedUserPreferenceContext(env, userId) {
     interestedProducts: (interests.results || []).map(row => ({ name: row.name, productType: row.productType, category: row.category })),
   };
 }
+function premiumUsageProfile(product) {
+  const value = premiumRelationText([product.name, product.productType, product.category, product.shortDescription, product.fullDescription, JSON.stringify(parse(product.specificationsJson, []))].join(" "));
+  if (premiumProductFamily(product) !== "notebook") return "";
+  const hasDedicatedGpu = /(?:rtx|gtx|radeon\s+rx|geforce)/.test(value);
+  return hasDedicatedGpu || /(?:gamer|gaming|rog|legion|nitro|predator|tuf)/.test(value) ? "gaming" : "everyday";
+}
+function premiumIsAccessory(product) {
+  const value = premiumRelationText([product.name, product.productType, product.shortDescription, product.fullDescription, JSON.stringify(parse(product.tagsJson, []))].join(" "));
+  return /\b(?:mochila|bolsa|case|capa|suporte|carregador|mouse|teclado|hub|adaptador|acessorio)\b/.test(value);
+}
 function premiumRelatedCandidatePool(source, candidates) {
   const sourceType = premiumRelationText(source.productType);
   const sourceCategory = premiumRelationText(source.category);
   const sourceFamily = premiumProductFamily(source);
   if (sourceFamily) {
-    return candidates.filter((product) => premiumProductFamily(product) === sourceFamily);
+    const sourceProfile = premiumUsageProfile(source);
+    return candidates.filter((product) => !premiumIsAccessory(product) && premiumProductFamily(product) === sourceFamily && (!sourceProfile || premiumUsageProfile(product) === sourceProfile));
   }
   const sameCategory = candidates.filter((product) =>
-    sourceCategory && premiumRelationText(product.category) === sourceCategory,
+    !premiumIsAccessory(product) && sourceCategory && premiumRelationText(product.category) === sourceCategory,
   );
   const sameTypeAndCategory = sameCategory.filter((product) =>
     sourceType && premiumRelationText(product.productType) === sourceType,
@@ -2578,27 +2588,33 @@ function fallbackPremiumRelatedProducts(source, candidates) {
       const sameBrand = premiumRelationText(product.brand) === premiumRelationText(source.brand);
       const cheaper = sourcePrice > 0 && Number(product.price || 0) < sourcePrice;
       const performanceReason = premiumPerformanceEvidence(source, product);
+      const betterRated = Number(product.score || 0) >= Number(source.score || 0) + 5;
       const relationType = performanceReason && sameType
         ? "more_performance"
         : cheaper && sameType
           ? "cheaper_equivalent"
+          : betterRated && sameType
+            ? "better_rated"
           : sameType
             ? "very_similar"
             : "best_value";
       const relationLabel = {
-        cheaper_equivalent: "Similar mais barato",
-        more_performance: "Mais desempenho",
+        cheaper_equivalent: "Mais barato",
+        more_performance: "Melhor desempenho",
+        better_rated: "Melhor avaliação",
         best_value: "Melhor custo-benefício",
         very_similar: "Alternativa muito próxima",
       }[relationType];
       const priceDifference = Math.abs(Number(product.price || 0) - sourcePrice);
       const relationReason = performanceReason && sameType
-        ? performanceReason
+        ? `${performanceReason} Faz mais sentido para quem precisa de folga em multitarefa, criação ou tarefas pesadas.`
         : cheaper && sameType
-          ? `Atende ao mesmo tipo de uso e custa ${moneyCents(priceDifference)} menos que este produto.`
+          ? `Economiza ${moneyCents(priceDifference)} mantendo a mesma proposta de uso. É indicada para quem prioriza preço; vale conferir tela, memória, autonomia e acabamento, onde podem estar os cortes.`
+          : betterRated && sameType
+            ? `A nota ${Number(product.score || 0)}/100 supera os ${Number(source.score || 0)}/100 deste produto, indicando um conjunto mais bem resolvido. É indicada para quem valoriza confiança geral; compare preço e recursos específicos antes de decidir.`
           : sameType
-            ? `É do mesmo tipo de produto e compartilha ${Math.max(1, overlap)} características relevantes da ficha.`
-            : `Alternativa da mesma categoria, selecionada pela proximidade de uso e faixa de preço.`;      return {
+            ? `Segue uma proposta de uso próxima e tende a exigir pouca adaptação. A escolha deve considerar preço, recursos, acabamento e garantia, que podem mudar mesmo entre produtos semelhantes.`
+            : `Resolve uma necessidade próxima, mas pode mudar a experiência de uso. Confira recursos essenciais, compatibilidade e limitações antes de tratá-la como substituta.`;      return {
         ...product,
         premiumRelation: true,
         relationType,
@@ -2631,7 +2647,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
   if (!env.AI || !candidates.length) return null;
   const aiSetting = await aiFeatureSetting(env, "premium_related");
   if (!aiSetting.isEnabled) return null;
-  const version = await sha256(`premium-related-v6|${aiSetting.modelId}|${aiSetting.fallbackModelId || ""}|${source.slug}:${source.updatedAt}:${source.price}|${candidates.map((product) => `${product.slug}:${product.updatedAt}:${product.price}`).join("|")}|${JSON.stringify(preferenceContext || {})}`);
+  const version = await sha256(`premium-related-v10|${aiSetting.modelId}|${aiSetting.fallbackModelId || ""}|${source.slug}:${source.updatedAt}:${source.price}|${candidates.map((product) => `${product.slug}:${product.updatedAt}:${product.price}`).join("|")}|${JSON.stringify(preferenceContext || {})}`);
   try {
     const compact = (product) => ({
       id: product.id,
@@ -2655,7 +2671,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
       messages: [
         {
           role: "system",
-          content: "Você é o curador SHOPLAB+ de alternativas de compra. Uma alternativa só é válida quando pode substituir o produto principal para resolver a mesma necessidade do usuário. A categoria cadastrada no D1 é uma condição obrigatória: só avalie candidatos da mesma categoria. Em seguida, valide título e descrição completa para confirmar a família funcional e a finalidade de uso; categoria ampla por si só não prova similaridade. Por exemplo, uma câmera não é similar a interruptor, tela, caixa de som ou assistente de voz só porque todos pertencem a casa inteligente. Descarte itens de família incompatível, acessórios e complementos, mesmo se forem mais baratos ou populares. Para cada item aprovado, compare exclusivamente informações verificáveis da ficha: tipo, recursos, especificações, público, preço e nota. Priorize, nesta ordem, equivalente mais barato, alternativa realmente mais próxima, melhor custo-benefício e opção com recurso comprovadamente superior. Classifique cada escolha como: cheaper_equivalent quando cumprir praticamente a mesma função e custar menos; more_performance apenas quando uma especificação concreta comprovar vantagem; best_value quando equilibrar preço e recursos para o mesmo uso; very_similar quando for a substituição mais próxima. O motivo deve citar uma ou duas características concretas da ficha e a diferença de uso ou preço. Nunca invente benchmark, desempenho ou característica. É melhor retornar menos produtos do que incluir uma relação fraca. Retorne somente o JSON solicitado. As preferências do usuário servem apenas para ordenar alternativas já compatíveis; nunca transforme acessório ou complemento em alternativa por causa delas.",
+          content: "Você é o curador SHOPLAB+ de alternativas de compra. Uma alternativa só é válida quando pode substituir o produto principal para resolver a mesma necessidade do usuário. A categoria cadastrada no D1 é uma condição obrigatória: só avalie candidatos da mesma categoria. Em seguida, valide título e descrição completa para confirmar a família funcional e a finalidade de uso; categoria ampla por si só não prova similaridade. Em notebooks, um modelo gamer com GPU dedicada só pode ser comparado a outro notebook gamer com GPU dedicada; modelos para estudo ou trabalho não são alternativas equivalentes. Por exemplo, uma câmera não é similar a interruptor, tela, caixa de som ou assistente de voz só porque todos pertencem a casa inteligente. Descarte itens de família incompatível, acessórios e complementos, mesmo se forem mais baratos ou populares. Para cada item aprovado, compare exclusivamente informações verificáveis da ficha: tipo, recursos, especificações, público, preço e nota. Classifique cada escolha como: cheaper_equivalent quando cumprir praticamente a mesma função e custar menos; more_performance apenas quando uma especificação concreta comprovar vantagem; better_rated quando a nota do catálogo for claramente superior para o mesmo tipo de uso; best_value quando equilibrar preço e recursos para o mesmo uso; very_similar quando for a substituição mais próxima. O motivo deve ter duas ou três frases curtas e ajudar na decisão, não apenas repetir o rótulo. Explique: (1) qual ganho concreto a pessoa recebe; (2) para qual uso ou perfil a alternativa faz mais sentido; e (3) qual troca, limitação ou ponto deve ser conferido em relação ao produto principal. Cite preço, nota e uma ou duas especificações reais quando disponíveis. Para mais barato, não diga apenas que custa menos: esclareça o que permanece equivalente e onde pode haver corte. Para melhor desempenho, diga em quais tarefas a vantagem técnica é útil. Para melhor custo-benefício, explique o equilíbrio obtido. Evite frases de banco de dados como “mesmo tipo”, “mesma categoria”, “características relevantes” ou “opção compatível”. Nunca invente benchmark, desempenho ou característica. É melhor retornar menos produtos do que incluir uma relação fraca. Retorne somente o JSON solicitado. As preferências do usuário servem apenas para ordenar alternativas já compatíveis; nunca transforme acessório ou complemento em alternativa por causa delas.",
         },
         {
           role: "user",
@@ -2670,7 +2686,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
             id: String(env.AI_GATEWAY_ID || "default"),
             skipCache: false,
             cacheTtl: 2592000,
-            cacheKey: `premium-related-v6:${version}`,
+            cacheKey: `premium-related-v10:${version}`,
             collectLog: true,
             metadata: { feature: "premium-related-products", sourceSlug: source.slug, modelId },
           },
@@ -2686,8 +2702,9 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
       : JSON.parse(String(result?.response || "{}").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
     const byId = new Map(candidates.map((product) => [product.id, product]));
     const labels = {
-      cheaper_equivalent: "Similar mais barato",
-      more_performance: "Mais desempenho",
+      cheaper_equivalent: "Mais barato",
+      more_performance: "Melhor desempenho",
+      better_rated: "Melhor avaliação",
       best_value: "Melhor custo-benefício",
       very_similar: "Alternativa muito próxima",
     };
@@ -2698,7 +2715,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
       if (!product || used.has(product.id)) continue;
       let relationType = recommendation.relationType;
       const performanceReason = premiumPerformanceEvidence(source, product);
-      if (performanceReason) relationType = "more_performance";
+      if (relationType === "more_performance" && !performanceReason) relationType = "very_similar";
       if (relationType === "cheaper_equivalent" && Number(product.price || 0) >= Number(source.price || 0))
         relationType = "very_similar";
       if (!labels[relationType]) relationType = "very_similar";
@@ -2708,7 +2725,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
         premiumRelation: true,
         relationType,
         relationLabel: labels[relationType],
-        relationReason: (performanceReason || repairLegacyText(recommendation.reason || "").trim()).slice(0, 240),
+        relationReason: (repairLegacyText(recommendation.reason || "").trim() || performanceReason || "Alternativa compatível para o mesmo tipo de uso.").slice(0, 360),
         priceDifferenceCents: Number(product.price || 0) - Number(source.price || 0),
       });
     }
