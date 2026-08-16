@@ -250,25 +250,34 @@ async function loadProductRecommendations(){
   for(let attempt=0;attempt<3;attempt+=1){
     try{
       if(attempt)await wait(attempt*700);
-      const [smartRaw,standardRaw,catalog,personalized]=await Promise.all([getRecommendations(slug),getRecommendations(slug,{standard:true}),getProducts({limit:50}),authSession()?getPersonalizedRecommendations().catch(()=>[]):Promise.resolve([])]);
+      const smartPromise=getRecommendations(slug).then(products=>({products,error:null})).catch(error=>({products:[],error}));
+      const [standardRaw,catalog,personalized]=await Promise.all([getRecommendations(slug,{standard:true}),getProducts({limit:50}),authSession()?getPersonalizedRecommendations().catch(()=>[]):Promise.resolve([])]);
       const cleanStandard=product=>{const copy={...product};delete copy.premiumRelation;delete copy.relationType;delete copy.relationLabel;delete copy.relationReason;delete copy.priceDifferenceCents;return copy};
       const catalogBySlug=new Map(catalog.map(product=>[product.slug,product]));
       const completeProduct=product=>{const full=catalogBySlug.get(product?.slug)||{};return {...full,...product,primaryStorageKey:product?.primaryStorageKey||full.primaryStorageKey,primaryExternalUrl:product?.primaryExternalUrl||full.primaryExternalUrl,primaryImageAlt:product?.primaryImageAlt||full.primaryImageAlt}};
       const unique=products=>products.filter((product,index,list)=>product?.slug&&product.slug!==slug&&list.findIndex(item=>item?.slug===product.slug)===index);
-      const alternativePool=unique(smartRaw.map(completeProduct).filter(product=>isCompatibleAlternative(source,product)));
-      const alternatives=alternativePool.slice(0,4).map(product=>({...product,premiumRelation:true,relationLabel:product.relationLabel||'Alternativa próxima',relationReason:product.relationReason||'Atende uma necessidade próxima. Compare os recursos essenciais, as limitações e o preço antes de decidir.'}));
       const historySlugs=viewedProducts().map(item=>item?.slug).filter(item=>item&&item!==slug);
       const historyProducts=historySlugs.map(item=>catalogBySlug.get(item)).filter(Boolean);
       const sourceCategory=String(source?.category||'').trim().toLocaleLowerCase('pt-BR');
       const historyCategories=new Set(historyProducts.map(product=>String(product.category||'').trim().toLocaleLowerCase('pt-BR')).filter(Boolean));
       const preferredCategories=historyCategories.size?historyCategories:new Set(sourceCategory?[sourceCategory]:[]);
       const categoryRecommendations=catalog.filter(product=>preferredCategories.has(String(product.category||'').trim().toLocaleLowerCase('pt-BR')));
-      const alternativeSlugs=new Set(alternatives.map(product=>product.slug));
-      const recommendations=unique([...personalized,...categoryRecommendations,...catalog].map(completeProduct)).filter(product=>!alternativeSlugs.has(product.slug)).slice(0,8).map(cleanStandard);
-      if(!alternatives.length&&!recommendations.length)throw new Error('Nenhuma recomendação relevante recebida');
-      const alternativeMarkup=alternatives.length?section('Alternativas próximas','',alternatives,'',true):'';
+      const recommendationCandidates=unique([...personalized,...categoryRecommendations,...standardRaw,...catalog].map(completeProduct));
       const recommendationTitle=historyCategories.size||personalized.length?'Recomendados para você':'Mais da categoria';
+      const renderRecommendations=excludedSlugs=>recommendationCandidates.filter(product=>!excludedSlugs.has(product.slug)).slice(0,8).map(cleanStandard);
+      const initialRecommendations=renderRecommendations(new Set());
+      if(initialRecommendations.length){
+        target.innerHTML=section(recommendationTitle,'',initialRecommendations,'',true)+`<div data-alternatives-loading>${relatedLoadingSkeleton()}</div>`;
+        await bindLibraryUI();await bindRatingSummaries().catch(()=>null);bindProductCarousels();bindProductImpressions();
+      }
+      const smartResult=await smartPromise;
+      const alternativePool=unique(smartResult.products.map(completeProduct).filter(product=>isCompatibleAlternative(source,product)));
+      const alternatives=alternativePool.slice(0,4).map(product=>({...product,premiumRelation:true,relationLabel:product.relationLabel||'Alternativa próxima',relationReason:product.relationReason||'Atende uma necessidade próxima. Compare os recursos essenciais, as limitações e o preço antes de decidir.'}));
+      const alternativeSlugs=new Set(alternatives.map(product=>product.slug));
+      const recommendations=renderRecommendations(alternativeSlugs);
+      if(!alternatives.length&&!recommendations.length)throw smartResult.error||new Error('Nenhuma recomendação relevante recebida');
       const recommendationMarkup=recommendations.length?section(recommendationTitle,'',recommendations,'',true):'';
+      const alternativeMarkup=alternatives.length?section('Alternativas próximas','',alternatives,'',true):'';
       target.innerHTML=alternativeMarkup+recommendationMarkup;
       await bindLibraryUI();await bindRatingSummaries().catch(()=>null);bindProductCarousels();bindProductImpressions();return;
     }catch(error){if(attempt===2)target.innerHTML='<section class="section related-loading"><div class="container"><h2>Não foi possível carregar as recomendações</h2><button class="btn ghost" type="button" data-retry-related>Tentar novamente</button></div></section>'}
