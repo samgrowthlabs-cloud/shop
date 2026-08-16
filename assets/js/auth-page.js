@@ -94,7 +94,7 @@ async function account(){
   Object.entries(accountTabs).forEach(([tab,id])=>{const panel=document.getElementById(id);if(panel)panel.hidden=tab!==activeTab});
   $('.account-sidebar nav')?.querySelectorAll('[data-account-tab]').forEach(link=>{const active=link.dataset.accountTab===activeTab;link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')});
   const displayName=profile.displayName||user.user_metadata?.display_name||user.email?.split('@')[0]||'Minha conta',initials=displayName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase(),avatar=user.user_metadata?.avatar_url||user.user_metadata?.picture||'';
-  const paintAvatar=id=>{const target=$(id);if(target)target.innerHTML=avatar?`<img src="${esc(avatar)}" alt="Foto de ${esc(displayName)}" referrerpolicy="no-referrer">`:`<b>${esc(initials)}</b>`};
+  const paintAvatar=id=>{const target=$(id);if(!target)return;if(avatar){target.innerHTML=`<img src="${esc(avatar)}" alt="Foto de ${esc(displayName)}" referrerpolicy="no-referrer">`;return}if(!target.querySelector("img"))target.innerHTML=`<b>${esc(initials)}</b>`};
   ['#header-account-avatar','#mobile-header-account-avatar','#mobile-overview-avatar','#sidebar-account-avatar','#profile-account-avatar'].forEach(paintAvatar);
   ['#header-account-name','#sidebar-account-name','#account-welcome-name'].forEach(selector=>{const target=$(selector);if(target)target.textContent=selector==='#account-welcome-name'?`Olá, ${displayName.split(' ')[0]}!`:displayName});
   $('#sidebar-account-email').textContent=user.email||'';
