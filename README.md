@@ -231,16 +231,16 @@ Leia [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). Em resumo: preserve o contrat
 - [Mapa de migrações](docs/MIGRATIONS.md)
 - [Guia de contribuição](docs/CONTRIBUTING.md)
 - [Templates de e-mail Supabase](supabase-email-templates/README.md)
-## SHOPLAB AdSense: funcionamento real
+## SHOPLAB Ads: funcionamento real
 
-O **SHOPLAB AdSense** é o sistema publicitário próprio deste projeto. Apesar do nome, ele não é o Google AdSense, não usa a API de anúncios do Google e não depende de uma rede externa para selecionar criativos. A explicação para visitantes está na [Política de Publicidade](politica-de-publicidade.html).
+O **SHOPLAB Ads** é o sistema publicitário próprio deste projeto. Apesar do nome, ele não é o Google Ads, não usa a API de anúncios do Google e não depende de uma rede externa para selecionar criativos. A explicação para visitantes está na [Política de Publicidade](politica-de-publicidade.html).
 
 ### Componentes
 
 | Componente | Responsabilidade |
 | --- | --- |
 | admin/anuncios-cabecalho.html | Entrada da tela administrativa |
-| assets/js/shoplab-adsense.js | Editor, upload, preview e atribuição às posições |
+| assets/js/shoplab-ads.js | Editor, upload, preview e atribuição às posições |
 | assets/js/shoplab-ads-public.js | Consulta pública, montagem no DOM e dispensa |
 | cloudflare-dashboard/worker.js | CRUD, validação, persistência e seleção |
 | shoplab_ads | Dados, apresentação, destino, status, período e palavras-chave |
@@ -285,7 +285,7 @@ Quando permitido, fechar grava shoplab-ad-hidden-<id> no localStorage até o pra
 
 ### Medição e limitações atuais
 
-O módulo próprio não registra hoje impressão, fechamento ou clique específico. O link abre em nova aba com rel sponsored noopener. Métricas gerais de outra camada não são telemetria do SHOPLAB AdSense.
+O módulo próprio não registra hoje impressão, fechamento ou clique específico. O link abre em nova aba com rel sponsored noopener. Métricas gerais de outra camada não são telemetria do SHOPLAB Ads.
 
 O fluxo também não possui leilão, CPM/CPC, faturamento automático, portal do anunciante, frequência entre dispositivos, relatório próprio de conversão ou revisão automática de criativos. Não documente esses recursos como existentes antes de implementá-los.
 

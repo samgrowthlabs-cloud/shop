@@ -19,7 +19,7 @@
 | Administração | `admin-collaborators-upgrade.sql`, `ai-feature-settings-upgrade.sql` |
 | Usuários, biblioteca e recompensas | `user-auth-upgrade.sql`, `user-library-upgrade.sql`, `user-library-isolation-cleanup.sql`, `user-engagement-referrals-upgrade.sql`, `gift-card-rewards-upgrade.sql`, `manual-user-rewards-upgrade.sql`, `manual-reward-redemption-upgrade.sql` |
 | SHOPLAB+ | `premium-subscriptions-upgrade.sql`, `premium-settings-upgrade.sql`, `premium-product-insight-cache-upgrade.sql`, `premium-pass-payments-upgrade.sql`, `premium-access-grants-upgrade.sql`, `free-ai-credits-upgrade.sql`, `comparison-analysis-cache-upgrade.sql`, `personalized-recommendations-upgrade.sql` |
-| Anúncios | `shoplab-adsense-upgrade.sql`, `shoplab-ads-presentation-upgrade.sql` |
+| Anúncios | `shoplab-ads-upgrade.sql`, `shoplab-ads-presentation-upgrade.sql`, `shoplab-ads-branding-upgrade.sql` |
 
 ## Tipografia
 

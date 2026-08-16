@@ -5665,7 +5665,7 @@ body[data-page="product"] .premium-product-insight.is-ready .ai-insight-generate
   }
 }
 
-/* Shoplab Adsense: a propria cor do criativo desvanece nas bordas. */
+/* Shoplab Ads: a propria cor do criativo desvanece nas bordas. */
 .shoplab-public-ad:not(.shoplab-public-ad-grid_sidebar)>a{
   position:relative;
   overflow:hidden;
@@ -5957,7 +5957,7 @@ body[data-page="home"] .product-rail>.products>.product-card{
     height:15px!important;
   }
 }
-/* Centraliza o criativo do SHOPLAB Adsense no cabeçalho mobile. */
+/* Centraliza o criativo do SHOPLAB Ads no cabeçalho mobile. */
 @media(max-width:760px){
   .shoplab-public-ad-below_menu img,
   .shoplab-public-ad-below_menu video{
