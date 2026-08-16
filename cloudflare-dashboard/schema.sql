@@ -504,6 +504,17 @@ CREATE TABLE IF NOT EXISTS shoplab_ad_assignments (
 );
 CREATE INDEX IF NOT EXISTS idx_shoplab_ads_active ON shoplab_ads(status,starts_at,ends_at,priority);
 CREATE INDEX IF NOT EXISTS idx_shoplab_ad_assignments_target ON shoplab_ad_assignments(device,page_kind,category_slug,position_key);
+CREATE TABLE IF NOT EXISTS shoplab_ad_events (
+  id TEXT PRIMARY KEY,
+  ad_id TEXT NOT NULL REFERENCES shoplab_ads(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL CHECK(event_type IN ('impression','click')),
+  device TEXT NOT NULL CHECK(device IN ('desktop','mobile')),
+  page_kind TEXT NOT NULL CHECK(page_kind IN ('home','products','category','product')),
+  position_key TEXT NOT NULL,
+  session_id TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_shoplab_ad_events_analytics ON shoplab_ad_events(created_at,event_type,ad_id);
 CREATE TABLE IF NOT EXISTS site_typography (
   id TEXT PRIMARY KEY,
   font_family TEXT NOT NULL DEFAULT 'Arial',
