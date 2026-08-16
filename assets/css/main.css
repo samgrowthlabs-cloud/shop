@@ -7213,3 +7213,9 @@ body:not([data-admin-page])[data-page="product"] #product-related .product-card.
 body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:hover .product-media img{
   transform:scale(1.06);
 }
+/* O motivo da alternativa é diferenciado pela cor do próprio texto, sem ícones. */
+body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-cheaper strong{color:#07815f!important}
+body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-performance strong{color:#2563b8!important}
+body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-rating strong{color:#7c3aed!important}
+body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-value strong{color:#956400!important}
+body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-similar strong{color:#087c70!important}
