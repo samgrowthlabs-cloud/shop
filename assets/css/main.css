@@ -6910,3 +6910,11 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page]) .product-carousel-controls button svg{display:block!important;width:22px!important;height:22px!important;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
   body:not([data-admin-page]) .product-carousel-controls button:disabled{opacity:0!important;pointer-events:none}
 }
+
+/* Cabeçalho público no celular usa o mesmo verde profundo da barra principal do desktop. */
+@media(max-width:760px){
+  html body:not([data-admin-page]) .header .mobile-home-header,
+  html body:not([data-admin-page]) .header.is-app-compact .mobile-home-header{
+    background:#021a17!important;
+  }
+}
