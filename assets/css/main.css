@@ -6803,19 +6803,20 @@ body[data-page='promotions'] .weekly-category-heading h2{margin:0;color:#172c28;
 
 body[data-page='promotions'] .weekly-category-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
 body[data-page='promotions'] .weekly-category-card{display:grid;min-width:0;grid-template-rows:auto auto auto;gap:5px;align-content:start;text-align:center}
-body[data-page='promotions'] .weekly-category-media{display:grid;width:100%;aspect-ratio:1.45;place-items:center;overflow:hidden;border-radius:10px;background:linear-gradient(145deg,#e8f7f3,#d9f0eb);transition:transform .18s ease,box-shadow .18s ease}
-body[data-page='promotions'] .weekly-category-media img{display:block;width:100%;height:100%;object-fit:contain;object-position:center;padding:9px;transition:transform .18s ease}
+body[data-page='promotions'] .weekly-category-media{display:grid;width:100%;aspect-ratio:1.45;place-items:center;overflow:hidden;border:1px solid rgba(19,155,127,.2);border-radius:10px;background:#bfe8d8;box-shadow:inset 0 0 14px rgba(35,174,143,.14),0 2px 8px rgba(14,126,103,.07);transition:transform .18s ease,box-shadow .18s ease}
+body[data-page='promotions'] .weekly-category-media img{display:block;width:calc(100% - 28px);height:calc(100% - 24px);max-width:calc(100% - 28px);max-height:calc(100% - 24px);object-fit:contain;object-position:50% 50%;transition:transform .18s ease}
 body[data-page='promotions'] .weekly-category-media i{color:#078a7b;font-size:42px;font-style:normal}
 body[data-page='promotions'] .weekly-category-card strong{overflow:hidden;color:#243b36;font-size:14px;line-height:1.25;text-overflow:ellipsis;white-space:nowrap}
 body[data-page='promotions'] .weekly-category-card small{color:#74817e;font-size:11px;line-height:1.2}
-body[data-page='promotions'] .weekly-category-card:hover .weekly-category-media{transform:translateY(-2px);box-shadow:0 8px 20px rgba(18,82,72,.13)}
-body[data-page='promotions'] .weekly-category-card:hover .weekly-category-media img{transform:scale(1.04)}
+body[data-page='promotions'] .weekly-category-card:hover .weekly-category-media{transform:none;box-shadow:inset 0 0 14px rgba(35,174,143,.14),0 2px 8px rgba(14,126,103,.07)}
+body[data-page='promotions'] .weekly-category-card:hover .weekly-category-media img{transform:none}
 @media(max-width:900px){body[data-page='promotions'] .weekly-category-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:600px){body[data-page='promotions'] .weekly-category-highlights{padding:20px 0 8px}body[data-page='promotions'] .weekly-category-heading{align-items:start;margin-bottom:12px}body[data-page='promotions'] .weekly-category-heading h2{font-size:20px}body[data-page='promotions'] .weekly-category-heading p{display:none}body[data-page='promotions'] .weekly-category-strip{display:flex;gap:10px;margin-right:-11px;padding:1px 11px 9px 0;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none}body[data-page='promotions'] .weekly-category-strip::-webkit-scrollbar{display:none}body[data-page='promotions'] .weekly-category-card{flex:0 0 132px;scroll-snap-align:start}body[data-page='promotions'] .weekly-category-media{aspect-ratio:1.35}body[data-page='promotions'] .weekly-category-card strong{font-size:13px}}
 /* Promotion cards: compact price-first showcase inspired by marketplace offer grids. */
 body[data-page="promotions"] .promotion-products{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
 body[data-page="promotions"] .promotion-products .product-card{min-width:0;overflow:hidden;border:1px solid #e8eceb!important;border-radius:6px!important;background:#f3f4f4!important;box-shadow:none!important}
-body[data-page="promotions"] .promotion-products .product-card:hover{transform:translateY(-2px);border-color:#d9e1df!important;box-shadow:0 8px 20px rgba(18,52,48,.08)!important}
+body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus-within,:active){transform:none!important;scale:1!important;border-color:#e8eceb!important;box-shadow:none!important}
+body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus-within,:active) .product-media img{transform:none!important}
 body[data-page="promotions"] .promotion-products .product-media{display:grid!important;width:100%;height:auto!important;min-height:0!important;aspect-ratio:1/1;padding:8px!important;place-items:center;background:#f3f4f4!important}
 body[data-page="promotions"] .promotion-products .product-media img{width:100%!important;height:100%!important;max-height:none!important;object-fit:contain!important;mix-blend-mode:normal}
 body[data-page="promotions"] .promotion-products :is(.badge,.card-actions,.meta,h3,.premium-relation,.public-rating,.card-saving){display:none!important}
@@ -6863,4 +6864,27 @@ body[data-page="promotions"] .campaign-head .campaign-discount:hover::before{bac
     border-top:1px solid rgba(255,255,255,.08)!important;
     border-bottom:0!important;
   }
+}
+/* Promoções: cards estáticos; no hover, somente a opacidade troca a foto. */
+body[data-page="promotions"] .promotion-products .product-card,
+body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,:focus-within,:active){
+  transform:none!important;
+  scale:none!important;
+  translate:none!important;
+  box-shadow:none!important;
+  transition:none!important;
+}
+body[data-page="promotions"] .promotion-products .product-card .product-media,
+body[data-page="promotions"] .promotion-products .product-card .product-media:is(:hover,:focus,:active){
+  transform:none!important;
+  scale:none!important;
+  translate:none!important;
+  transition:none!important;
+}
+body[data-page="promotions"] .promotion-products .product-card .product-media img,
+body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,:focus-within,:active) .product-media img{
+  transform:none!important;
+  scale:none!important;
+  translate:none!important;
+  transition-property:opacity!important;
 }
