@@ -6895,3 +6895,18 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   .shoplab-public-ad-grid_sidebar>a{height:auto;min-height:0;aspect-ratio:728/90}
   .shoplab-public-ad-grid_sidebar .shoplab-public-ad-head{background:linear-gradient(90deg,rgba(255,255,255,.28) 0%,rgba(255,255,255,.06) 34%,transparent 52%)}
 }
+
+/* Navegação de carrosséis no celular: mantém as setas laterais do desktop em todas as páginas públicas. */
+@media(max-width:760px){
+  body:not([data-admin-page]) .home-banner-arrow{display:grid!important;top:50%!important;bottom:auto!important;width:40px!important;height:40px!important;border:0!important;border-radius:10px!important;background:#fff!important;color:#087e68!important;box-shadow:0 8px 22px rgba(8,35,31,.16)!important;font-size:28px!important;opacity:1!important;transform:translateY(-50%)!important}
+  body:not([data-admin-page]) .home-banner-arrow.previous{left:8px!important;right:auto!important}
+  body:not([data-admin-page]) .home-banner-arrow.next{right:8px!important;left:auto!important}
+  body:not([data-admin-page]) .home-banner-arrow:active{background:#087e68!important;color:#fff!important}
+
+  body:not([data-admin-page]) .product-carousel-section.has-carousel-overflow .product-carousel-controls{display:block!important}
+  body:not([data-admin-page]) .product-carousel-controls button{display:grid!important;place-items:center;width:42px!important;height:42px!important;padding:0!important;border:0!important;border-radius:50%!important;background:#079b89!important;color:#fff!important;box-shadow:0 7px 18px rgba(7,112,98,.24)!important;opacity:1!important}
+  body:not([data-admin-page]) .product-carousel-controls [data-product-carousel="previous"]{left:-12px!important}
+  body:not([data-admin-page]) .product-carousel-controls [data-product-carousel="next"]{right:-12px!important}
+  body:not([data-admin-page]) .product-carousel-controls button svg{display:block!important;width:22px!important;height:22px!important;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
+  body:not([data-admin-page]) .product-carousel-controls button:disabled{opacity:0!important;pointer-events:none}
+}
