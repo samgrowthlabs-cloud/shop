@@ -6918,3 +6918,246 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
     background:#021a17!important;
   }
 }
+
+/* Cards comuns: mesma densidade compacta da vitrine ìEm alta agoraî. As grades de ofertas permanecem inalteradas. */
+@media(min-width:761px){
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card{
+    height:334px!important;
+    border-radius:8px!important;
+    border-color:#e5e8e7!important;
+    box-shadow:0 1px 2px rgba(22,47,42,.05)!important;
+  }
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .product-media{
+    flex:0 0 152px!important;
+    height:152px!important;
+    min-height:152px!important;
+    padding:16px 12px 8px!important;
+    background:#f7f9f8!important;
+  }
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .product-media img{max-height:128px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .product-body{
+    flex:0 0 181px!important;
+    height:181px!important;
+    min-height:181px!important;
+    padding:10px 11px 11px!important;
+    overflow:hidden!important;
+  }
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .meta{min-height:11px!important;margin-bottom:6px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card h3{min-height:34px!important;max-height:34px!important;margin:0 0 5px!important;font-size:13px!important;line-height:1.35!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .public-rating{flex:0 0 18px!important;min-height:18px!important;margin:0 0 5px!important;overflow:hidden!important;white-space:nowrap!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .price{flex:0 0 78px!important;height:78px!important;min-height:78px!important;margin-top:auto!important;padding-top:8px!important;overflow:hidden!important;border-top:1px solid #e2e7e5!important;align-content:start!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .price .old{min-height:11px!important;margin-bottom:1px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .price .current-price{font-size:20px!important;line-height:1.1!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .card-saving{margin-top:5px!important;padding:4px 6px!important;border-radius:5px!important;font-size:8px!important;line-height:1.15!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .badge{top:10px!important;left:10px!important;padding:6px 10px!important;font-size:11px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .card-actions{top:9px!important;right:9px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .card-actions .card-compare{width:30px!important;height:30px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .card-actions .card-compare img{width:15px!important;height:15px!important}
+}
+
+/* A vitrine de alternativas tambÈm segue o card compacto padr„o. */
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card{height:334px!important;border-radius:8px!important;border-color:#e5e8e7!important;box-shadow:0 1px 2px rgba(22,47,42,.05)!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .product-media{flex:0 0 152px!important;height:152px!important;min-height:152px!important;padding:16px 12px 8px!important;background:#f7f9f8!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .product-media img{max-height:128px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .product-body{flex:0 0 181px!important;height:181px!important;min-height:181px!important;padding:10px 11px 11px!important;overflow:hidden!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .meta{min-height:11px!important;margin-bottom:6px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card h3{min-height:34px!important;max-height:34px!important;margin:0 0 5px!important;font-size:13px!important;line-height:1.35!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .public-rating{flex:0 0 18px!important;min-height:18px!important;margin:0 0 5px!important;overflow:hidden!important;white-space:nowrap!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .price{flex:0 0 78px!important;height:78px!important;min-height:78px!important;margin-top:auto!important;padding-top:8px!important;overflow:hidden!important;border-top:1px solid #e2e7e5!important;align-content:start!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .price .old{min-height:11px!important;margin-bottom:1px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .price .current-price{font-size:20px!important;line-height:1.1!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .card-saving{margin-top:5px!important;padding:4px 6px!important;border-radius:5px!important;font-size:8px!important;line-height:1.15!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .badge{top:10px!important;left:10px!important;padding:6px 10px!important;font-size:11px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .card-actions{top:9px!important;right:9px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .card-actions .card-compare{width:30px!important;height:30px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .card-actions .card-compare img{width:15px!important;height:15px!important}
+}
+
+/* Nas alternativas, a explicaÁ„o longa vira apenas um selo discreto para manter todos os cards na mesma altura. */
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .premium-relation{
+    display:block!important;
+    margin:0 0 5px!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .premium-relation strong{
+    display:block!important;
+    overflow:hidden!important;
+    color:#087c70!important;
+    font-size:9px!important;
+    line-height:13px!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .premium-relation :is(span,.premium-relation-toggle){display:none!important}
+}
+
+/* Alternativas prÛximas: mantÈm toda a explicaÁ„o; o card cresce quando necess·rio para n„o cortar conte˙do. */
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
+    height:auto!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-body{
+    height:auto!important;
+    min-height:181px!important;
+    overflow:visible!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .premium-relation{
+    display:grid!important;
+    gap:4px!important;
+    margin:2px 0 10px!important;
+    padding:9px 10px!important;
+    border:1px solid rgba(10,143,130,.18)!important;
+    border-radius:10px!important;
+    background:rgba(10,143,130,.075)!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .premium-relation strong{
+    display:block!important;
+    overflow:visible!important;
+    color:#087c70!important;
+    font-size:11px!important;
+    line-height:1.2!important;
+    text-overflow:clip!important;
+    white-space:normal!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .premium-relation span{
+    display:-webkit-box!important;
+    overflow:hidden!important;
+    color:var(--text)!important;
+    font-size:12px!important;
+    line-height:1.4!important;
+    -webkit-box-orient:vertical!important;
+    -webkit-line-clamp:3!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .premium-relation .premium-relation-toggle{
+    display:block!important;
+    justify-self:start!important;
+    padding:0!important;
+    border:0!important;
+    background:transparent!important;
+    color:#087c70!important;
+    font-size:11px!important;
+  }
+}
+
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .products{align-items:stretch!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card{height:auto!important}
+}
+
+/* Alternativas prÛximas usam um card prÛprio: imagem clic·vel e explicaÁ„o da curadoria, sem dados comerciais. */
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
+    height:300px!important;
+    border-radius:8px!important;
+    overflow:hidden!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media{
+    flex:0 0 172px!important;
+    height:172px!important;
+    min-height:172px!important;
+    padding:16px 12px!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:140px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .card-actions,
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card :is(.meta,h3,.public-rating,.price){display:none!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-body{
+    display:block!important;
+    flex:1 1 auto!important;
+    height:auto!important;
+    min-height:0!important;
+    padding:10px 11px 11px!important;
+    overflow:hidden!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation{
+    display:grid!important;
+    gap:3px!important;
+    height:100%!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation strong{
+    font-size:10px!important;
+    line-height:1.2!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation span{
+    display:-webkit-box!important;
+    font-size:11px!important;
+    line-height:1.3!important;
+    -webkit-box-orient:vertical!important;
+    -webkit-line-clamp:2!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation .premium-relation-toggle{display:block!important;font-size:10px!important}
+}
+
+/* Destaque visual e leitura completa das alternativas geradas. */
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
+    height:340px!important;
+    border:1px solid transparent!important;
+    background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#008d7b 0%,#d9b456 48%,#008d7b 100%) border-box!important;
+    box-shadow:0 7px 20px rgba(14,107,91,.12),0 0 0 1px rgba(211,173,73,.16)!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media{
+    flex-basis:205px!important;
+    height:205px!important;
+    min-height:205px!important;
+    padding:14px!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:180px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation.is-expanded span{
+    display:block!important;
+    overflow:visible!important;
+    -webkit-line-clamp:unset!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:has(.premium-relation.is-expanded){
+    height:auto!important;
+    overflow:visible!important;
+    z-index:2;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:has(.premium-relation.is-expanded) .product-body,
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:has(.premium-relation.is-expanded) .premium-relation{
+    overflow:visible!important;
+  }
+}
+
+/* Alternativas s„o cards de curadoria, sem etiqueta de promoÁ„o. */
+body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .badge{display:none!important}
+
+/* CabeÁalho mais direto e acabamento premium das alternativas. */
+body:not([data-admin-page])[data-page="product"] #product-related .premium-related-section .section-head .eyebrow{display:none!important}
+body:not([data-admin-page])[data-page="product"] #product-related .premium-related-section .section-head h2{font-size:26px!important;line-height:1.12!important;letter-spacing:-.03em!important}
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
+    border:1px solid transparent!important;
+    background:linear-gradient(#fff,#fff) padding-box,linear-gradient(120deg,#007d6d 0%,#43a793 30%,#d8b25b 50%,#43a793 70%,#007d6d 100%) border-box!important;
+    box-shadow:0 10px 24px rgba(6,85,72,.10),inset 0 0 0 1px rgba(255,255,255,.72)!important;
+    transition:transform .22s ease,box-shadow .22s ease!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:hover{
+    transform:translateY(-4px)!important;
+    box-shadow:0 15px 30px rgba(6,85,72,.16),0 0 0 2px rgba(216,178,91,.16)!important;
+  }
+}
+
+body:not([data-admin-page])[data-page="product"] #product-related .premium-related-section .section-head>p{display:none!important}
+
+/* T√≠tulo compacto da se√ß√£o de alternativas na p√°gina de produto. */
+body:not([data-admin-page])[data-page="product"] #product-related .minimal-section .section-head h2{font-size:22px!important;line-height:1.15!important;letter-spacing:-.02em!important}
+
+/* Borda verde-dourada mais marcante para os cards de alternativas. */
+body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
+  border:2px solid transparent!important;
+  background:linear-gradient(#fff,#fff) padding-box,linear-gradient(125deg,#006d60 0%,#00a58e 27%,#d8a52e 50%,#00a58e 73%,#006d60 100%) border-box!important;
+  box-shadow:0 10px 24px rgba(0,109,96,.16),0 0 0 1px rgba(216,165,46,.24)!important;
+}
+body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:hover{
+  box-shadow:0 16px 32px rgba(0,109,96,.22),0 0 0 2px rgba(216,165,46,.38)!important;
+}
