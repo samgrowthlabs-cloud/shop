@@ -3822,6 +3822,7 @@ body[data-page="product"] .detail-main-image img{
   object-fit:contain!important;
   object-position:center!important;
   transform:none!important;
+  box-shadow:0 10px 24px rgba(0,109,96,.16),0 0 0 1px rgba(216,165,46,.24)!important;
 }
 @media(max-width:760px){
   body[data-page="product"] .detail-main-image{
@@ -5205,6 +5206,7 @@ body[data-page="product"] .product-breadcrumb{overflow:hidden;margin-bottom:14px
   object-fit:contain!important;
   object-position:center!important;
   transform:none!important;
+  box-shadow:0 10px 24px rgba(0,109,96,.16),0 0 0 1px rgba(216,165,46,.24)!important;
 }
 .comparison-progress{display:grid;gap:7px;max-width:780px;margin-top:16px}.comparison-progress>i{display:block;height:10px;overflow:hidden;border-radius:999px;background:#dfeeea}.comparison-progress>i>span{display:block;width:45%;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#35bfa8);animation:comparison-progress-bar 1.7s ease-in-out infinite}.comparison-progress>small{display:flex;justify-content:space-between;gap:12px;color:var(--muted)}.comparison-progress>small b{color:var(--accent)}@keyframes comparison-progress-bar{0%{transform:translateX(-110%)}100%{transform:translateX(245%)}}
 .comparison-score-unavailable{display:grid;gap:5px;margin:14px 0;padding:14px;border:1px dashed #b9cbc6;border-radius:10px;background:#f7faf9;color:var(--muted)}.comparison-score-unavailable strong{color:var(--text)}.comparison-score-unavailable span{font-size:12px;line-height:1.45}
@@ -5497,7 +5499,7 @@ body[data-page="compare"] .comparison-verdict p,.comparison-summary{font-size:15
 .product-card .premium-relation{margin:-4px 0 14px!important}
 .product-card .public-rating{display:flex!important;align-items:center;min-height:24px;margin:0 0 17px!important;padding:0!important;border:0!important;color:#909896!important;font-size:13px!important;gap:8px!important}
 .product-card .public-rating .rating-stars{color:#009482!important;font-size:19px!important;letter-spacing:2px!important}.product-card .public-rating small{font-size:13px!important;color:#8b9392!important}.product-card .price{display:flex!important;flex-direction:column;align-items:flex-start;margin-top:auto!important;padding-top:17px!important;border-top:1px solid #e6ecea!important}.product-card .price .old{margin:0 0 4px!important;color:#929a98!important;font-size:15px!important;text-decoration-thickness:1px!important}.product-card .price .current-price{color:#008d7d!important;font-size:36px!important;font-weight:800!important;line-height:1.05!important;letter-spacing:-.045em!important}.product-card .card-saving{display:inline-flex;margin-top:11px;padding:7px 10px;border-radius:10px;background:#effaf7;color:#008a78;font-size:13px!important;font-weight:700!important}
-@media(max-width:760px){.product-card{border-radius:18px!important}.product-card:hover{transform:none}.product-card .product-media{min-height:164px!important;height:164px!important;padding:29px 11px 9px!important}.product-card .product-media img{max-height:132px!important}.product-card .badge{top:10px!important;left:10px!important;padding:6px 9px!important;font-size:11px!important}.product-card .card-actions{top:9px;right:9px;gap:6px}.product-card :is(.card-favorite,.card-compare){width:31px!important;height:31px!important}.product-card .card-favorite img,.product-card .card-compare img{width:16px!important;height:16px!important}.product-card .product-body{min-height:0!important;padding:15px 13px 14px!important}.product-card .meta{min-height:15px;margin-bottom:8px!important;font-size:8px!important;letter-spacing:.1em!important}.product-card h3{min-height:36px!important;margin-bottom:9px!important;font-size:13px!important;line-height:1.35!important;letter-spacing:-.02em!important}.product-card .public-rating{min-height:18px;margin-bottom:10px!important;gap:4px!important}.product-card .public-rating .rating-stars{font-size:13px!important;letter-spacing:-1px!important}.product-card .public-rating small{max-width:67px;overflow:hidden;font-size:10px!important;white-space:nowrap;text-overflow:ellipsis}.product-card .price{padding-top:10px!important}.product-card .price .old{margin-bottom:2px!important;font-size:10px!important}.product-card .price .current-price{font-size:19px!important}.product-card .card-saving{display:none!important}.product-card .premium-relation{margin:-2px 0 9px!important}.product-card .premium-relation strong{font-size:9px!important}.product-card .premium-relation span{font-size:11px!important;line-height:1.25!important}}
+@media(max-width:760px){.product-card{border-radius:18px!important}.product-card:hover{transform:none}.product-card .product-media{min-height:164px!important;height:164px!important;padding:29px 11px 9px!important}.product-card .product-media img{max-height:150px!important}.product-card .badge{top:10px!important;left:10px!important;padding:6px 9px!important;font-size:11px!important}.product-card .card-actions{top:9px;right:9px;gap:6px}.product-card :is(.card-favorite,.card-compare){width:31px!important;height:31px!important}.product-card .card-favorite img,.product-card .card-compare img{width:16px!important;height:16px!important}.product-card .product-body{min-height:0!important;padding:15px 13px 14px!important}.product-card .meta{min-height:15px;margin-bottom:8px!important;font-size:8px!important;letter-spacing:.1em!important}.product-card h3{min-height:36px!important;margin-bottom:9px!important;font-size:13px!important;line-height:1.35!important;letter-spacing:-.02em!important}.product-card .public-rating{min-height:18px;margin-bottom:10px!important;gap:4px!important}.product-card .public-rating .rating-stars{font-size:13px!important;letter-spacing:-1px!important}.product-card .public-rating small{max-width:67px;overflow:hidden;font-size:10px!important;white-space:nowrap;text-overflow:ellipsis}.product-card .price{padding-top:10px!important}.product-card .price .old{margin-bottom:2px!important;font-size:10px!important}.product-card .price .current-price{font-size:19px!important}.product-card .card-saving{display:none!important}.product-card .premium-relation{margin:-2px 0 9px!important}.product-card .premium-relation strong{font-size:9px!important}.product-card .premium-relation span{font-size:11px!important;line-height:1.25!important}}
 /* Ajuste final: card segue a referÃªncia, sem aÃ§Ã£o de curtir. */
 .product-card .card-actions{right:20px!important;top:20px!important}
 .product-card .card-actions .card-compare{width:54px!important;height:54px!important;border-radius:50%!important}
@@ -6383,6 +6385,7 @@ body[data-page="home"] .home-price-drop-card[data-card-url]:focus-visible{
   border-color:#ecefed!important;
   box-shadow:none!important;
   transform:none!important;
+  box-shadow:0 10px 24px rgba(0,109,96,.16),0 0 0 1px rgba(216,165,46,.24)!important;
 }
 body[data-page="home"] .home-price-drop-card[data-card-url]>.home-product-thumb{
   position:relative;
@@ -6403,6 +6406,7 @@ body[data-page="home"] .home-price-drop-card[data-card-url]>.home-product-thumb 
   padding:8px!important;
   object-fit:contain!important;
   transform:none!important;
+  box-shadow:0 10px 24px rgba(0,109,96,.16),0 0 0 1px rgba(216,165,46,.24)!important;
 }
 body[data-page="home"] .home-price-drop-card[data-card-url]>.home-price-drop-copy{
   display:flex!important;
@@ -6896,7 +6900,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   .shoplab-public-ad-grid_sidebar .shoplab-public-ad-head{background:linear-gradient(90deg,rgba(255,255,255,.28) 0%,rgba(255,255,255,.06) 34%,transparent 52%)}
 }
 
-/* Navegação de carrosséis no celular: mantém as setas laterais do desktop em todas as páginas públicas. */
+/* Navegaï¿½ï¿½o de carrossï¿½is no celular: mantï¿½m as setas laterais do desktop em todas as pï¿½ginas pï¿½blicas. */
 @media(max-width:760px){
   body:not([data-admin-page]) .home-banner-arrow{display:grid!important;top:50%!important;bottom:auto!important;width:40px!important;height:40px!important;border:0!important;border-radius:10px!important;background:#fff!important;color:#087e68!important;box-shadow:0 8px 22px rgba(8,35,31,.16)!important;font-size:28px!important;opacity:1!important;transform:translateY(-50%)!important}
   body:not([data-admin-page]) .home-banner-arrow.previous{left:8px!important;right:auto!important}
@@ -6911,7 +6915,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page]) .product-carousel-controls button:disabled{opacity:0!important;pointer-events:none}
 }
 
-/* Cabeçalho público no celular usa o mesmo verde profundo da barra principal do desktop. */
+/* Cabeï¿½alho pï¿½blico no celular usa o mesmo verde profundo da barra principal do desktop. */
 @media(max-width:760px){
   html body:not([data-admin-page]) .header .mobile-home-header,
   html body:not([data-admin-page]) .header.is-app-compact .mobile-home-header{
@@ -6919,7 +6923,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   }
 }
 
-/* Cards comuns: mesma densidade compacta da vitrine “Em alta agora”. As grades de ofertas permanecem inalteradas. */
+/* Cards comuns: mesma densidade compacta da vitrine ï¿½Em alta agoraï¿½. As grades de ofertas permanecem inalteradas. */
 @media(min-width:761px){
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card{
     height:334px!important;
@@ -6955,7 +6959,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .card-actions .card-compare img{width:15px!important;height:15px!important}
 }
 
-/* A vitrine de alternativas também segue o card compacto padrão. */
+/* A vitrine de alternativas tambï¿½m segue o card compacto padrï¿½o. */
 @media(min-width:761px){
   body:not([data-admin-page])[data-page="product"] #product-related .product-card{height:334px!important;border-radius:8px!important;border-color:#e5e8e7!important;box-shadow:0 1px 2px rgba(22,47,42,.05)!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card .product-media{flex:0 0 152px!important;height:152px!important;min-height:152px!important;padding:16px 12px 8px!important;background:#f7f9f8!important}
@@ -6974,7 +6978,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page])[data-page="product"] #product-related .product-card .card-actions .card-compare img{width:15px!important;height:15px!important}
 }
 
-/* Nas alternativas, a explicação longa vira apenas um selo discreto para manter todos os cards na mesma altura. */
+/* Nas alternativas, a explicaï¿½ï¿½o longa vira apenas um selo discreto para manter todos os cards na mesma altura. */
 @media(min-width:761px){
   body:not([data-admin-page])[data-page="product"] #product-related .premium-relation{
     display:block!important;
@@ -6996,7 +7000,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page])[data-page="product"] #product-related .premium-relation :is(span,.premium-relation-toggle){display:none!important}
 }
 
-/* Alternativas próximas: mantém toda a explicação; o card cresce quando necessário para não cortar conteúdo. */
+/* Alternativas prï¿½ximas: mantï¿½m toda a explicaï¿½ï¿½o; o card cresce quando necessï¿½rio para nï¿½o cortar conteï¿½do. */
 @media(min-width:761px){
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
     height:auto!important;
@@ -7049,7 +7053,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page])[data-page="product"] #product-related .product-card{height:auto!important}
 }
 
-/* Alternativas próximas usam um card próprio: imagem clicável e explicação da curadoria, sem dados comerciais. */
+/* Alternativas prï¿½ximas usam um card prï¿½prio: imagem clicï¿½vel e explicaï¿½ï¿½o da curadoria, sem dados comerciais. */
 @media(min-width:761px){
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
     height:300px!important;
@@ -7128,10 +7132,10 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   }
 }
 
-/* Alternativas são cards de curadoria, sem etiqueta de promoção. */
+/* Alternativas sï¿½o cards de curadoria, sem etiqueta de promoï¿½ï¿½o. */
 body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .badge{display:none!important}
 
-/* Cabeçalho mais direto e acabamento premium das alternativas. */
+/* Cabeï¿½alho mais direto e acabamento premium das alternativas. */
 body:not([data-admin-page])[data-page="product"] #product-related .premium-related-section .section-head .eyebrow{display:none!important}
 body:not([data-admin-page])[data-page="product"] #product-related .premium-related-section .section-head h2{font-size:26px!important;line-height:1.12!important;letter-spacing:-.03em!important}
 @media(min-width:761px){
@@ -7168,12 +7172,12 @@ body:not([data-admin-page])[data-page="product"] #product-related .product-card.
     overflow:hidden!important;
   }
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media{
-    flex:0 0 150px!important;
-    height:150px!important;
-    min-height:150px!important;
-    padding:12px!important;
+    flex:0 0 166px!important;
+    height:166px!important;
+    min-height:166px!important;
+    padding:10px!important;
   }
-  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:132px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:150px!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .card-actions,
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card :is(.meta,h3,.public-rating,.price){display:none!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-body{
@@ -7192,4 +7196,20 @@ body:not([data-admin-page])[data-page="product"] #product-related .product-card.
   }
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation strong{font-size:10px!important;line-height:1.2!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation span{font-size:11px!important;line-height:1.35!important;-webkit-line-clamp:3!important}
+}
+/* A expansÃ£o de uma alternativa no celular nÃ£o estica o card vizinho. */
+@media(max-width:760px){
+  body:not([data-admin-page])[data-page="product"] #product-related .products{align-items:start!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{align-self:start!important}
+}
+/* Hover das alternativas: anima apenas a imagem, sem alterar o tamanho do card. */
+body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:hover{
+  transform:none!important;
+  box-shadow:0 10px 24px rgba(0,109,96,.16),0 0 0 1px rgba(216,165,46,.24)!important;
+}
+body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{
+  transition:transform .22s ease;
+}
+body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:hover .product-media img{
+  transform:scale(1.06);
 }
