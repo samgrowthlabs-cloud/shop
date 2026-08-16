@@ -476,8 +476,12 @@ async function route(request, env, ctx, requestId) {
   if (request.method === "GET" && path === "/sitemap.xml")
     return dynamicSitemap(env);
 
+  if (request.method === "GET" && path === "/api/v1/home")
+    return publicHomeData(request, env, ctx, requestId);
   if (request.method === "GET" && path === "/api/v1/categories")
     return listCategories(request, env, requestId);
+  if (request.method === 'GET' && path === '/api/v1/categories/weekly-highlights')
+    return weeklyCategoryHighlights(request, env, url, requestId);
   if (request.method === "GET" && path === "/api/v1/site-config")
     return publicSiteConfig(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/shoplab-ads")
@@ -825,12 +829,101 @@ async function route(request, env, ctx, requestId) {
   return fail(request, env, "NOT_FOUND", "Rota não encontrada", 404, requestId);
 }
 
+async function publicHomeData(req, env, ctx, id) {
+  const cacheUrl = new URL("/api/v1/home", req.url);
+  const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
+  const cache = caches.default;
+  const cached = await cache.match(cacheKey);
+  if (cached) return cors(req, env, new Response(cached.body, cached));
+
+  const internalHeaders = new Headers(req.headers);
+  internalHeaders.delete("authorization");
+  internalHeaders.delete("cookie");
+  internalHeaders.delete("origin");
+  const internalRequest = (path) => new Request(new URL(path, req.url), {
+    method: "GET",
+    headers: internalHeaders,
+  });
+  const dataFrom = async (responsePromise) => {
+    const response = await responsePromise;
+    const payload = await response.json();
+    if (!response.ok || !payload?.success)
+      throw new Error(payload?.error?.message || "Falha ao montar os dados da home");
+    return payload.data;
+  };
+
+  const configRequest = internalRequest("/api/v1/site-config");
+  const productsRequest = internalRequest("/api/v1/products?limit=50");
+  const trendingRequest = internalRequest("/api/v1/products/trending?limit=16");
+  const promotionsRequest = internalRequest("/api/v1/promotions");
+  const categoriesRequest = internalRequest("/api/v1/categories");
+  const collectionsRequest = internalRequest("/api/v1/collections");
+  const [siteConfig, products, trending, campaigns, categories, collections] = await Promise.all([
+    dataFrom(publicSiteConfig(configRequest, env, id)),
+    dataFrom(listProductsV2(productsRequest, env, new URL(productsRequest.url), id)),
+    dataFrom(trendingProducts(trendingRequest, env, new URL(trendingRequest.url), id)),
+    dataFrom(publicPromotions(promotionsRequest, env, id)),
+    dataFrom(listCategories(categoriesRequest, env, id)),
+    dataFrom(publicFeaturedCollections(collectionsRequest, env, id)),
+  ]);
+
+  const response = new Response(JSON.stringify({
+    success: true,
+    data: { siteConfig, products, trending, campaigns, categories, collections },
+    meta: { requestId: id },
+    error: null,
+  }), {
+    headers: {
+      ...JSON_HEADERS,
+      "cache-control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300",
+    },
+  });
+  ctx.waitUntil(cache.put(cacheKey, response.clone()));
+  return cors(req, env, response);
+}
 async function listCategories(req, env, id) {
   const { results } = await env.DB.prepare(
     `SELECT c.id,c.name,c.slug,c.description,c.icon,c.image_storage_key imageStorageKey,c.image_scale imageScale,c.image_position_x imagePositionX,c.image_position_y imagePositionY,COUNT(p.id) count FROM categories c LEFT JOIN products p ON p.category_id=c.id AND p.status='published' WHERE c.is_active=1 GROUP BY c.id ORDER BY c.sort_order,c.name`,
   ).all();
   const origin=new URL(req.url).origin;
   return ok(req, env, (results||[]).map(category=>({...category,imageUrl:category.imageStorageKey?`${origin}/media/${encodeURIComponent(category.imageStorageKey)}`:null})), id);
+}
+
+async function weeklyCategoryHighlights(req, env, url, id) {
+  const limit = clamp(url.searchParams.get('limit'), 1, 12, 6);
+  const { results } = await env.DB.prepare(
+    `SELECT c.id,c.name,c.slug,c.icon,c.image_storage_key imageStorageKey,
+      COUNT(e.id) weeklyViews,
+      (
+        SELECT pm.storage_key FROM products ranked_product
+        JOIN events ranked_event ON ranked_event.product_slug=ranked_product.slug
+          AND ranked_event.event_type='product_view'
+          AND ranked_event.created_at>=datetime('now','-7 days')
+        JOIN product_media pm ON pm.id=(
+          SELECT selected_media.id FROM product_media selected_media
+          WHERE selected_media.product_id=ranked_product.id AND selected_media.type='image'
+          ORDER BY selected_media.is_primary DESC,selected_media.sort_order,selected_media.created_at
+          LIMIT 1
+        )
+        WHERE ranked_product.category_id=c.id AND ranked_product.status='published'
+        GROUP BY ranked_product.id
+        ORDER BY COUNT(ranked_event.id) DESC,ranked_product.updated_at DESC
+        LIMIT 1
+      ) representativeStorageKey
+     FROM categories c
+     JOIN products p ON p.category_id=c.id AND p.status='published'
+     JOIN events e ON e.product_slug=p.slug AND e.event_type='product_view'
+       AND e.created_at>=datetime('now','-7 days')
+     WHERE c.is_active=1
+     GROUP BY c.id
+     ORDER BY weeklyViews DESC,c.sort_order,c.name
+     LIMIT ?`,
+  ).bind(limit).all();
+  const origin = new URL(req.url).origin;
+  return ok(req, env, (results || []).map((category) => {
+    const storageKey = category.imageStorageKey || category.representativeStorageKey;
+    return { ...category, weeklyViews: Number(category.weeklyViews || 0), imageUrl: storageKey ? `${origin}/media/${encodeURIComponent(storageKey)}?w=360&q=82` : null };
+  }), id, { windowDays: 7, signal: 'product_view' });
 }
 
 async function adminCatalogSettings(req,env,id){
@@ -6755,8 +6848,11 @@ async function publicCollection(req, env, slug, id) {
   return ok(req,env,{...collection,products:results.map(normalizeProduct)},id);
 }
 async function publicFeaturedCollections(req,env,id){
-  const {results=[]}=await env.DB.prepare(`SELECT id,name,slug,description,home_title homeTitle FROM product_collections WHERE is_active=1 AND is_home_featured=1 ORDER BY home_sort_order,name LIMIT 8`).all(),collections=[];
-  for(const collection of results){const products=await env.DB.prepare(`${PRODUCT_CARD_SELECT} LEFT JOIN product_collection_items pci ON pci.product_id=p.id AND pci.collection_id=? LEFT JOIN product_collection_categories pcc ON pcc.category_id=p.category_id AND pcc.collection_id=? WHERE p.status='published' AND (pci.collection_id IS NOT NULL OR pcc.collection_id IS NOT NULL) ORDER BY CASE WHEN pci.product_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(pci.sort_order,pcc.sort_order),p.name LIMIT 12`).bind(collection.id,collection.id).all();if(products.results?.length)collections.push({...collection,products:products.results.map(normalizeProduct)})}
+  const {results=[]}=await env.DB.prepare(`SELECT id,name,slug,description,home_title homeTitle FROM product_collections WHERE is_active=1 AND is_home_featured=1 ORDER BY home_sort_order,name LIMIT 8`).all();
+  if(!results.length)return ok(req,env,[],id);
+  const statements=results.map(collection=>env.DB.prepare(`${PRODUCT_CARD_SELECT} LEFT JOIN product_collection_items pci ON pci.product_id=p.id AND pci.collection_id=? LEFT JOIN product_collection_categories pcc ON pcc.category_id=p.category_id AND pcc.collection_id=? WHERE p.status='published' AND (pci.collection_id IS NOT NULL OR pcc.collection_id IS NOT NULL) ORDER BY CASE WHEN pci.product_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(pci.sort_order,pcc.sort_order),p.name LIMIT 12`).bind(collection.id,collection.id));
+  const productResults=await env.DB.batch(statements);
+  const collections=results.map((collection,index)=>({...collection,products:(productResults[index]?.results||[]).map(normalizeProduct)})).filter(collection=>collection.products.length);
   return ok(req,env,collections,id);
 }
 async function adminCollections(req, env, id) {
