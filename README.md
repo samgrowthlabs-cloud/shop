@@ -231,3 +231,84 @@ Leia [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). Em resumo: preserve o contrat
 - [Mapa de migrações](docs/MIGRATIONS.md)
 - [Guia de contribuição](docs/CONTRIBUTING.md)
 - [Templates de e-mail Supabase](supabase-email-templates/README.md)
+## SHOPLAB AdSense: funcionamento real
+
+O **SHOPLAB AdSense** é o sistema publicitário próprio deste projeto. Apesar do nome, ele não é o Google AdSense, não usa a API de anúncios do Google e não depende de uma rede externa para selecionar criativos. A explicação para visitantes está na [Política de Publicidade](politica-de-publicidade.html).
+
+### Componentes
+
+| Componente | Responsabilidade |
+| --- | --- |
+| admin/anuncios-cabecalho.html | Entrada da tela administrativa |
+| assets/js/shoplab-adsense.js | Editor, upload, preview e atribuição às posições |
+| assets/js/shoplab-ads-public.js | Consulta pública, montagem no DOM e dispensa |
+| cloudflare-dashboard/worker.js | CRUD, validação, persistência e seleção |
+| shoplab_ads | Dados, apresentação, destino, status, período e palavras-chave |
+| shoplab_ad_placement_members | Relações com dispositivo, página, posição e categoria |
+| shoplab_ad_assignments | Estrutura legada de compatibilidade |
+| R2 MEDIA | Imagens e vídeos |
+
+### Fluxo do admin ao visitante
+
+1. O admin cria ou edita um anúncio. O frontend envia FormData para /api/v1/admin/shoplab-ads.
+2. O Worker valida os campos, salva a mídia no R2 e os metadados em shoplab_ads.
+3. Arrastar para uma posição salva uma relação por /api/v1/admin/shoplab-ad-assignments e ativa o anúncio.
+4. O preview abre a página real em iframe e injeta zonas editoriais. Ele não substitui a entrega pública.
+5. No site, mountShoplabAds() obtém página, desktop/mobile e categoria, então chama /api/v1/shoplab-ads.
+6. Se houver login, o token Bearer acompanha a consulta.
+7. O Worker filtra candidatos, escolhe um vencedor por positionKey e não expõe palavras-chave nem pontuação.
+8. O frontend monta um aside com mídia, identificação, CTA, preço e fechamento no ponto definido por targetFor().
+
+### Elegibilidade e seleção
+
+O anúncio precisa estar ativo, dentro do período programado, ligado ao dispositivo e tipo de página e corresponder à categoria quando a relação define category_slug.
+
+Para usuário conectado, o Worker consulta até 30 pesquisas dos últimos 60 dias. Ocorrências das palavras-chave do anúncio aumentam a afinidade. Maior afinidade vem primeiro; empates e casos sem afinidade variam aleatoriamente. Só o primeiro candidato de cada posição é devolvido.
+
+A prioridade é armazenada e ordena a lista administrativa, mas publicShoplabAds() atualmente não a usa como desempate. Se isso mudar, atualize também a política pública.
+
+### Produto vinculado e preço
+
+Com product_slug, o destino vira a página interna do produto e os textos de preço podem vir da oferta principal atual. Sem vínculo, valem o link e os preços cadastrados no anúncio. Preço final, frete e estoque sempre devem ser confirmados na loja.
+
+### Posições e páginas
+
+O inventário separa desktop e celular e usa chaves como top, menu, home_categories, home_sections, grid_sidebar, products, footer, product_top, product_middle e product_footer.
+
+pageMap agrupa busca, promoções, novidades, marca e catálogo como products. Portanto uma alteração nesse grupo deve ser testada em todas essas páginas.
+
+targetFor() define o ponto público e zoneTarget() define o preview. Os dois precisam usar o mesmo elemento. Se divergirem, o anúncio pode aparecer dentro de uma grade mesmo parecendo correto no admin.
+
+### Dispensa temporária
+
+Quando permitido, fechar grava shoplab-ad-hidden-<id> no localStorage até o prazo de dismissMinutes, limitado de 1 minuto a 7 dias. A preferência vale apenas naquele navegador, não sincroniza com a conta e não envia atualmente um evento ao backend.
+
+### Medição e limitações atuais
+
+O módulo próprio não registra hoje impressão, fechamento ou clique específico. O link abre em nova aba com rel sponsored noopener. Métricas gerais de outra camada não são telemetria do SHOPLAB AdSense.
+
+O fluxo também não possui leilão, CPM/CPC, faturamento automático, portal do anunciante, frequência entre dispositivos, relatório próprio de conversão ou revisão automática de criativos. Não documente esses recursos como existentes antes de implementá-los.
+
+### Endpoints
+
+| Método | Rota | Uso |
+| --- | --- | --- |
+| GET | /api/v1/admin/shoplab-ads | Lista anúncios |
+| POST | /api/v1/admin/shoplab-ads | Cria anúncio e envia mídia |
+| PUT | /api/v1/admin/shoplab-ads/:id | Atualiza e pode trocar mídia |
+| DELETE | /api/v1/admin/shoplab-ads/:id | Remove anúncio e mídia |
+| GET | /api/v1/admin/shoplab-ad-assignments | Lista posições |
+| PUT | /api/v1/admin/shoplab-ad-assignments | Acrescenta relações e ativa anúncios |
+| GET | /api/v1/shoplab-ads | Entrega um vencedor por posição |
+
+As rotas administrativas exigem sessão e permissão header_ads.manage.
+
+### Cuidados ao alterar
+
+- Mantenha inventário, targetFor(), zoneTarget() e CSS sincronizados.
+- Preserve a identificação visual de publicidade.
+- Não envie palavras-chave ou pontuação ao cliente.
+- Valide URLs e arquivos no Worker.
+- Atualize schema.sql, migração e ensureShoplabAdsSchema() ao criar colunas.
+- Teste anônimo/autenticado, desktop/celular, período, categoria, produto vinculado, dispensa e múltiplos candidatos.
+- Se adicionar medição, consentimento ou terceiros, revise as políticas antes da publicação.
