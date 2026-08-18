@@ -1,4 +1,4 @@
-const VERSION='shoplab-pwa-v11-alternatives-final-order';
+const VERSION='shoplab-pwa-v12-dark-green';
 const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{

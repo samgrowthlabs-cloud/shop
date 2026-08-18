@@ -7229,11 +7229,11 @@ body:not([data-admin-page]) .product-card:hover,
 body:not([data-admin-page]) .product-card[data-card-url]:hover{
   border:1px solid #e7edeb!important;
 }
-/* Todos os verdes do site ficam escuríssimos (#021a17), iguais ao topo do cabeçalho. */
+/* Todos os verdes do site ficam num verde muito escuro (#06443c), um pouco mais claro que o topo do cabeçalho. */
 body:not([data-admin-page]){
-  --accent:#021a17;
-  --accent-hover:#021a17;
-  --success:#021a17;
+  --accent:#06443c;
+  --accent-hover:#06443c;
+  --success:#06443c;
 }
 
 /* Preços em qualquer card, oferta, comparação e dock mobile. */
@@ -7253,7 +7253,7 @@ body:not([data-admin-page]) :is(
   .mobile-account-stats strong,
   .mobile-product-dock strong
 ){
-  color:#021a17!important;
+  color:#06443c!important;
 }
 
 /* Textos verdes de apoio (categoria, link, rótulo, desconto e afins). */
@@ -7281,31 +7281,31 @@ body:not([data-admin-page]) :is(
   .trending a:first-child,
   .nav-cart.is-added
 ){
-  color:#021a17!important;
+  color:#06443c!important;
 }
 
-/* Selos/etiquetas com porcentagem ganham fundo escuríssimo e texto branco. */
+/* Selos/etiquetas com porcentagem ganham fundo verde-escuro e texto branco. */
 body:not([data-admin-page]) :is(
   .product-card .badge,
   .promotion-products .badge,
   .price-drop-badge,
   .campaign-discount::before
 ){
-  background:#021a17!important;
-  border-color:#021a17!important;
+  background:#06443c!important;
+  border-color:#06443c!important;
   color:#fff!important;
 }
 
 /* O ícone de porcentagem da vitrine de ofertas acompanha o tom escuro. */
 body:not([data-admin-page]) .price-drop-heading-icon{
-  color:#021a17!important;
+  color:#06443c!important;
 }
 body:not([data-admin-page]) .price-drop-heading-icon svg{
   fill:#e6fff8;
-  stroke:#021a17!important;
+  stroke:#06443c!important;
 }
 
-/* Estrelas, selos e demais indicadores verdes também ficam escuríssimos. */
+/* Estrelas, selos e demais indicadores verdes também escurecem. */
 body:not([data-admin-page]) :is(
   .public-rating>span,
   .public-rating .rating-stars,
@@ -7326,7 +7326,7 @@ body:not([data-admin-page]) :is(
   .mobile-account-tab-header small,
   .search-ai-context span
 ){
-  color:#021a17!important;
+  color:#06443c!important;
 }
 body:not([data-admin-page]) :is(
   .account-sidebar nav b,
@@ -7334,6 +7334,39 @@ body:not([data-admin-page]) :is(
   .mobile-plus-card>b,
   .product-cart.is-added
 ){
-  background:#021a17!important;
+  background:#06443c!important;
   color:#fff!important;
+}
+
+/* Setas de carrossel (produtos, vitrines e banner) no verde escuro padrão. */
+body:not([data-admin-page]) :is(
+  .product-carousel-controls button,
+  .product-rail-arrow,
+  .product-rail-arrow:hover,
+  .product-rail-arrow:active,
+  .home-banner-arrow,
+  .home-banner-arrow:hover
+){
+  background:#06443c!important;
+  border-color:#06443c!important;
+  color:#fff!important;
+}
+body:not([data-admin-page]) :is(.product-rail-arrow,.product-rail-arrow:hover,.product-rail-arrow:active)::before{
+  border-top-color:#fff!important;
+  border-right-color:#fff!important;
+}
+body:not([data-admin-page]) .search>button,
+body:not([data-admin-page]) .mobile-home-search button[type="submit"]{
+  background:#06443c!important;
+  border-color:#06443c!important;
+  color:#fff!important;
+}
+
+/* Hover somente no título do card, sem afetar a borda ou o fundo. */
+@media(hover:hover) and (pointer:fine){
+  body:not([data-admin-page]) .product-card[data-card-url]:hover h3{
+    text-decoration:underline!important;
+    text-underline-offset:3px;
+    color:#0a6f63!important;
+  }
 }
