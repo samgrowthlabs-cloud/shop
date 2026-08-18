@@ -7229,3 +7229,111 @@ body:not([data-admin-page]) .product-card:hover,
 body:not([data-admin-page]) .product-card[data-card-url]:hover{
   border:1px solid #e7edeb!important;
 }
+/* Todos os verdes do site ficam escuríssimos (#021a17), iguais ao topo do cabeçalho. */
+body:not([data-admin-page]){
+  --accent:#021a17;
+  --accent-hover:#021a17;
+  --success:#021a17;
+}
+
+/* Preços em qualquer card, oferta, comparação e dock mobile. */
+body:not([data-admin-page]) :is(
+  .product-card .price .current-price,
+  .home-price-drop-card .home-price-drop-copy>b,
+  .promotion-products .current-price,
+  .detail .offer .price,
+  .comparison-head-price,
+  .comparison-mobile-teaser b,
+  .mobile-product-dock-price>strong,
+  .quick-comparison-stats strong,
+  .shoplab-public-ad-prices b,
+  .shop-public-ad-price-chip b,
+  .premium-plan-state>strong,
+  .account-summary-grid strong,
+  .mobile-account-stats strong,
+  .mobile-product-dock strong
+){
+  color:#021a17!important;
+}
+
+/* Textos verdes de apoio (categoria, link, rótulo, desconto e afins). */
+body:not([data-admin-page]) :is(
+  .meta,
+  .eyebrow,
+  .product-symbol,
+  .category i,
+  .simple-head>a,
+  .catalog-link,
+  .home-category-media i,
+  .detail-discount,
+  .card-saving,
+  .premium-relation strong,
+  .premium-relation-toggle,
+  .premium-related-section .section-head .eyebrow,
+  .campaign-discount,
+  .price-drop-badge,
+  .quick-comparison-copy>span,
+  .comparison-price-gap span,
+  .comparison-table td>small,
+  .comparison-table thead .comparison-head-price i,
+  .comparison-table .comparison-verdict,
+  .home-category-item .home-category-media i,
+  .trending a:first-child,
+  .nav-cart.is-added
+){
+  color:#021a17!important;
+}
+
+/* Selos/etiquetas com porcentagem ganham fundo escuríssimo e texto branco. */
+body:not([data-admin-page]) :is(
+  .product-card .badge,
+  .promotion-products .badge,
+  .price-drop-badge,
+  .campaign-discount::before
+){
+  background:#021a17!important;
+  border-color:#021a17!important;
+  color:#fff!important;
+}
+
+/* O ícone de porcentagem da vitrine de ofertas acompanha o tom escuro. */
+body:not([data-admin-page]) .price-drop-heading-icon{
+  color:#021a17!important;
+}
+body:not([data-admin-page]) .price-drop-heading-icon svg{
+  fill:#e6fff8;
+  stroke:#021a17!important;
+}
+
+/* Estrelas, selos e demais indicadores verdes também ficam escuríssimos. */
+body:not([data-admin-page]) :is(
+  .public-rating>span,
+  .public-rating .rating-stars,
+  .public-rating.is-empty>.rating-stars,
+  .detail-public-rating>span,
+  .account-rating,
+  .product-cart.is-added,
+  .card-favorite.active,
+  .detail-favorite.active,
+  .verified-partner,
+  .premium-status,
+  .premium-benefits article>span,
+  .premium-payment-options article>span,
+  .account-profile-avatar,
+  .product-tech-highlights span,
+  .account-summary-grid a>img,
+  .account-sidebar nav a.active,
+  .mobile-account-tab-header small,
+  .search-ai-context span
+){
+  color:#021a17!important;
+}
+body:not([data-admin-page]) :is(
+  .account-sidebar nav b,
+  .premium-usage span,
+  .mobile-plus-card>b,
+  .product-cart.is-added
+){
+  background:#021a17!important;
+  color:#fff!important;
+}
