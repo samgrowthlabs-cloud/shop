@@ -7369,3 +7369,61 @@ body:not([data-admin-page]) .mobile-home-search button[type="submit"]{
     color:#0a6f63!important;
   }
 }
+
+/* Página de produto: botão de oferta no verde escuro padrão. */
+body:not([data-admin-page]) .detail .offer .btn.primary,
+body:not([data-admin-page]) .offer .btn.primary{
+  background:#06443c!important;
+  background-image:none!important;
+  border:1px solid #06443c!important;
+  color:#fff!important;
+  box-shadow:0 6px 16px rgba(6,68,60,.22)!important;
+}
+body:not([data-admin-page]) .detail .offer .btn.primary:hover,
+body:not([data-admin-page]) .offer .btn.primary:hover{
+  background:#063b35!important;
+  background-image:none!important;
+  border-color:#063b35!important;
+}
+
+/* Página de produto: botão "Adicionar à lista" no verde escuro padrão. */
+body:not([data-admin-page]) .user-product-actions .btn.primary.product-cart{
+  background:#06443c!important;
+  background-image:none!important;
+  border:1px solid #06443c!important;
+  color:#fff!important;
+  box-shadow:0 6px 16px rgba(6,68,60,.22)!important;
+}
+body:not([data-admin-page]) .user-product-actions .btn.primary.product-cart:hover{
+  background:#063b35!important;
+  background-image:none!important;
+  border-color:#063b35!important;
+}
+
+/* Página de produto: seção de análise de produtos em verde escuro. */
+body:not([data-admin-page]) .premium-product-insight,
+body:not([data-admin-page]) .product-ai-trigger{
+  background:#06443c!important;
+  background-image:none!important;
+  border-color:rgba(255,255,255,.14)!important;
+  color:#fff!important;
+}
+body:not([data-admin-page]) .premium-product-insight :is(.eyebrow,p,h2,h3,small),
+body:not([data-admin-page]) .product-ai-trigger :is(.eyebrow,p,h2,h3,small){
+  color:#eaf6f2!important;
+}
+body:not([data-admin-page]) .premium-product-insight .ai-insight-generate,
+body:not([data-admin-page]) .product-ai-trigger .ai-insight-generate{
+  background:rgba(255,255,255,.14)!important;
+  border-color:rgba(255,255,255,.5)!important;
+  color:#fff!important;
+}
+body:not([data-admin-page]) .premium-product-insight .ai-insight-generate:hover,
+body:not([data-admin-page]) .product-ai-trigger .ai-insight-generate:hover{
+  background:rgba(255,255,255,.22)!important;
+}
+body:not([data-admin-page]) .premium-product-insight .ai-credit-pill,
+body:not([data-admin-page]) .product-ai-trigger .ai-credit-pill{
+  border-color:rgba(255,255,255,.5)!important;
+  color:#eaf6f2!important;
+}
