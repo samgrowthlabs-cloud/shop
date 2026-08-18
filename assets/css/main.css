@@ -6838,11 +6838,11 @@ body[data-page="promotions"] .campaign-head>div>:is(.eyebrow,h2,p){display:none}
 body[data-page="promotions"] .campaign-head .campaign-discount{display:inline-flex;align-items:center;gap:9px;padding:0;background:transparent;color:#007f70;font-size:18px;font-weight:600;letter-spacing:.01em}
 body[data-page="promotions"] .promotion-products .badge{display:inline-flex!important;align-items:center;top:10px!important;left:10px!important;padding:6px 9px!important;border-radius:4px!important;background:#008f7d!important;color:#fff!important;font-size:12px!important;font-weight:700!important;box-shadow:0 3px 9px rgba(0,93,82,.2)!important}
 @media(max-width:760px){body[data-page="promotions"] .promotion-campaign{padding-top:22px}body[data-page="promotions"] .campaign-head .campaign-discount{font-size:15px}body[data-page="promotions"] .promotion-products .badge{top:7px!important;left:7px!important;padding:5px 7px!important;font-size:10px!important}}body[data-page="promotions"] .campaign-head .campaign-discount::before{content:"%";display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;clip-path:polygon(0 50%,46% 4%,100% 4%,100% 56%,52% 100%);background:#00a889;color:#fff;font-size:14px;font-weight:800;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,91,78,.42)) drop-shadow(0 0 9px rgba(0,168,137,.62));transform-origin:72% 25%;animation:price-drop-tag 2.4s ease-in-out infinite}
-body[data-page="promotions"] .campaign-head .campaign-discount:hover::before{background:#00c7a3;color:#fff;filter:drop-shadow(0 2px 4px rgba(0,91,78,.48)) drop-shadow(0 0 16px rgba(0,199,163,.72));animation:price-drop-tag-hover .42s ease-in-out infinite alternate}
+body[data-page="promotions"] .campaign-head .campaign-discount:hover::before{filter:drop-shadow(0 2px 4px rgba(0,91,78,.48)) drop-shadow(0 0 16px rgba(0,199,163,.72));animation:price-drop-tag-hover .42s ease-in-out infinite alternate}
 @media(prefers-reduced-motion:reduce){body[data-page="promotions"] .campaign-head .campaign-discount::before{animation:none}}
 /* Promotion heading tag uses the same outlined SVG as the home. */
 body[data-page="promotions"] .campaign-head .campaign-discount::before{content:"";display:block;flex:0 0 40px;width:40px;height:40px;clip-path:none;background:url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%3E%3Cpath%20d=%22M3.5%2012.2%2012.2%203.5H20.5V11.8L11.8%2020.5%203.5%2012.2Z%22%20fill=%22%23e6fff8%22%20stroke=%22%2300a889%22%20stroke-width=%221.5%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22/%3E%3Ccircle%20cx=%2216.7%22%20cy=%227.3%22%20r=%221.4%22%20fill=%22%23e6fff8%22%20stroke=%22%2300a889%22%20stroke-width=%221.5%22/%3E%3Ctext%20x=%2211.5%22%20y=%2214.2%22%20text-anchor=%22middle%22%20fill=%22%2300a889%22%20font-family=%22Arial%22%20font-size=%227%22%3E%25%3C/text%3E%3C/svg%3E) center/contain no-repeat;color:transparent;font-size:0;filter:drop-shadow(0 0 5px rgba(0,168,137,.55)) drop-shadow(0 0 11px rgba(0,168,137,.25));transform-origin:72% 25%;animation:price-drop-tag 2.4s ease-in-out infinite}
-body[data-page="promotions"] .campaign-head .campaign-discount:hover::before{background-color:transparent;filter:drop-shadow(0 0 7px rgba(0,199,163,.85)) drop-shadow(0 0 16px rgba(0,199,163,.5));animation:price-drop-tag-hover .42s ease-in-out infinite alternate}
+body[data-page="promotions"] .campaign-head .campaign-discount:hover::before{filter:brightness(1.4) saturate(1.1) drop-shadow(0 0 7px rgba(0,199,163,.9)) drop-shadow(0 0 16px rgba(0,199,163,.55));animation:price-drop-tag-hover .42s ease-in-out infinite alternate}
 
 /* Desktop public header: two dark green bands with a white wordmark. */
 @media(min-width:761px){
@@ -7288,8 +7288,7 @@ body:not([data-admin-page]) :is(
 body:not([data-admin-page]) :is(
   .product-card .badge,
   .promotion-products .badge,
-  .price-drop-badge,
-  .campaign-discount::before
+  .price-drop-badge
 ){
   background:#06443c!important;
   border-color:#06443c!important;
