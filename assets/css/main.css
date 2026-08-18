@@ -7219,3 +7219,7 @@ body:not([data-admin-page])[data-page="product"] #product-related .premium-relat
 body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-rating strong{color:#7c3aed!important}
 body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-value strong{color:#956400!important}
 body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-similar strong{color:#087c70!important}
+/* Remove o escurecimento lateral do banner da pagina home. */
+body[data-page="home"] .home-banner-shade{display:none!important}
+/* Titulos dos cards sem negrito. */
+body:not([data-admin-page]) :is(.product-card h3,.home-price-drop-card .home-price-drop-copy strong,.quick-comparison-item .quick-comparison-copy strong,.comparison-mobile-teaser strong,.account-dashboard .account-product-copy strong,.store-marquee-card strong,.comparison-table thead strong){font-weight:400!important}
