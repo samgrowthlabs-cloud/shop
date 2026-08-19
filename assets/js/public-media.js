@@ -55,13 +55,13 @@ function renderPromotion(data){const promotion=data?.promotion,host=document.que
 
 function renderDescriptions(data){
   if(!data||document.querySelector('.product-description-section'))return;
-  const productCopy=document.querySelector('.detail > div:last-child'),current=productCopy?.querySelector(':scope > p:not(.muted)'),shortText=(data.shortDescription||data.subtitle||'').trim(),longText=(data.fullDescription||data.description||'').trim();
-  if(current){current.className='product-short-description';current.textContent=shortText||longText||'Confira os detalhes, características e ofertas disponíveis para este produto.'}
-  if(!longText||longText===(shortText||'').trim())return;
+  const shortText=(data.shortDescription||data.subtitle||'').trim(),longText=(data.fullDescription||data.description||'').trim(),text=longText||shortText;
+  if(!text)return;
+  const hasLong=Boolean(longText),collapsed=hasLong?' collapsed':'',toggle=hasLong?`<button class="btn ghost description-toggle" type="button" aria-expanded="false" aria-controls="long-description">Mostrar mais</button>`:'';
   const analysis=document.querySelector('#conteudo > .section.alt'),section=document.createElement('section');section.className='section product-description-section';
-  section.innerHTML=`<div class="container"><div class="section-head"><div><span class="eyebrow">DETALHES DO PRODUTO</span><h2>Descrição completa</h2></div></div><div class="long-description collapsed" id="long-description"><p>${safe(longText)}</p></div><button class="btn ghost description-toggle" type="button" aria-expanded="false" aria-controls="long-description">Mostrar mais</button></div>`;
+  section.innerHTML=`<div class="container"><div class="section-head"><div><span class="eyebrow">DETALHES DO PRODUTO</span><h2>Descrição completa</h2></div></div><div class="long-description${collapsed}" id="long-description"><p>${safe(text)}</p></div>${toggle}</div>`;
   if(analysis)analysis.insertAdjacentElement('beforebegin',section);else document.querySelector('#conteudo')?.append(section);
-  section.querySelector('.description-toggle').addEventListener('click',event=>{const content=section.querySelector('.long-description'),expanded=event.currentTarget.getAttribute('aria-expanded')==='true';content.classList.toggle('collapsed',expanded);event.currentTarget.setAttribute('aria-expanded',String(!expanded));event.currentTarget.textContent=expanded?'Mostrar mais':'Mostrar menos';if(expanded)section.scrollIntoView({behavior:'smooth',block:'start'})});
+  if(hasLong)section.querySelector('.description-toggle').addEventListener('click',event=>{const content=section.querySelector('.long-description'),expanded=event.currentTarget.getAttribute('aria-expanded')==='true';content.classList.toggle('collapsed',expanded);event.currentTarget.setAttribute('aria-expanded',String(!expanded));event.currentTarget.textContent=expanded?'Mostrar mais':'Mostrar menos';if(expanded)section.scrollIntoView({behavior:'smooth',block:'start'})});
 }
 
 function productSpecifications(data){return(data?.specificationGroups||[]).flatMap(group=>(group.items||group.specifications||[]).map(item=>({name:String(item.name||item.label||'').trim(),value:String(item.value||'').trim()}))).filter(item=>item.name&&item.value)}
