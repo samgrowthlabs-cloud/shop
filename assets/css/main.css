@@ -7829,3 +7829,106 @@ body:not([data-admin-page]) .product-card .card-countdown{
 .home-banner[data-banner-carousel]{cursor:grab;touch-action:pan-y}
 .home-banner[data-banner-carousel].is-dragging{cursor:grabbing;user-select:none}
 @media(prefers-reduced-motion:reduce){.home-banner[data-banner-carousel]{cursor:default}}
+
+/* Categoria menor; título do card maior e destacado. */
+body:not([data-admin-page]) .product-card .meta,
+body[data-page="home"] .product-card .meta{
+  font-size:11px!important;
+  line-height:1.3!important;
+}
+body:not([data-admin-page]) .product-card h3,
+body[data-page="home"] .product-card h3{
+  font-size:16px!important;
+  line-height:1.3!important;
+  letter-spacing:0!important;
+}
+@media(max-width:760px){
+  body:not([data-admin-page]) .product-card h3,
+  body[data-page="home"] .product-card h3{
+    font-size:15px!important;
+  }
+}
+
+/* Título maior também na vitrine "Em alta agora" (product-rail). */
+body[data-page="home"] .product-rail .product-card h3,
+body:not([data-admin-page]) .product-rail .product-card h3{
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical!important;
+  -webkit-line-clamp:2!important;
+  line-clamp:2!important;
+  min-height:auto!important;
+  max-height:none!important;
+  height:auto!important;
+  overflow:hidden!important;
+  -webkit-mask-image:none!important;
+  mask-image:none!important;
+  font-size:16px!important;
+  line-height:1.3!important;
+  letter-spacing:0!important;
+}
+@media(max-width:760px){
+  body[data-page="home"] .product-rail .product-card h3,
+  body:not([data-admin-page]) .product-rail .product-card h3{
+    font-size:15px!important;
+  }
+}
+
+/* Remove qualquer linha entre o cabeçalho e o banner no celular. */
+@media(max-width:760px){
+  html body[data-page="home"] .header,
+  html body[data-page="home"] .header .mobile-home-header,
+  html body[data-page="home"] .header .mobile-home-header-top{
+    border:0!important;
+    border-bottom:0!important;
+    border-top:0!important;
+    box-shadow:none!important;
+    outline:0!important;
+  }
+  html body[data-page="home"] .home-banner{
+    border:0!important;
+    box-shadow:none!important;
+  }
+  html body[data-page="home"] .home-banner::after{
+    display:none!important;
+  }
+}
+
+/* Banner da home: apenas desliza na horizontal, como os carrosséis de cards.
+   Remove zoom, fade, blur e recorte das transições automáticas. */
+html body[data-page="home"] .home-banner{
+  overflow:hidden!important;
+}
+html body[data-page="home"] .home-banner .home-banner-slide{
+  opacity:1!important;
+  visibility:visible!important;
+  clip-path:none!important;
+  filter:none!important;
+  animation:none!important;
+  transform:translateX(100%);
+  transition:transform .45s cubic-bezier(.22,1,.36,1);
+}
+html body[data-page="home"] .home-banner .home-banner-slide.is-active{
+  transform:translateX(0);
+  z-index:1;
+}
+html body[data-page="home"] .home-banner .home-banner-slide picture,
+html body[data-page="home"] .home-banner .home-banner-slide.is-active picture{
+  transform:none!important;
+  filter:none!important;
+  clip-path:none!important;
+  animation:none!important;
+  transition:none!important;
+}
+html body[data-page="home"] .home-banner .home-banner-slide .home-banner-copy{
+  animation:none!important;
+  clip-path:none!important;
+  filter:none!important;
+}
+html body[data-page="home"] .home-banner .home-banner-slide :is(.home-banner-copy small,.home-banner-copy strong,.home-banner-copy>span,.home-banner-copy b){
+  animation:none!important;
+}
+@media(prefers-reduced-motion:reduce){
+  html body[data-page="home"] .home-banner .home-banner-slide{
+    transition:none!important;
+  }
+}

@@ -18,5 +18,23 @@ export function acceptRedirectSession(){const values=new URLSearchParams(locatio
 export async function validSession(){let current=session();if(!current)return null;if(Number(current.expires_at||0)>Math.floor(Date.now()/1000)+30)return current;if(!current.refresh_token){save(null);return null}try{current=await request('token?grant_type=refresh_token',{refresh_token:current.refresh_token});return save(current)}catch{save(null);return null}}
 export async function currentUser(){const current=await validSession();if(!current)return null;try{return await request('user',undefined,current.access_token,'GET')}catch{save(null);return null}}
 export async function apiProfile(options={}){const current=await validSession();if(!current)throw Error('Entre na sua conta.');const response=await fetch(`${C.API_BASE_URL}/api/v1/user/profile`,{...options,credentials:'include',headers:{authorization:`Bearer ${current.access_token}`,...referralHeader(),...(options.body?{'content-type':'application/json'}:{})}}),data=await response.json();if(!response.ok||!data.success)throw Error(data.error?.message||'Não foi possível carregar o perfil.');return data.data}
-export async function userApi(path,options={}){const current=await validSession();if(!current)throw Error('Entre na sua conta.');const response=await fetch(`${C.API_BASE_URL}/api/v1/user/${path}`,{...options,credentials:'include',headers:{authorization:`Bearer ${current.access_token}`,...referralHeader(),...(options.body?{'content-type':'application/json'}:{})}}),data=await response.json();if(!response.ok||!data.success)throw Error(data.error?.message||'Não foi possível concluir.');return data.data}
+export async function userApi(path,options={}){
+  const current=await validSession();
+  if(!current)throw Error('Entre na sua conta.');
+  const response=await fetch(`${C.API_BASE_URL}/api/v1/user/${path}`,{
+    ...options,
+    credentials:'include',
+    headers:{
+      authorization:`Bearer ${current.access_token}`,
+      ...referralHeader(),
+      ...(options.body?{'content-type':'application/json'}:{})
+    }
+  });
+  // Uma sessão local pode estar desatualizada/revogada no servidor. Ao receber
+  // 401, descartamos o token para não repetir chamadas que só geram erro.
+  if(response.status===401){save(null);}
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.success)throw Error(data.error?.message||'Não foi possível concluir.');
+  return data.data;
+}
 export function startPresence(){if(!session()||window.__shoplabPresence)return;window.__shoplabPresence=true;let id=sessionStorage.getItem('shoplab:visit-session');if(!id){id=crypto.randomUUID();sessionStorage.setItem('shoplab:visit-session',id)}let sending=false;const ping=async()=>{if(document.hidden||!session()||sending)return;sending=true;try{await userApi('presence',{method:'POST',body:JSON.stringify({sessionId:id})})}catch{}finally{sending=false}};ping();setInterval(ping,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)ping()});window.addEventListener('focus',ping)}
