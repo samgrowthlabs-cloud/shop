@@ -4953,6 +4953,12 @@ body[data-page="home"] .home-banner-slide.banner-animation-none.is-active pictur
 @keyframes public-banner-reveal{from{opacity:0;clip-path:inset(0 100% 0 0)}to{opacity:1;clip-path:inset(0)}}
 @keyframes public-banner-impact{from{opacity:0;transform:translate(-50%,-50%) scale(.9)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 @keyframes public-banner-float{from{transform:translateY(0) scale(1)}to{transform:translateY(calc(var(--banner-animation-float,6px)*-1)) scale(1.015)}}
+
+/* Swipe: entrada lateral suave, estilo carrossel. */
+body[data-page="home"] .home-banner-slide.banner-animation-swipe.is-active .home-banner-copy{animation:public-banner-swipe var(--banner-animation-duration,900ms) cubic-bezier(.22,1,.36,1) both}
+body[data-page="home"] .home-banner-slide.banner-animation-swipe.is-active picture{animation:public-banner-swipe-media var(--banner-animation-duration,900ms) cubic-bezier(.22,1,.36,1) both}
+@keyframes public-banner-swipe{from{opacity:0;clip-path:inset(0 0 0 100%)}to{opacity:1;clip-path:inset(0)}}
+@keyframes public-banner-swipe-media{from{opacity:.55;transform:translateX(7%)}to{opacity:1;transform:translateX(0)}}
 @media(prefers-reduced-motion:reduce){body[data-page="home"] [class*="banner-animation-"] picture,body[data-page="home"] [class*="banner-animation-"] .home-banner-copy{animation:none!important}}
 .product-card .badge:empty{display:none!important}
 
@@ -7750,6 +7756,26 @@ body:not([data-admin-page]) .product-card .card-saving{
   background:#eef1f0!important;
   color:#6c7672!important;
 }
+/* Força peso 400 em TODOS os textos dentro dos cards de produto,
+   vencendo regras anteriores que usavam 700/800/850/900. */
+body:not([data-admin-page]) .product-card,
+body:not([data-admin-page]) .product-card *,
+body[data-page="home"] .product-card,
+body[data-page="home"] .product-card *{
+  font-weight:400!important;
+}
+body[data-page="home"] .product-card h3,
+body[data-page="home"] .product-card .price,
+body[data-page="home"] .product-card .price .current-price,
+body[data-page="home"] .product-card .price .old,
+body[data-page="home"] .product-card .meta,
+body[data-page="home"] .product-card .public-rating,
+body[data-page="home"] .product-card .public-rating>strong,
+body[data-page="home"] .product-card .public-rating>small,
+body:not([data-admin-page]) .product-card .public-rating>strong,
+body:not([data-admin-page]) .product-card .public-rating>small{
+  font-weight:400!important;
+}
 /* Títulos das seções da home: um pouco maiores e com peso 600. */
 body[data-page="home"] .simple-head h2,
 body[data-page="home"] .section-head h2{
@@ -7771,3 +7797,35 @@ body[data-page="home"] .section-head h2{
     top:82px!important;
   }
 }
+
+/* ===== Override final: remove TODO e QUALQUER negrito dentro dos cards ===== */
+/* Estas regras têm especificidade máxima e vencem todos os
+   font-weight 700/750/780/800/850/900/950 espalhados pelo arquivo. */
+body:not([data-admin-page]) .product-card,
+body:not([data-admin-page]) .product-card .product-body,
+body:not([data-admin-page]) .product-card .meta,
+body:not([data-admin-page]) .product-card h3,
+body:not([data-admin-page]) .product-card .price,
+body:not([data-admin-page]) .product-card .price .current-price,
+body:not([data-admin-page]) .product-card .price .old,
+body:not([data-admin-page]) .product-card .old,
+body:not([data-admin-page]) .product-card .badge,
+body:not([data-admin-page]) .product-card .card-saving,
+body:not([data-admin-page]) .product-card .public-rating,
+body:not([data-admin-page]) .product-card .public-rating > span,
+body:not([data-admin-page]) .product-card .public-rating > strong,
+body:not([data-admin-page]) .product-card .public-rating > small,
+body:not([data-admin-page]) .product-card .public-rating .rating-stars,
+body:not([data-admin-page]) .product-card .premium-relation,
+body:not([data-admin-page]) .product-card .premium-relation strong,
+body:not([data-admin-page]) .product-card .premium-relation span,
+body:not([data-admin-page]) .product-card .card-promotion,
+body:not([data-admin-page]) .product-card .card-promotion b,
+body:not([data-admin-page]) .product-card .card-countdown{
+  font-weight:400!important;
+}
+
+/* Drag/swipe do banner da home */
+.home-banner[data-banner-carousel]{cursor:grab;touch-action:pan-y}
+.home-banner[data-banner-carousel].is-dragging{cursor:grabbing;user-select:none}
+@media(prefers-reduced-motion:reduce){.home-banner[data-banner-carousel]{cursor:default}}
