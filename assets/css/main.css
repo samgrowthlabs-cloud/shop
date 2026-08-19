@@ -7589,3 +7589,50 @@ body:not([data-admin-page]) .product-rail .product-card .public-rating .rating-s
 body:not([data-admin-page]) .product-rail .product-card .public-rating.is-empty>.rating-stars{
   font-size:17px!important;
 }
+
+/* Banner da home: colado imediatamente abaixo do cabeçalho e ocupando a largura total da tela, mantendo a altura. */
+body[data-page="home"] .home-banner-section{
+  padding-top:0!important;
+  padding-left:0!important;
+  padding-right:0!important;
+  margin:0!important;
+  width:100%!important;
+  max-width:100vw!important;
+}
+body[data-page="home"] .home-banner-section>.container{
+  width:100%!important;
+  max-width:100vw!important;
+  margin:0!important;
+  padding-left:0!important;
+  padding-right:0!important;
+}
+body[data-page="home"] .home-banner{
+  width:100%!important;
+  max-width:100vw!important;
+  margin:0!important;
+  border-radius:0!important;
+}
+@media(min-width:901px){
+  body[data-page="home"] .home-banner{
+    height:270px!important;
+    min-height:270px!important;
+    max-height:270px!important;
+    aspect-ratio:auto!important;
+  }
+}
+
+/* Setas do banner da home: posicionadas para dentro do banner, sem vazar para fora. */
+@media(min-width:901px){
+  body[data-page="home"] .home-banner .home-banner-arrow{
+    top:50%!important;
+    bottom:auto!important;
+  }
+  body[data-page="home"] .home-banner .home-banner-arrow.previous{
+    left:20px!important;
+    right:auto!important;
+  }
+  body[data-page="home"] .home-banner .home-banner-arrow.next{
+    right:20px!important;
+    left:auto!important;
+  }
+}
