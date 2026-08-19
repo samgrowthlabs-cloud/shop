@@ -7850,3 +7850,44 @@ body:not([data-admin-page]) .product-card .card-countdown{
     mask-image:none!important;
   }
 }
+
+/* Todos os cards mais próximos: reduz espaçamento vertical e lateral entre eles. */
+body:not([data-admin-page]) :is(
+  .products,
+  .catalog .products,
+  .listing-section .products,
+  .home-section .products,
+  .continue-viewing-section .products,
+  .home-product-rail,
+  .product-rail>.products,
+  .product-carousel-track
+){
+  row-gap:6px!important;
+  column-gap:10px!important;
+}
+body:not([data-admin-page]) :is(
+  .home-price-drop-grid,
+  .quick-comparison-grid
+){
+  row-gap:8px!important;
+  column-gap:10px!important;
+}
+body:not([data-admin-page]) .product-card{
+  margin-bottom:0!important;
+}
+body[data-page="home"] .product-rail>.products>.product-card{
+  margin-bottom:0!important;
+}
+@media(max-width:760px){
+  body:not([data-admin-page]) :is(
+    .catalog .products,
+    .listing-section .products,
+    .home-price-drop-grid,
+    .quick-comparison-grid,
+    .product-rail>.products,
+    .home-section .products
+  ){
+    row-gap:6px!important;
+    column-gap:8px!important;
+  }
+}
