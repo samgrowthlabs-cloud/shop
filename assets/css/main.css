@@ -7829,3 +7829,24 @@ body:not([data-admin-page]) .product-card .card-countdown{
 .home-banner[data-banner-carousel]{cursor:grab;touch-action:pan-y}
 .home-banner[data-banner-carousel].is-dragging{cursor:grabbing;user-select:none}
 @media(prefers-reduced-motion:reduce){.home-banner[data-banner-carousel]{cursor:default}}
+
+/* No celular, "Ainda sem avaliações" fica contido no card e termina em reticências. */
+@media(max-width:760px){
+  body:not([data-admin-page]) .product-card .public-rating,
+  body:not([data-admin-page]) .product-card .public-rating.is-empty{
+    min-width:0!important;
+    max-width:100%!important;
+    overflow:hidden!important;
+  }
+  body:not([data-admin-page]) .product-card .public-rating>small,
+  body:not([data-admin-page]) .product-card .public-rating.is-empty>small{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    -webkit-mask-image:none!important;
+    mask-image:none!important;
+  }
+}
