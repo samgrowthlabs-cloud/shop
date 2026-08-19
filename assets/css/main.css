@@ -7400,6 +7400,35 @@ body:not([data-admin-page]) .user-product-actions .btn.primary.product-cart:hove
   border-color:#063b35!important;
 }
 
+/* Lupa da barra de pesquisa no verde escuro padrão, vencendo as regras
+   mais específicas que coloriam o botão com tons mais claros no mobile. */
+html body .header .mobile-home-search>button[type="submit"],
+html body .header .mobile-home-search button[type="submit"]{
+  background:#06443c!important;
+  border-color:#06443c!important;
+  color:#fff!important;
+  box-shadow:none!important;
+}
+html body .header .mobile-home-search>button[type="submit"]:hover,
+html body .header .mobile-home-search button[type="submit"]:hover{
+  background:#063b35!important;
+  border-color:#063b35!important;
+}
+
+/* Botão "Ver oferta" do dock fixo no celular, no mesmo verde escuro. */
+body:not([data-admin-page]) .mobile-product-dock .btn.primary{
+  background:#06443c!important;
+  background-image:none!important;
+  border:1px solid #06443c!important;
+  color:#fff!important;
+  box-shadow:0 6px 16px rgba(6,68,60,.22)!important;
+}
+body:not([data-admin-page]) .mobile-product-dock .btn.primary:hover{
+  background:#063b35!important;
+  background-image:none!important;
+  border-color:#063b35!important;
+}
+
 /* Página de produto: seção de análise de produtos em verde escuro. */
 body:not([data-admin-page]) .premium-product-insight,
 body:not([data-admin-page]) .product-ai-trigger{
@@ -7426,4 +7455,107 @@ body:not([data-admin-page]) .premium-product-insight .ai-credit-pill,
 body:not([data-admin-page]) .product-ai-trigger .ai-credit-pill{
   border-color:rgba(255,255,255,.5)!important;
   color:#eaf6f2!important;
+}
+
+/* ===== Alternativas próximas: curadoria maior, legível e com borda sutil ===== */
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .products:has(>.premium-related-card){
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(300px,1fr))!important;
+    gap:16px!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{
+    height:auto!important;
+    min-height:320px!important;
+    border-radius:12px!important;
+    border:1px solid transparent!important;
+    background:linear-gradient(#fff,#fff) padding-box,
+      linear-gradient(125deg,rgba(0,122,106,.30),rgba(216,165,46,.28) 50%,rgba(0,122,106,.30)) border-box!important;
+    box-shadow:0 8px 22px rgba(6,75,64,.08),inset 0 0 0 1px rgba(255,255,255,.72)!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media{
+    flex:0 0 200px!important;
+    height:200px!important;
+    min-height:200px!important;
+    padding:14px!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:168px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-body{padding:14px 16px 16px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation{gap:7px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation strong{
+    font-size:11px!important;
+    font-weight:600!important;
+    line-height:1.3!important;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation span{
+    font-size:12.5px!important;
+    line-height:1.5!important;
+    -webkit-line-clamp:3!important;
+    line-clamp:3;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .premium-relation .premium-relation-toggle{
+    align-self:start;
+    margin-top:2px;
+    font-size:12.5px!important;
+    font-weight:600!important;
+    color:#06443c!important;
+    text-decoration:none;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card:hover{
+    transform:none!important;
+    box-shadow:0 12px 28px rgba(6,75,64,.12),inset 0 0 0 1px rgba(216,165,46,.25)!important;
+  }
+  body:not([data-admin-page])[data-page="product"] #product-related .minimal-section{padding-block:14px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .minimal-section + .minimal-section{padding-top:6px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .minimal-section .section-head{margin-bottom:12px!important}
+}
+
+/* ===== Estrelas com brilho verde-claro, uma por vez e dentro da estrela (≥ 4.5) ===== */
+body:not([data-admin-page]) .public-rating.has-glowing-stars .rating-stars{
+  display:inline-flex;
+  align-items:center;
+  gap:0;
+  white-space:nowrap;
+  line-height:1;
+}
+body:not([data-admin-page]) .public-rating.has-glowing-stars .rating-stars .rating-star{
+  position:relative;
+  display:inline-block;
+  font-style:normal;
+  line-height:1;
+  color:#1ba88f!important;
+  -webkit-text-fill-color:#1ba88f!important;
+}
+body:not([data-admin-page]) .public-rating.has-glowing-stars .rating-stars .rating-star.empty{
+  color:#9bc9c2!important;
+  -webkit-text-fill-color:#9bc9c2!important;
+}
+body:not([data-admin-page]) .public-rating.has-glowing-stars .rating-stars .rating-star:not(.empty)::after{
+  content:"★";
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  color:transparent!important;
+  -webkit-text-fill-color:transparent!important;
+  background-image:linear-gradient(180deg,#ffffff 0%,#c6fff0 45%,#37c6aa 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  opacity:0;
+  transform:scale(.72);
+  pointer-events:none;
+  animation:star-shine-inner calc(var(--star-count,5) * var(--star-step,.6s)) ease-in-out infinite;
+  animation-delay:calc(var(--star-glow-delay,0s) + var(--star-i,0) * var(--star-step,.6s));
+}
+@keyframes star-shine-inner{
+  0%,12.9%{opacity:0;transform:scale(.9)}
+  17%{opacity:1;transform:scale(1)}
+  27%{opacity:1;transform:scale(1)}
+  31%,100%{opacity:0;transform:scale(.9)}
+}
+@media(prefers-reduced-motion:reduce){
+  body:not([data-admin-page]) .public-rating.has-glowing-stars .rating-stars .rating-star::after{animation:none!important}
 }
