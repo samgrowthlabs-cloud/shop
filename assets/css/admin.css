@@ -696,3 +696,4 @@ html[data-admin-theme="dark"] .admin-context-menu{border-color:#315048;backgroun
 
 /* Preview do banner igual ao site: computador em largura total com 270px de altura. */
 #banner-modal .banner-preview-device.desktop .home-banner,.banner-preview-device.desktop .home-banner{height:270px!important}
+.ads-distribution select{margin-top:6px}.ads-distribution small,#weightSummary{display:block;margin-top:8px;line-height:1.45}.form-field#weightField{position:relative;padding:14px;border:1px solid #cfe2dd;border-radius:10px;background:#f5fbf9}.form-field#weightField input[type=range]{width:calc(100% - 56px)}#weightValue{display:inline-grid;place-items:center;min-width:42px;margin-left:8px;padding:5px 8px;border-radius:8px;background:#087c70;color:#fff;font-weight:800}
