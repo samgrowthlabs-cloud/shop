@@ -5005,7 +5005,15 @@ async function serveMedia(req, env, key, ctx) {
 
   headers.set("etag", object.httpEtag);
   headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
+  headers.set("accept-ranges", "bytes");
   if (width) headers.set("x-shoplab-image-width", String(width));
+  if (object.range) {
+    const offset = object.range.offset;
+    const length = object.range.length ?? object.size - offset;
+    headers.set("content-length", String(length));
+    headers.set("content-range", `bytes ${offset}-${offset + length - 1}/${object.size}`);
+    return new Response(isHead ? null : object.body, { status: 206, headers });
+  }
   return new Response(isHead ? null : object.body, { status: 200, headers });
 }
 
