@@ -1,5 +1,7 @@
-import { getComparisonAnalysis, getProductBySlug } from './api.js';
+import { getComparisonAnalysis, getProductBySlug, getProducts } from './api.js';
+import { selectAutomaticComparisons, automaticComparisonSection } from './automatic-comparisons.js?v=20260820-home-cards-1';
 import { SHOPLAB_CONFIG as C } from './config.js';
+import { getPersonalizedRecommendations } from './user-library.js?v=20260807-card-compare-1';
 
 const STORAGE_KEY = 'shoplab-compare-products';
 const ANALYSIS_CACHE_TTL=1000*60*60*24*30;
@@ -330,7 +332,25 @@ export async function comparisonPage() {
 
   activeComparison = { slugs: [...slugs], products };
 
-  return `<main id="conteudo" class="comparison-page"><div class="container page-hero"><span class="eyebrow">COMPARADOR SHOPLAB · ${safe(category)}</span><h1 class="page-title">Compare antes de escolher</h1><p class="muted">A SHOPLAB reconhece especificações equivalentes e explica as diferenças mais importantes.</p></div><div id="comparison-intelligence-slot">${renderComparisonLoading()}</div><section class="container comparison-shell" aria-label="Comparação de produtos"><table class="comparison-table"><thead><tr><th>Critério</th>${cells(product => `<th><a href="produto.html?slug=${encodeURIComponent(product.slug)}">${mediaUrl(product) ? `<img src="${safe(mediaUrl(product))}" alt="${safe(product.name)}" loading="lazy" decoding="async">` : ''}<strong>${safe(product.name)}</strong><small class="comparison-head-price${Number(product.price) === bestPrice ? ` is-best` : ``}">${money(product.price)}${Number(product.price) === bestPrice ? `<i>Melhor preço</i>` : ``}</small></a><button class="comparison-remove" type="button" data-remove-comparison="${safe(product.slug)}" aria-label="Remover produto da comparação">Remover</button></th>`)}</tr></thead><tbody><tr><th>Preço atual</th>${cells(product => `<td class="${Number(product.price) === bestPrice ? 'comparison-best' : ''}"><strong>${money(product.price)}</strong>${Number(product.price) === bestPrice ? '<small>Melhor preço</small>' : ''}</td>`)}</tr><tr><th>Nota SHOPLAB</th>${cells(product => { const score = Number(product.editorialScore ?? product.score ?? 0); return `<td class="${score === bestScore ? 'comparison-best' : ''}"><strong>${score}/100 ${Number(product.isFeatured) ? '<span class="owner-recommended">★</span>' : ''}</strong>${score === bestScore ? '<small>Maior nota</small>' : ''}</td>`; })}</tr><tr><th>Marca</th>${cells(product => `<td>${safe(product.brand || '—')}</td>`)}</tr></tbody><tbody id="comparison-specification-rows">${specificationRows}</tbody><tbody><tr><th>Ver produto</th>${cells(product => `<td><a class="btn primary" href="produto.html?slug=${encodeURIComponent(product.slug)}">Ver detalhes</a></td>`)}</tr></tbody></table></section><div class="container comparison-actions"><a class="btn ghost" href="produtos.html">Adicionar ou trocar produtos</a><button class="btn ghost" type="button" data-clear-comparison>Limpar comparação</button></div></main>`;
+  const [catalog, personalized] = await Promise.all([
+    getProducts({ limit: 50 }).catch(() => []),
+    getPersonalizedRecommendations().catch(() => []),
+  ]);
+  const currentComparisonProducts = products.map(product => ({...product, comparisonAnchor:true, comparisonPriority:20}));
+  const personalizedComparisonProducts = personalized
+    .filter(product => product.category === category)
+    .map((product,index) => ({...product, comparisonPriority:Math.max(8,32-index*3)}));
+  const relatedPool = [...currentComparisonProducts, ...personalizedComparisonProducts, ...catalog.filter(product => product.category === category)]
+    .filter((product, index, list) => product?.slug && list.findIndex(item => item?.slug === product.slug) === index);
+  const currentSlugs = new Set(products.map(product => product.slug));
+  const relatedComparisons = selectAutomaticComparisons(relatedPool, 6)
+    .filter(pair => currentSlugs.has(pair.source.slug) !== currentSlugs.has(pair.candidate.slug))
+    .slice(0, 6);
+  const relatedComparisonMarkup = relatedComparisons.length
+    ? automaticComparisonSection(relatedComparisons).replace('automatic-comparison-home', 'automatic-comparison-related')
+    : '';
+
+  return `<main id="conteudo" class="comparison-page"><div class="container page-hero"><span class="eyebrow">COMPARADOR SHOPLAB · ${safe(category)}</span><h1 class="page-title">Compare antes de escolher</h1><p class="muted">A SHOPLAB reconhece especificações equivalentes e explica as diferenças mais importantes.</p></div><div id="comparison-intelligence-slot">${renderComparisonLoading()}</div><section class="container comparison-shell" aria-label="Comparação de produtos"><table class="comparison-table"><thead><tr><th>Critério</th>${cells(product => `<th><a href="produto.html?slug=${encodeURIComponent(product.slug)}">${mediaUrl(product) ? `<img src="${safe(mediaUrl(product))}" alt="${safe(product.name)}" loading="lazy" decoding="async">` : ''}<strong>${safe(product.name)}</strong><small class="comparison-head-price${Number(product.price) === bestPrice ? ` is-best` : ``}">${money(product.price)}${Number(product.price) === bestPrice ? `<i>Melhor preço</i>` : ``}</small></a><button class="comparison-remove" type="button" data-remove-comparison="${safe(product.slug)}" aria-label="Remover produto da comparação">Remover</button></th>`)}</tr></thead><tbody><tr><th>Preço atual</th>${cells(product => `<td class="${Number(product.price) === bestPrice ? 'comparison-best' : ''}"><strong>${money(product.price)}</strong>${Number(product.price) === bestPrice ? '<small>Melhor preço</small>' : ''}</td>`)}</tr><tr><th>Nota SHOPLAB</th>${cells(product => { const score = Number(product.editorialScore ?? product.score ?? 0); return `<td class="${score === bestScore ? 'comparison-best' : ''}"><strong>${score}/100 ${Number(product.isFeatured) ? '<span class="owner-recommended">★</span>' : ''}</strong>${score === bestScore ? '<small>Maior nota</small>' : ''}</td>`; })}</tr><tr><th>Marca</th>${cells(product => `<td>${safe(product.brand || '—')}</td>`)}</tr></tbody><tbody id="comparison-specification-rows">${specificationRows}</tbody><tbody><tr><th>Ver produto</th>${cells(product => `<td><a class="btn primary" href="produto.html?slug=${encodeURIComponent(product.slug)}">Ver detalhes</a></td>`)}</tr></tbody></table></section><div class="container comparison-actions"><a class="btn ghost" href="produtos.html">Adicionar ou trocar produtos</a><button class="btn ghost" type="button" data-clear-comparison>Limpar comparação</button></div>${relatedComparisonMarkup}</main>`;
 }
 
 document.addEventListener('click', event => {
