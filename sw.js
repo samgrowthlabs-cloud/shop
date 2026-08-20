@@ -1,4 +1,4 @@
-const VERSION='shoplab-pwa-v21-mobile-banner-edge';
+const VERSION='shoplab-pwa-v22-network-first-navigation';
 const SHELL=['/','/index.html','/produto.html','/produtos.html','/busca.html','/categoria.html','/promocoes.html','/novidades.html','/comparar.html','/conta.html','/entrar.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{
@@ -15,12 +15,16 @@ self.addEventListener('fetch',event=>{
   const url=new URL(request.url);
   if(url.origin!==location.origin||url.pathname.startsWith('/api/'))return;
   if(request.mode==='navigate'){
-    event.respondWith((async()=>{
-      const cache=await caches.open(VERSION),cacheKey=new Request(`${url.origin}${url.pathname}`,{method:'GET'}),cached=await cache.match(cacheKey);
-      const network=fetch(request).then(async response=>{if(response.ok)await cache.put(cacheKey,response.clone());return response});
-      event.waitUntil(network.then(()=>undefined).catch(()=>undefined));
-      return cached||network.catch(()=>caches.match('/offline.html'));
-    })());
+    event.respondWith(fetch(request).then(response=>{
+      if(response.ok){
+        const cacheKey=new Request(`${url.origin}${url.pathname}`,{method:'GET'});
+        event.waitUntil(caches.open(VERSION).then(cache=>cache.put(cacheKey,response.clone())).catch(()=>undefined));
+      }
+      return response;
+    }).catch(async()=>{
+      const cache=await caches.open(VERSION),cacheKey=new Request(`${url.origin}${url.pathname}`,{method:'GET'});
+      return await cache.match(cacheKey)||await caches.match('/offline.html');
+    }));
     return;
   }
   if(!/\.(?:css|js|svg|png|webp|jpg|jpeg|gif|woff2?)(?:$|\?)/i.test(url.pathname+url.search))return;
