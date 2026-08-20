@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260820-product-card-image-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260820-product-media-prefetch-1';
+import'./favicon.js?v=20260820-ads-render-no-title-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260820-product-media-prefetch-1';
 import'./search-ui.js?v=20260803-media-domain-38';
 import'./public-media.js?v=20260820-product-images-instant-1';
 import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260820-related-images-1';
@@ -6,7 +6,7 @@ import{session as authSession,currentUser,signOut,startPresence,userApi}from'./a
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260807-card-compare-1';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
-import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260820-ads-compact-media-1';
+import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260820-ads-render-no-title-1';
 import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260820-banner-carousel-reset-1';
 import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-comparisons.js?v=20260820-home-cards-1';
 const mediaVariant=(key,width)=>`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(key)}?w=${width}&q=78`;
