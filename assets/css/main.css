@@ -4854,6 +4854,16 @@ body[data-page="product"] .detail-main-image img{
   body[data-page="product"] .detail-gallery-dots span.active{width:9px;height:9px;flex-basis:9px;background:var(--accent)}
   body[data-page="product"] .detail-media.has-multiple-media .detail-main-image::after{display:none!important}
 }
+/* No celular, os indicadores ficam abaixo da foto, sem sobrepor a imagem. */
+@media(max-width:760px){
+  body[data-page="product"] .detail-media:has(.detail-main-image){padding-bottom:0!important}
+  body[data-page="product"] .detail-gallery-dots{
+    position:static!important;
+    width:max-content;
+    margin:12px auto 0;
+    transform:none!important;
+  }
+}
 /* Auditoria responsiva mobile: 320px a 760px. */
 @media(max-width:760px){
   #app,main,main>*,.container,.page-hero,.catalog,.catalog-results,
