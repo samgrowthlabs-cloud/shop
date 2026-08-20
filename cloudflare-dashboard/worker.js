@@ -1489,7 +1489,7 @@ const PREMIUM_RELATED_PRODUCTS_SCHEMA = {
         additionalProperties: false,
         properties: {
           productId: { type: "string" },
-          relationType: { type: "string", enum: ["cheaper_equivalent", "more_performance", "better_rated", "best_value", "very_similar"] },
+          relationType: { type: "string", enum: ["cheaper_equivalent", "more_performance", "best_value", "premium_upgrade", "better_rated", "very_similar"] },
           reason: { type: "string" },
         },
         required: ["productId", "relationType", "reason"],
@@ -2600,83 +2600,57 @@ function premiumPerformanceEvidence(source, product) {
   const ram = productText.match(/\b\d{1,3}\s*gb\s*(?:de\s*)?(?:ram|memoria)\b/); if (ram) facts.push(ram[0].toUpperCase());
   return facts.length ? `Tem vantagem técnica indicada por ${facts.slice(0,2).join(" e ")}.` : "A ficha apresenta componentes de desempenho superiores aos do produto atual.";
 }
+function premiumFallbackBenefit(item) {
+  const name = comparisonText(item.name);
+  const value = String(item.value || "").trim();
+  if (/(memoria interna|armazenamento|storage)/.test(name)) return `${value} para apps e fotos`;
+  if (/(memoria ram|ram)/.test(name)) return `${value} de RAM para multitarefa`;
+  if (/bateria/.test(name)) return `bateria de ${value}`;
+  if (/(tela|display)/.test(name)) return `tela ${value}`;
+  if (/camera/.test(name)) return `câmera ${value}`;
+  return `${item.name} ${value}`;
+}
+
 function premiumFallbackSpecComparison(source, product) {
+  const ignored = /^(marca|brand|modelo|cor|dual sim|sim card)$/;
   const sourceSpecs = new Map(comparisonSpecifications(source).map(item => [comparisonText(item.name), item]));
   const maintained = [];
   const changed = [];
   for (const item of comparisonSpecifications(product)) {
-    const sourceItem = sourceSpecs.get(comparisonText(item.name));
+    const key = comparisonText(item.name);
+    if (ignored.test(key)) continue;
+    const sourceItem = sourceSpecs.get(key);
     if (!sourceItem) continue;
-    if (comparisonEqualityKey(sourceItem.value) === comparisonEqualityKey(item.value)) maintained.push(`${item.name} ${item.value}`);
-    else changed.push(`${item.name} muda de ${sourceItem.value} para ${item.value}`);
+    if (comparisonEqualityKey(sourceItem.value) === comparisonEqualityKey(item.value)) maintained.push(premiumFallbackBenefit(item));
+    else changed.push(`${item.name} muda para ${item.value}`);
   }
   return { maintained: maintained.slice(0, 2), changed: changed.slice(0, 1) };
 }
 
-function premiumFallbackUsage(product) {
-  const value = premiumRelationText([product.name, product.category, product.shortDescription, product.fullDescription].join(" "));
-  if (/(?:gamer|gaming|jogos|rtx|gtx|radeon rx)/.test(value)) return "Para jogos, criação e tarefas pesadas, essa diferença aparece mais.";
-  if (/(?:smartphone|celular|iphone|camera)/.test(value)) return "Para redes sociais, vídeos e uso diário, é isso que você tende a perceber na prática.";
-  if (/(?:notebook|laptop|chromebook|macbook)/.test(value)) return "Para estudo, trabalho e uso diário, é essa troca que faz diferença na prática.";
-  if (/(?:livro|ebook|e-book)/.test(value)) return "A escolha depende mais do conteúdo e do formato de leitura do que da marca.";
-  return "Na prática, a escolha depende de quanto essa diferença importa no seu uso.";
-}
 function fallbackPremiumRelatedProducts(source, candidates) {
   const sourceTokens = premiumRelationTokens(source);
   const sourcePrice = Number(source.price || 0);
-  return candidates
-    .map((product) => {
-      const candidateTokens = premiumRelationTokens(product);
-      let overlap = 0;
-      for (const token of candidateTokens) if (sourceTokens.has(token)) overlap += 1;
-      const sameType = premiumRelationText(product.productType) === premiumRelationText(source.productType);
-      const sameBrand = premiumRelationText(product.brand) === premiumRelationText(source.brand);
-      const cheaper = sourcePrice > 0 && Number(product.price || 0) < sourcePrice;
-      const performanceReason = premiumPerformanceEvidence(source, product);
-      const betterRated = Number(product.editorialScore || 0) >= Number(source.editorialScore || 0) + 5;
-      const relationType = performanceReason && sameType
-        ? "more_performance"
-        : cheaper && sameType
-          ? "cheaper_equivalent"
-          : betterRated && sameType
-            ? "better_rated"
-          : sameType
-            ? "very_similar"
-            : "best_value";
-      const relationLabel = {
-        cheaper_equivalent: "Mais barato",
-        more_performance: "Melhor desempenho",
-        better_rated: "Melhor avaliação",
-        best_value: "Melhor pelo preço",
-        very_similar: "Alternativa muito próxima",
-      }[relationType];
-      const priceDifference = Math.abs(Number(product.price || 0) - sourcePrice);
-      const specComparison = premiumFallbackSpecComparison(source, product);
-      const maintainedText = specComparison.maintained.length ? ` sem abrir mão de ${specComparison.maintained.join(" e ")}` : "";
-      const changedText = specComparison.changed.length ? ` Em troca, ${specComparison.changed[0]}.` : "";
-      const usageText = premiumFallbackUsage(product);
-      const relationReason = performanceReason && sameType
-        ? `${performanceReason}${changedText} ${usageText}`
-        : cheaper && sameType
-          ? `Economiza ${moneyCents(priceDifference)}${maintainedText}.${changedText} ${usageText}`
-          : betterRated && sameType
-            ? `A nota sobe de ${Number(source.editorialScore || 0)}/100 para ${Number(product.editorialScore || 0)}/100${maintainedText}.${changedText} ${usageText}`
-          : sameType
-            ? `${specComparison.maintained.length ? `Mantém ${specComparison.maintained.join(" e ")}.` : "Entrega uma experiência próxima no uso principal."}${changedText} ${usageText}`
-            : `${changedText || "A ficha não traz detalhes suficientes para afirmar onde ela é melhor."} ${usageText}`;      return {
-        ...product,
-        premiumRelation: true,
-        relationType,
-        relationLabel,
-        relationReason: relationReason.trim().slice(0, 360),
-        priceDifferenceCents: Number(product.price || 0) - sourcePrice,
-        _premiumScore: overlap * 8 + (sameType ? 80 : 0) + (sameBrand ? 12 : 0) + (cheaper ? 8 : 0),
-      };
-    })
-    .sort((a, b) => b._premiumScore - a._premiumScore)
-    .map(({ _premiumScore, ...product }) => product);
+  return candidates.map((product) => {
+    const candidateTokens = premiumRelationTokens(product);
+    let overlap = 0;
+    for (const token of candidateTokens) if (sourceTokens.has(token)) overlap += 1;
+    const sameType = premiumRelationText(product.productType) === premiumRelationText(source.productType);
+    const sameBrand = premiumRelationText(product.brand) === premiumRelationText(source.brand);
+    const candidatePrice = Number(product.price || 0);
+    const cheaper = sourcePrice > 0 && candidatePrice < sourcePrice;
+    const moreExpensive = sourcePrice > 0 && candidatePrice > sourcePrice;
+    const performanceReason = premiumPerformanceEvidence(source, product);
+    const betterRated = Number(product.editorialScore || 0) >= Number(source.editorialScore || 0) + 5;
+    const relationType = performanceReason && moreExpensive && sameType ? "premium_upgrade" : performanceReason && sameType ? "more_performance" : cheaper && betterRated && sameType ? "best_value" : cheaper && sameType ? "cheaper_equivalent" : betterRated && sameType ? "best_value" : "very_similar";
+    const relationLabel = { cheaper_equivalent: "Mais barato", more_performance: "Mais desempenho", best_value: "Melhor custo-benefício", premium_upgrade: "Alternativa premium", very_similar: "Alternativa próxima" }[relationType];
+    const priceDifference = Math.abs(candidatePrice - sourcePrice);
+    const specComparison = premiumFallbackSpecComparison(source, product);
+    const maintainedText = specComparison.maintained.length ? ` Mantém ${specComparison.maintained.join(" e ")}.` : "";
+    const changedText = specComparison.changed.length ? ` Em troca, ${specComparison.changed[0]}.` : "";
+    const relationReason = relationType === "premium_upgrade" ? `Mais recursos por ${moneyCents(priceDifference)} a mais. ${performanceReason || "Melhor para quem quer subir de nível."}` : relationType === "more_performance" ? `${performanceReason} Melhor para multitarefa e uso mais exigente.` : relationType === "cheaper_equivalent" ? `Economize ${moneyCents(priceDifference)}.${maintainedText}${changedText || " Melhor escolha para gastar menos sem perder o essencial."}` : relationType === "best_value" ? `Mais equilíbrio entre preço e recursos.${maintainedText}${changedText}` : `Experiência parecida com o produto atual.${maintainedText}${changedText}`;
+    return { ...product, premiumRelation: true, relationType, relationLabel, relationReason: relationReason.trim().slice(0, 180), priceDifferenceCents: candidatePrice - sourcePrice, _premiumScore: overlap * 8 + (sameType ? 80 : 0) + (sameBrand ? 12 : 0) + (cheaper ? 8 : 0) };
+  }).sort((a, b) => b._premiumScore - a._premiumScore).map(({ _premiumScore, ...product }) => product);
 }
-
 function mergePremiumRelatedProducts(primary, fallback) {
   const merged = [];
   const used = new Set();
@@ -2720,7 +2694,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
       messages: [
         {
           role: "system",
-          content: "Você é o curador SHOPLAB+ de alternativas de compra. Uma alternativa só é válida quando pode substituir o produto principal para resolver a mesma necessidade do usuário. A categoria cadastrada no D1 é uma condição obrigatória: só avalie candidatos da mesma categoria. Em seguida, valide título e descrição completa para confirmar a família funcional e a finalidade de uso; categoria ampla por si só não prova similaridade. Em notebooks, um modelo gamer com GPU dedicada só pode ser comparado a outro notebook gamer com GPU dedicada; modelos para estudo ou trabalho não são alternativas equivalentes. Por exemplo, uma câmera não é similar a interruptor, tela, caixa de som ou assistente de voz só porque todos pertencem a casa inteligente. Descarte itens de família incompatível, acessórios e complementos, mesmo se forem mais baratos ou populares. Para cada item aprovado, compare exclusivamente informações verificáveis da ficha: tipo, recursos, especificações, público, preço e nota. Classifique cada escolha como: cheaper_equivalent quando cumprir praticamente a mesma função e custar menos; more_performance apenas quando uma especificação concreta comprovar vantagem; better_rated quando a nota do catálogo for claramente superior para o mesmo tipo de uso; best_value quando equilibrar preço e recursos para o mesmo uso; very_similar quando for a substituição mais próxima. Escreva o motivo como alguém que comparou os dois produtos lado a lado, em duas ou três frases curtas. Seja específico ao produto: comece pelo efeito prático da escolha, cite a diferença exata de preço e preserve números concretos como RAM, armazenamento, processador, GPU, tela, câmera, bateria ou nota quando estiverem nas fichas. Depois diga claramente o que a pessoa mantém e do que abre mão. Termine indicando para qual uso a troca é racional, como estudo, trabalho, jogos, criação, fotos, redes sociais ou vídeos. Se a ficha não comprovar uma diferença, não mencione essa diferença. A troca de marca, sozinha, não é vantagem nem limitação: nunca escreva “a principal mudança é a marca”. Só cite marcas quando isso estiver ligado a uma diferença concreta de câmera, sistema, garantia, construção ou ecossistema presente nos dados. Escreva como uma pessoa ajudando outra a comprar: use “sem perder o básico”, “em troca, você abre mão de” e “a experiência será parecida” apenas quando as fichas sustentarem essas conclusões. Não use tom corporativo, elogios vagos ou frases de banco de dados. Evite “mesmo tipo”, “mesma categoria”, “características relevantes”, “conjunto mais bem resolvido”, “proposta de uso”, “tende a”, “vale conferir” sem dizer exatamente o quê e “opção compatível”. Prefira construções diretas como: “Custa R$ 120 menos e mantém 8 GB de RAM e 256 GB. A câmera é inferior, mas para uso diário é a escolha mais racional.”; “Entrega uma experiência semelhante em redes sociais e vídeos. A diferença está principalmente na câmera e na bateria.”; “O processador e a GPU são superiores, então termina renderizações e tarefas pesadas com mais folga. Em troca, custa R$ X a mais.” Cada afirmação deve vir exclusivamente dos dados enviados. Nunca invente benchmark, desempenho ou característica. É melhor retornar menos produtos do que incluir uma relação fraca. Retorne somente o JSON solicitado. As preferências do usuário servem apenas para ordenar alternativas já compatíveis; nunca transforme acessório ou complemento em alternativa por causa delas.",
+          content: "Você é o curador SHOPLAB+ de alternativas de compra. Uma alternativa só é válida quando pode substituir o produto principal para resolver a mesma necessidade do usuário. A categoria cadastrada no D1 é uma condição obrigatória: só avalie candidatos da mesma categoria. Em seguida, valide título e descrição completa para confirmar a família funcional e a finalidade de uso; categoria ampla por si só não prova similaridade. Em notebooks, um modelo gamer com GPU dedicada só pode ser comparado a outro notebook gamer com GPU dedicada; modelos para estudo ou trabalho não são alternativas equivalentes. Por exemplo, uma câmera não é similar a interruptor, tela, caixa de som ou assistente de voz só porque todos pertencem a casa inteligente. Descarte itens de família incompatível, acessórios e complementos, mesmo se forem mais baratos ou populares. Para cada item aprovado, compare exclusivamente informações verificáveis da ficha: tipo, recursos, especificações, público, preço e nota. Classifique cada escolha como: cheaper_equivalent quando cumprir praticamente a mesma função e custar menos; more_performance apenas quando uma especificação concreta comprovar vantagem; better_rated quando a nota do catálogo for claramente superior para o mesmo tipo de uso; best_value quando oferecer o melhor equilíbrio entre preço e recursos; premium_upgrade quando trouxer recursos ou desempenho claramente superiores por um preço maior; very_similar quando for a substituição mais próxima. Retorne um resumo vendedor de no máximo 180 caracteres. Responda por que vale clicar: comece pela economia ou ganho principal, traduza a especificação em benefício e termine dizendo para quem é a melhor escolha. Diga o que ganha e perde quando houver dados. Nunca trate mudança de marca, Dual SIM Sim ou nome cru de ficha como benefício. Quando os dados permitirem, monte uma escada de decisão com tipos diferentes e não repita o mesmo selo: economia, desempenho, custo-benefício e premium. Se a ficha não comprovar uma diferença, não mencione essa diferença. A troca de marca, sozinha, não é vantagem nem limitação: nunca escreva “a principal mudança é a marca”. Só cite marcas quando isso estiver ligado a uma diferença concreta de câmera, sistema, garantia, construção ou ecossistema presente nos dados. Escreva como uma pessoa ajudando outra a comprar: use “sem perder o básico”, “em troca, você abre mão de” e “a experiência será parecida” apenas quando as fichas sustentarem essas conclusões. Não use tom corporativo, elogios vagos ou frases de banco de dados. Evite “mesmo tipo”, “mesma categoria”, “características relevantes”, “conjunto mais bem resolvido”, “proposta de uso”, “tende a”, “vale conferir” sem dizer exatamente o quê e “opção compatível”. Prefira construções diretas como: “Economize R$ 463 e mantenha memória suficiente para o dia a dia. Melhor escolha para gastar menos.”; “Ganhe mais RAM e desempenho para multitarefa e jogos leves.”; “Pague R$ X a mais por câmera e tela superiores. Ideal para quem quer subir de nível.” Cada afirmação deve vir exclusivamente dos dados enviados. Nunca invente benchmark, desempenho ou característica. É melhor retornar menos produtos do que incluir uma relação fraca. Retorne somente o JSON solicitado. As preferências do usuário servem apenas para ordenar alternativas já compatíveis; nunca transforme acessório ou complemento em alternativa por causa delas.",
         },
         {
           role: "user",
@@ -2752,9 +2726,10 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
     const byId = new Map(candidates.map((product) => [product.id, product]));
     const labels = {
       cheaper_equivalent: "Mais barato",
-      more_performance: "Melhor desempenho",
+      more_performance: "Mais desempenho",
       better_rated: "Melhor avaliação",
-      best_value: "Melhor pelo preço",
+      best_value: "Melhor custo-benefício",
+      premium_upgrade: "Alternativa premium",
       very_similar: "Alternativa muito próxima",
     };
     const selected = [];
@@ -2767,6 +2742,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
       if (relationType === "more_performance" && !performanceReason) relationType = "very_similar";
       if (relationType === "cheaper_equivalent" && Number(product.price || 0) >= Number(source.price || 0))
         relationType = "very_similar";
+      if (relationType === "premium_upgrade" && Number(product.price || 0) <= Number(source.price || 0)) relationType = performanceReason ? "more_performance" : "very_similar";
       if (!labels[relationType]) relationType = "very_similar";
       used.add(product.id);
       selected.push({
@@ -2774,7 +2750,7 @@ async function rankPremiumRelatedProductsWithAi(env, source, candidates, prefere
         premiumRelation: true,
         relationType,
         relationLabel: labels[relationType],
-        relationReason: (repairLegacyText(recommendation.reason || "").trim() || performanceReason || "Alternativa compatível para o mesmo tipo de uso.").slice(0, 360),
+        relationReason: (repairLegacyText(recommendation.reason || "").trim() || performanceReason || "Compare preço e especificações antes de decidir.").slice(0, 180),
         priceDifferenceCents: Number(product.price || 0) - Number(source.price || 0),
       });
     }

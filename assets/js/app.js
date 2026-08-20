@@ -302,8 +302,8 @@ function card(p,options={}){
   const imageSrcset=p.primaryStorageKey?`${esc(mediaVariant(p.primaryStorageKey,240))} 240w, ${esc(mediaVariant(p.primaryStorageKey,480))} 480w, ${esc(mediaVariant(p.primaryStorageKey,640))} 640w`:'';
   const symbol=p.icon||'⌬';
   const media=imageUrl?`<img src="${esc(imageUrl)}" ${imageSrcset?`srcset="${imageSrcset}" sizes="(max-width:760px) 44vw, 360px"`:''} alt="${esc(p.primaryImageAlt||p.name||'Produto')}" ${eager?'loading="eager" fetchpriority="high"':'loading="lazy"'} decoding="async">`:`<span class="product-symbol" role="img" aria-label="Imagem ilustrativa">${esc(symbol)}</span>`;
-  const relationTone={cheaper_equivalent:'cheaper',more_performance:'performance',better_rated:'rating',best_value:'value'}[p.relationType]||'similar';
-  const premiumNote=p.premiumRelation?`<aside class="premium-relation relation-tone-${relationTone}"><strong>${esc(p.relationLabel||'Alternativa próxima')}</strong><span>${esc(p.relationReason||'Opção selecionada pela curadoria inteligente SHOPLAB+.')}</span><button type="button" class="premium-relation-toggle" data-premium-relation-toggle aria-expanded="false">Ver detalhes →</button></aside>`:'';
+  const relationTone={cheaper_equivalent:'cheaper',more_performance:'performance',better_rated:'rating',best_value:'value',premium_upgrade:'premium'}[p.relationType]||'similar';
+  const premiumNote=p.premiumRelation?`<aside class="premium-relation relation-tone-${relationTone}"><strong>${esc(p.relationLabel||'Alternativa próxima')}</strong>${p.comparedToName?`<small class="premium-relation-context">Comparado ao ${esc(p.comparedToName)}</small>`:''}<span>${esc(p.relationReason||'Veja os ganhos, as perdas e a diferença de preço antes de escolher.')}</span><button type="button" class="premium-relation-toggle" data-premium-relation-toggle aria-expanded="false">Ver comparação →</button></aside>`:'';
   const saving=oldPrice>price?`<span class="card-saving">Você economiza ${money(oldPrice-price)}</span>`:'';
   return `<article class="product-card${p.premiumRelation?' premium-related-card':''}" data-card-url="${esc(detailsUrl)}"${imageUrl?' data-media-ready="1"':''} tabindex="0" aria-label="Ver ${esc(p.name)}">
     <a class="product-media" href="${detailsUrl}" tabindex="-1">${discount>0?'':`<span class="badge${badge?'':' is-empty'}">${esc(badge)}</span>`}${media}</a>
@@ -394,8 +394,9 @@ async function loadProductRecommendations(){
       const historyCategories=new Set(historyProducts.map(product=>String(product.category||'').trim().toLocaleLowerCase('pt-BR')).filter(Boolean));
       const preferredCategories=historyCategories.size?historyCategories:new Set(sourceCategory?[sourceCategory]:[]);
       const categoryRecommendations=catalog.filter(product=>preferredCategories.has(String(product.category||'').trim().toLocaleLowerCase('pt-BR')));
-      const recommendationCandidates=unique([...personalized,...categoryRecommendations,...standardRaw,...catalog].map(completeProduct));
-      const recommendationTitle=historyCategories.size||personalized.length?'Recomendados para você':'Mais da categoria';
+      const isInPreferredCategory=product=>preferredCategories.has(String(product.category||'').trim().toLocaleLowerCase('pt-BR'));
+      const recommendationCandidates=unique([...personalized,...categoryRecommendations,...standardRaw].map(completeProduct)).filter(isInPreferredCategory);
+      const recommendationTitle=historyCategories.size||personalized.length?'Baseado no que você viu':'Você também pode gostar';
       const renderRecommendations=excludedSlugs=>recommendationCandidates.filter(product=>!excludedSlugs.has(product.slug)).slice(0,8).map(cleanStandard);
       const initialRecommendations=renderRecommendations(new Set());
       if(initialRecommendations.length){
@@ -404,7 +405,7 @@ async function loadProductRecommendations(){
       }
       const smartResult=await smartPromise;
       const alternativePool=unique(smartResult.products.map(completeProduct).filter(product=>isCompatibleAlternative(source,product)));
-      const alternatives=[...alternativePool].sort((a,b)=>(Number(b.editorialScore??b.score)||0)-(Number(a.editorialScore??a.score)||0)).slice(0,4).map(product=>({...product,premiumRelation:true,relationLabel:product.relationLabel||'Alternativa próxima',relationReason:product.relationReason||'Atende uma necessidade próxima. Compare os recursos essenciais, as limitações e o preço antes de decidir.'}));
+      const sortedAlternatives=[...alternativePool].sort((a,b)=>(Number(b.editorialScore??b.score)||0)-(Number(a.editorialScore??a.score)||0)),diverseAlternatives=[],seenRelationTypes=new Set();for(const product of sortedAlternatives){if(!seenRelationTypes.has(product.relationType)){diverseAlternatives.push(product);seenRelationTypes.add(product.relationType)}}const alternatives=[...diverseAlternatives,...sortedAlternatives.filter(product=>!diverseAlternatives.includes(product))].slice(0,4).map(product=>({...product,premiumRelation:true,comparedToName:source.name,relationLabel:product.relationLabel||'Alternativa próxima',relationReason:product.relationReason||'Veja os ganhos, as perdas e a diferença de preço antes de escolher.'}));
       const alternativeSlugs=new Set(alternatives.map(product=>product.slug));
       const recommendations=renderRecommendations(alternativeSlugs);
       if(!alternatives.length&&!recommendations.length)throw smartResult.error||new Error('Nenhuma recomendação relevante recebida');
@@ -697,7 +698,7 @@ document.addEventListener('click',event=>{
   const button=event.target.closest('[data-premium-relation-toggle]');if(!button)return;
   event.preventDefault();event.stopPropagation();
   const relation=button.closest('.premium-relation'),expanded=button.getAttribute('aria-expanded')==='true';
-  relation?.classList.toggle('is-expanded',!expanded);button.setAttribute('aria-expanded',String(!expanded));button.textContent=expanded?'Ver detalhes →':'Ver menos';
+  relation?.classList.toggle('is-expanded',!expanded);button.setAttribute('aria-expanded',String(!expanded));button.textContent=expanded?'Ver comparação →':'Ver menos';
 });
 document.addEventListener('click',async event=>{
   const button=event.target.closest('[data-copy-coupon]');
