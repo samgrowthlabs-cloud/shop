@@ -1,6 +1,6 @@
-import { getComparisonAnalysis, getProductBySlug, getProducts } from './api.js';
+import { getComparisonAnalysis, getProductBySlug, getProducts } from './api.js?v=20260820-product-media-prefetch-1';
 import { selectAutomaticComparisons, automaticComparisonSection } from './automatic-comparisons.js?v=20260820-home-cards-1';
-import { SHOPLAB_CONFIG as C } from './config.js';
+import { SHOPLAB_CONFIG as C } from './config.js?v=20260803-media-domain-38';
 import { getPersonalizedRecommendations } from './user-library.js?v=20260807-card-compare-1';
 
 const STORAGE_KEY = 'shoplab-compare-products';

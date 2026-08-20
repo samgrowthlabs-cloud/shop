@@ -7736,13 +7736,13 @@ body:not([data-admin-page]) .product-card h3{
   overflow:hidden!important;
   -webkit-mask-image:none!important;
   mask-image:none!important;
-  font-size:15px!important;
+  font-size:16px!important;
   font-weight:400!important;
   line-height:1.35!important;
   letter-spacing:-.01em!important;
 }
 body:not([data-admin-page]) .product-card .meta{
-  font-size:11px!important;
+  font-size:10px!important;
   font-weight:400!important;
   letter-spacing:.04em!important;
   color:#84908c!important;
@@ -7933,3 +7933,222 @@ body[data-page="home"] .automatic-comparison-or,body[data-page="compare"] .autom
 body[data-page="compare"] .automatic-comparison-related{margin-top:18px;padding:34px 0 44px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--surface) 92%,var(--accent) 8%)}
 @media(max-width:960px){body[data-page="home"] .automatic-comparison-grid,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){body[data-page="home"] .automatic-comparison-grid,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-grid{grid-template-columns:1fr;gap:12px}body[data-page="compare"] .automatic-comparison-related{margin-top:10px;padding:24px 0 34px}body[data-page="compare"] .automatic-comparison-related .container{width:100%;padding-inline:10px}body[data-page="home"] .automatic-comparison-card,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-card{min-height:258px;padding:16px 10px 18px;border-radius:20px}body[data-page="home"] .automatic-comparison-product,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-product{grid-template-rows:145px minmax(54px,auto);gap:10px;padding-inline:12px}body[data-page="home"] .automatic-comparison-product img,body[data-page="home"] .automatic-comparison-product>span,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-product img,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-product>span{height:145px;max-width:180px}body[data-page="home"] .automatic-comparison-product strong,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-product strong{min-height:54px;font-size:13px;line-height:1.35}body[data-page="home"] .automatic-comparison-or,body[data-page="compare"] .automatic-comparison-related .automatic-comparison-or{width:48px;height:48px;font-size:13px}}
+/* ShopLab Ads: publicidade nativa, compacta e adaptável ao próprio container. */
+.shoplab-public-ad{container-type:inline-size;position:relative;width:100%;max-width:none;margin:24px auto;overflow:visible;border:1px solid #dce7e4;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(20,58,50,.04)}
+.shoplab-public-ad>a{display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(150px,.9fr) minmax(140px,.72fr);grid-template-areas:"copy media price";align-items:center;gap:clamp(14px,2.4cqi,34px);min-height:156px;height:auto;padding:clamp(16px,2.4cqi,28px) clamp(18px,3cqi,36px);border:0;border-radius:inherit;background:#fff;color:#142a26;text-decoration:none;aspect-ratio:auto}
+.shoplab-public-ad>a:hover{color:#142a26;text-decoration:none}.shoplab-public-ad>a:focus-visible{outline:3px solid color-mix(in srgb,var(--accent,#087c70) 45%,transparent);outline-offset:3px}
+.shoplab-public-ad-copy{grid-area:copy;display:grid;align-content:center;justify-items:start;gap:9px;min-width:0}.shoplab-public-ad-label{display:inline-flex;max-width:100%;overflow:hidden;padding:4px 7px;border-radius:5px;background:#eef7f4;color:#08766b;font-size:10px;font-weight:800;letter-spacing:.065em;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}.shoplab-public-ad-title{display:-webkit-box;overflow:hidden;color:#162a27;font-size:clamp(18px,2.1cqi,27px);font-weight:700;line-height:1.13;letter-spacing:-.028em;-webkit-box-orient:vertical;-webkit-line-clamp:2}.shoplab-public-ad-cta{display:inline-flex;align-items:center;justify-content:center;min-height:38px;margin-top:3px;padding:8px 15px;border:1px solid var(--shoplab-ad-cta-color,#087c70);border-radius:999px;background:transparent;color:var(--shoplab-ad-cta-color,#087c70);font-size:12px;font-weight:700;line-height:1.1;transition:background-color .16s ease,color .16s ease,border-color .16s ease}.shoplab-public-ad>a:hover .shoplab-public-ad-cta{background:var(--shoplab-ad-cta-color,#087c70);color:#fff}
+.shoplab-public-ad-media{grid-area:media;display:grid;place-items:center;align-self:stretch;min-height:112px;padding:10px;border-radius:999px;background:#f1f8f6}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{display:block;width:100%;height:100%;max-width:100%;max-height:148px;object-fit:contain;object-position:center;background:transparent;-webkit-mask-image:none;mask-image:none}
+.shoplab-public-ad-price-chip{position:static;grid-area:price;display:grid;align-content:center;justify-items:start;gap:5px;min-width:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;line-height:1.12;backdrop-filter:none}.shoplab-public-ad-price-chip small{font-size:12px;font-weight:500;line-height:1.2}.shoplab-public-ad-price-chip b{font-size:clamp(22px,2.6cqi,34px);font-weight:700;letter-spacing:-.035em;line-height:1.05;white-space:nowrap}.shoplab-public-ad-price-chip.single{padding:0}
+.shoplab-public-ad>button[data-dismiss-ad]{position:absolute;z-index:2;top:10px;right:10px;display:grid;place-items:center;width:26px;height:26px;padding:0;border:1px solid #dce7e4;border-radius:50%;background:#fff;color:#64746f;font-size:17px;line-height:1;cursor:pointer;box-shadow:none}.shoplab-public-ad>button[data-dismiss-ad]:hover{border-color:#9cbfb6;color:#08766b}.shoplab-public-ad>button[data-dismiss-ad]:focus-visible{outline:3px solid color-mix(in srgb,var(--accent,#087c70) 45%,transparent);outline-offset:2px}.shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,1fr) minmax(130px,.55fr);grid-template-areas:"media price"}.shoplab-public-ad-grid_sidebar{width:100%;margin:0 0 18px}
+@container (max-width:760px){.shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(120px,.86fr);grid-template-areas:"copy media" "copy price";gap:12px 18px;min-height:146px;padding:18px 20px}.shoplab-public-ad-media{min-height:82px;max-height:105px;padding:8px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:94px}.shoplab-public-ad-price-chip{align-self:start;padding-top:2px}.shoplab-public-ad-price-chip b{font-size:clamp(22px,5cqi,30px)}.shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,1fr) minmax(115px,.65fr);grid-template-areas:"media price"}}
+@container (max-width:500px){.shoplab-public-ad{border-radius:13px}.shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(0,.9fr);grid-template-areas:"copy copy" "media price";gap:14px;min-height:0;padding:16px}.shoplab-public-ad-copy{gap:7px}.shoplab-public-ad-label{font-size:9px}.shoplab-public-ad-title{font-size:clamp(17px,5.4cqi,22px);-webkit-line-clamp:2}.shoplab-public-ad-cta{min-height:36px;padding:7px 13px;font-size:11px}.shoplab-public-ad-media{min-height:90px;max-height:112px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:100px}.shoplab-public-ad-price-chip{align-self:center;gap:4px}.shoplab-public-ad-price-chip small{font-size:11px}.shoplab-public-ad-price-chip b{font-size:clamp(21px,7cqi,28px)}}
+@container (max-width:320px){.shoplab-public-ad>a{grid-template-columns:1fr;grid-template-areas:"copy" "media" "price"}.shoplab-public-ad-media{max-height:136px}.shoplab-public-ad-price-chip{justify-items:start}.shoplab-public-ad>button[data-dismiss-ad]{top:8px;right:8px}}
+@media(max-width:760px){.shoplab-public-ad{width:calc(100% - 20px);margin:14px auto}.shoplab-public-ad-grid_sidebar{width:calc(100% - 20px);margin:14px auto}}
+body[data-page="home"] .shoplab-public-ad{background:#fff!important;border-color:#dce7e4!important}
+
+/* Refinamento do ShopLab Ads: criativos existentes são preservados sem simular foto de produto. */
+.shoplab-public-ad{border-radius:14px;box-shadow:none}
+.shoplab-public-ad>a{grid-template-columns:minmax(180px,.88fr) minmax(220px,1.08fr) minmax(150px,.64fr);gap:clamp(16px,2.2cqi,30px);min-height:132px;padding:18px clamp(20px,2.6cqi,32px)}
+.shoplab-public-ad-copy{gap:7px}.shoplab-public-ad-title{font-size:clamp(18px,1.8cqi,24px);line-height:1.14}.shoplab-public-ad-cta{min-height:34px;padding:7px 14px;font-size:11px}
+.shoplab-public-ad-media{min-height:92px;max-height:112px;padding:0;border-radius:12px;background:#f4f8f7}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:112px;border-radius:11px;object-fit:contain}
+.shoplab-public-ad-price-chip{gap:4px}.shoplab-public-ad-price-chip b{font-size:clamp(21px,2.3cqi,30px);white-space:normal;overflow-wrap:anywhere}
+@container (max-width:760px){.shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(116px,.8fr);grid-template-areas:"copy media" "copy price";min-height:128px;padding:16px 18px}.shoplab-public-ad-media{min-height:78px;max-height:92px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:92px}.shoplab-public-ad-price-chip b{font-size:clamp(20px,4.6cqi,27px)}}
+@container (max-width:500px){.shoplab-public-ad>a{grid-template-columns:1fr;grid-template-areas:"copy" "media" "price";gap:10px;min-height:0;padding:14px}.shoplab-public-ad-copy{gap:6px}.shoplab-public-ad-title{font-size:19px;line-height:1.15}.shoplab-public-ad-cta{min-height:33px;padding:6px 13px}.shoplab-public-ad-media{width:100%;min-height:72px;max-height:92px;padding:0;border-radius:10px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{width:100%;max-height:92px;border-radius:9px;object-fit:contain}.shoplab-public-ad-price-chip{justify-items:start;gap:2px;padding-top:1px}.shoplab-public-ad-price-chip small{font-size:10px}.shoplab-public-ad-price-chip b{font-size:25px;line-height:1.08;white-space:normal}.shoplab-public-ad.without-head>a{grid-template-columns:1fr;grid-template-areas:"media" "price"}}
+@container (max-width:360px){.shoplab-public-ad>a{padding:13px}.shoplab-public-ad-title{font-size:18px}.shoplab-public-ad-media{min-height:66px;max-height:82px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:82px}.shoplab-public-ad-price-chip b{font-size:23px}}
+/* Faixa publicitária compacta: a composição nunca vira um bloco alto. */
+.shoplab-public-ad>a{grid-template-columns:minmax(180px,.9fr) minmax(230px,1.12fr) minmax(155px,.68fr);min-height:112px;padding:15px clamp(18px,2.3cqi,28px)}
+.shoplab-public-ad-copy{gap:5px}.shoplab-public-ad-title{font-size:clamp(17px,1.65cqi,22px);-webkit-line-clamp:2}.shoplab-public-ad-label{padding:3px 6px;font-size:9px}.shoplab-public-ad-cta{min-height:31px;margin-top:1px;padding:6px 12px;font-size:10px}
+.shoplab-public-ad-media{min-height:72px;max-height:82px;border-radius:10px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:82px;border-radius:9px}.shoplab-public-ad-price-chip{gap:2px}.shoplab-public-ad-price-chip small{font-size:10px}.shoplab-public-ad-price-chip b{font-size:clamp(19px,2cqi,26px);line-height:1.05}
+@container (max-width:760px){.shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(138px,.94fr);grid-template-areas:"copy media" "copy price";gap:7px 14px;min-height:108px;padding:13px 16px}.shoplab-public-ad-copy{gap:4px}.shoplab-public-ad-media{min-height:57px;max-height:66px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:66px}.shoplab-public-ad-price-chip{align-self:start;padding:0}.shoplab-public-ad-price-chip b{font-size:clamp(18px,4.4cqi,22px);white-space:nowrap;letter-spacing:-.045em}.shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,1fr) minmax(125px,.72fr);grid-template-areas:"media price"}}
+@container (max-width:500px){.shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(138px,.92fr);grid-template-areas:"copy media" "copy price";gap:6px 12px;min-height:104px;padding:12px}.shoplab-public-ad-copy{gap:4px}.shoplab-public-ad-title{font-size:clamp(16px,5cqi,19px);line-height:1.1}.shoplab-public-ad-label{font-size:8px}.shoplab-public-ad-cta{min-height:29px;padding:5px 11px;font-size:9px}.shoplab-public-ad-media{min-height:54px;max-height:62px;border-radius:8px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:62px;border-radius:7px}.shoplab-public-ad-price-chip{align-self:start;gap:1px}.shoplab-public-ad-price-chip small{font-size:9px}.shoplab-public-ad-price-chip b{font-size:clamp(18px,6cqi,21px);white-space:nowrap}.shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,1fr) minmax(118px,.72fr);grid-template-areas:"media price"}}
+@container (max-width:360px){.shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(126px,.96fr);padding:11px}.shoplab-public-ad-title{font-size:16px}.shoplab-public-ad-price-chip b{font-size:18px}.shoplab-public-ad-media{min-height:50px;max-height:58px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:58px}}
+/* Alinhamento com a malha do site e distribuição real das três zonas. */
+.shoplab-public-ad{width:min(1180px,calc(100% - 32px))}
+body[data-page="home"] .shoplab-public-ad{width:min(1410px,calc(100% - 48px))}
+@container (max-width:500px){.shoplab-public-ad>a{grid-template-columns:minmax(118px,1.2fr) minmax(84px,.8fr) minmax(92px,.9fr);grid-template-areas:"copy media price";align-items:center;gap:8px;min-height:102px;padding:11px}.shoplab-public-ad-copy{gap:3px}.shoplab-public-ad-title{font-size:clamp(15px,4.6cqi,18px);-webkit-line-clamp:2}.shoplab-public-ad-label{max-width:100px;font-size:7px}.shoplab-public-ad-cta{min-height:28px;padding:4px 9px;font-size:8px}.shoplab-public-ad-media{min-width:0;min-height:54px;max-height:60px}.shoplab-public-ad-price-chip{min-width:0;align-self:center;justify-items:start}.shoplab-public-ad-price-chip small{overflow:hidden;max-width:100%;font-size:8px;text-overflow:ellipsis;white-space:nowrap}.shoplab-public-ad-price-chip b{max-width:100%;font-size:clamp(16px,5cqi,19px);letter-spacing:-.055em;line-height:1.05;white-space:normal;overflow-wrap:anywhere}.shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,1fr) minmax(90px,.72fr);grid-template-areas:"media price"}}
+@container (max-width:360px){.shoplab-public-ad>a{grid-template-columns:minmax(108px,1.18fr) minmax(72px,.78fr) minmax(84px,.9fr);gap:6px;padding:10px}.shoplab-public-ad-title{font-size:15px}.shoplab-public-ad-price-chip b{font-size:16px}.shoplab-public-ad-media{min-height:48px;max-height:54px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:54px}}
+@media(max-width:760px){.shoplab-public-ad,body[data-page="home"] .shoplab-public-ad{width:calc(100% - 24px);margin:12px auto}}
+.shoplab-public-ad-grid_sidebar{width:100%}
+
+/* Ajuste fino: mais presença do criativo no desktop e três colunas nítidas no mobile. */
+@media(min-width:761px){.shoplab-public-ad-media{min-height:80px;max-height:90px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:90px}}
+@container (max-width:500px){.shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);grid-template-areas:"copy media price";gap:8px;padding:11px 10px}.shoplab-public-ad-copy{min-width:0}.shoplab-public-ad-title{font-size:clamp(14px,4.3cqi,17px);overflow-wrap:anywhere}.shoplab-public-ad-label{max-width:100%;font-size:6.5px;letter-spacing:.035em}.shoplab-public-ad-cta{max-width:100%;min-height:27px;padding:4px 7px;font-size:7px;white-space:nowrap}.shoplab-public-ad-media{min-width:0;min-height:52px;max-height:60px}.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{max-height:60px}.shoplab-public-ad-price-chip{min-width:0;align-self:center;justify-items:start}.shoplab-public-ad-price-chip small{font-size:7px}.shoplab-public-ad-price-chip b{font-size:clamp(14px,4.45cqi,17px);letter-spacing:-.065em;white-space:normal;word-break:normal}.shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,2fr) minmax(0,1fr);grid-template-areas:"media price"}}
+@container (max-width:360px){.shoplab-public-ad>a{gap:6px;padding:10px 8px}.shoplab-public-ad-title{font-size:14px}.shoplab-public-ad-cta{padding-inline:6px}.shoplab-public-ad-price-chip b{font-size:14px}}
+/* Mobile final: leitura limpa à esquerda, criativo visível no meio e preço isolado à direita. */
+@container (max-width:500px){
+  .shoplab-public-ad>a{grid-template-columns:minmax(0,1.05fr) minmax(0,1.15fr) minmax(0,.95fr);grid-template-areas:"copy media price";gap:9px;min-height:104px;padding:11px 12px}
+  .shoplab-public-ad-copy{align-self:center;gap:4px;min-width:0}
+  .shoplab-public-ad-title{overflow-wrap:normal;word-break:normal;font-size:clamp(13px,4.1cqi,16px);line-height:1.12}
+  .shoplab-public-ad-label{font-size:6.5px}
+  .shoplab-public-ad-cta{min-height:27px;padding:4px 7px;font-size:7.5px}
+  .shoplab-public-ad-media{align-self:center;width:100%;min-width:0;min-height:58px;max-height:64px;overflow:hidden;background:#f1f6f5}
+  .shoplab-public-ad-media>img,.shoplab-public-ad-media>video{width:100%;height:64px;max-height:64px;object-fit:cover;object-position:center}
+  .shoplab-public-ad-price-chip{align-self:center;justify-self:end;justify-items:end;text-align:right}
+  .shoplab-public-ad-price-chip small{font-size:7px}
+  .shoplab-public-ad-price-chip b{font-size:clamp(14px,4.35cqi,17px);line-height:1.05;letter-spacing:-.045em;overflow-wrap:normal;word-break:normal}
+}
+@container (max-width:360px){
+  .shoplab-public-ad>a{grid-template-columns:minmax(0,1.08fr) minmax(0,1.12fr) minmax(0,.9fr);gap:7px;padding-inline:9px}
+  .shoplab-public-ad-title{font-size:13px}
+  .shoplab-public-ad-media,.shoplab-public-ad-media>img,.shoplab-public-ad-media>video{height:58px;max-height:58px}
+  .shoplab-public-ad-price-chip b{font-size:13.5px}
+}
+/* ShopLab Ads mobile: hierarquia legivel, sem espremer nem cortar o criativo. */
+@media (max-width:760px){
+  .shoplab-public-ad,body[data-page="home"] .shoplab-public-ad{width:calc(100% - 20px);margin:14px auto;overflow:hidden;border-radius:14px}
+  .shoplab-public-ad>a{grid-template-columns:minmax(0,1fr) minmax(104px,.72fr);grid-template-areas:"copy copy" "media price";align-items:center;gap:12px 14px;min-height:0;padding:15px}
+  .shoplab-public-ad-copy{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"label cta" "title cta";align-items:center;gap:4px 12px}
+  .shoplab-public-ad-label{grid-area:label;width:max-content;max-width:100%;padding:3px 6px;font-size:8px;letter-spacing:.055em}
+  .shoplab-public-ad-title{grid-area:title;font-size:17px;line-height:1.15;overflow-wrap:normal;word-break:normal}
+  .shoplab-public-ad-cta{grid-area:cta;min-height:34px;margin:0;padding:7px 12px;font-size:10px;white-space:nowrap}
+  .shoplab-public-ad-media{width:100%;height:76px;min-height:76px;max-height:76px;padding:4px;overflow:hidden;border-radius:10px;background:#f4f8f7}
+  .shoplab-public-ad-media>img,.shoplab-public-ad-media>video{width:100%;height:68px;max-height:68px;border-radius:8px;object-fit:contain;object-position:center}
+  .shoplab-public-ad-price-chip{align-self:center;justify-self:start;justify-items:start;gap:3px;text-align:left}
+  .shoplab-public-ad-price-chip small{font-size:9px}
+  .shoplab-public-ad-price-chip b{max-width:100%;font-size:20px;line-height:1.06;letter-spacing:-.035em;overflow-wrap:normal;word-break:normal;white-space:normal}
+  .shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,1fr) minmax(104px,.72fr);grid-template-areas:"media price"}
+}
+@media (max-width:380px){
+  .shoplab-public-ad>a{gap:10px 12px;padding:13px}
+  .shoplab-public-ad-copy{gap:3px 8px}
+  .shoplab-public-ad-title{font-size:15px}
+  .shoplab-public-ad-cta{min-height:31px;padding:6px 9px;font-size:9px}
+  .shoplab-public-ad-media{height:70px;min-height:70px;max-height:70px}
+  .shoplab-public-ad-media>img,.shoplab-public-ad-media>video{height:62px;max-height:62px}
+  .shoplab-public-ad-price-chip b{font-size:18px}
+}
+
+/* ShopLab Ads mobile: texto e CTA a esquerda, criativo ao centro e preco a direita. */
+@media (max-width:760px){
+  .shoplab-public-ad>a{
+    grid-template-columns:minmax(92px,1fr) minmax(84px,1.05fr) minmax(78px,.78fr);
+    grid-template-areas:"copy media price";
+    align-items:center;
+    gap:8px;
+    min-height:104px;
+    padding:11px 12px;
+  }
+  .shoplab-public-ad-copy{
+    display:grid;
+    grid-template-columns:1fr;
+    grid-template-areas:"label" "title" "cta";
+    align-content:center;
+    justify-items:start;
+    gap:4px;
+    min-width:0;
+  }
+  .shoplab-public-ad-label{grid-area:label;max-width:100%;font-size:6.5px}
+  .shoplab-public-ad-title{grid-area:title;font-size:14px;line-height:1.12;-webkit-line-clamp:2}
+  .shoplab-public-ad-cta{grid-area:cta;min-height:28px;margin-top:1px;padding:5px 8px;font-size:8px;white-space:nowrap}
+  .shoplab-public-ad-media{grid-area:media;width:100%;height:64px;min-height:64px;max-height:64px;padding:2px}
+  .shoplab-public-ad-media>img,.shoplab-public-ad-media>video{width:100%;height:60px;max-height:60px;object-fit:contain}
+  .shoplab-public-ad-price-chip{grid-area:price;align-self:center;justify-self:end;justify-items:end;min-width:0;text-align:right}
+  .shoplab-public-ad-price-chip small{max-width:100%;font-size:7px;white-space:normal}
+  .shoplab-public-ad-price-chip b{max-width:100%;font-size:16px;line-height:1.05;letter-spacing:-.04em;text-align:right;white-space:normal}
+  .shoplab-public-ad.without-head>a{grid-template-columns:minmax(0,1fr) minmax(78px,.7fr);grid-template-areas:"media price"}
+}
+@media (max-width:380px){
+  .shoplab-public-ad>a{grid-template-columns:minmax(86px,1fr) minmax(76px,1fr) minmax(70px,.76fr);gap:6px;padding:10px 9px}
+  .shoplab-public-ad-title{font-size:13px}
+  .shoplab-public-ad-cta{min-height:27px;padding:4px 7px;font-size:7.5px}
+  .shoplab-public-ad-media{height:58px;min-height:58px;max-height:58px}
+  .shoplab-public-ad-media>img,.shoplab-public-ad-media>video{height:54px;max-height:54px}
+  .shoplab-public-ad-price-chip b{font-size:14px}
+}
+
+/* ShopLab Ads mobile sem preco: remove a coluna vazia e ocupa toda a largura. */
+@media (max-width:760px){
+  .shoplab-public-ad:not(:has(.shoplab-public-ad-price-chip))>a{
+    grid-template-columns:minmax(0,1.15fr) minmax(108px,.85fr);
+    grid-template-areas:"copy media";
+    gap:12px;
+  }
+  .shoplab-public-ad:not(:has(.shoplab-public-ad-price-chip)) .shoplab-public-ad-copy{
+    width:100%;
+    justify-self:stretch;
+  }
+  .shoplab-public-ad:not(:has(.shoplab-public-ad-price-chip)) .shoplab-public-ad-media{
+    justify-self:stretch;
+  }
+}
+@media (max-width:380px){
+  .shoplab-public-ad:not(:has(.shoplab-public-ad-price-chip))>a{
+    grid-template-columns:minmax(0,1.12fr) minmax(96px,.88fr);
+    gap:9px;
+  }
+}
+
+/* ShopLab Ads mobile definitivo: flex impede colunas fora do viewport. */
+@media (max-width:760px){
+  html body .shoplab-public-ad>a{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:stretch!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:106px!important;
+    padding:11px 12px!important;
+    gap:8px!important;
+    overflow:hidden!important;
+    box-sizing:border-box!important;
+  }
+  html body .shoplab-public-ad-copy{
+    order:1!important;
+    flex:1.05 1 0!important;
+    width:auto!important;
+    min-width:0!important;
+    justify-self:auto!important;
+  }
+  html body .shoplab-public-ad-media{
+    order:2!important;
+    flex:1 1 0!important;
+    width:auto!important;
+    min-width:0!important;
+    height:64px!important;
+    min-height:64px!important;
+    max-height:64px!important;
+  }
+  html body .shoplab-public-ad-price-chip{
+    order:3!important;
+    flex:.85 1 0!important;
+    width:auto!important;
+    min-width:0!important;
+    margin:0!important;
+    align-self:center!important;
+    justify-self:auto!important;
+    justify-items:end!important;
+    text-align:right!important;
+  }
+  html body .shoplab-public-ad-media>img,
+  html body .shoplab-public-ad-media>video{
+    width:100%!important;
+    height:60px!important;
+    max-height:60px!important;
+    object-fit:contain!important;
+  }
+  html body .shoplab-public-ad-price-chip small{font-size:7px!important;white-space:normal!important}
+  html body .shoplab-public-ad-price-chip b{display:block!important;font-size:16px!important;line-height:1.05!important;white-space:normal!important}
+  html body .shoplab-public-ad:not(:has(.shoplab-public-ad-price-chip)) .shoplab-public-ad-copy{flex:1.1 1 0!important}
+  html body .shoplab-public-ad:not(:has(.shoplab-public-ad-price-chip)) .shoplab-public-ad-media{flex:.9 1 0!important}
+}
+@media (max-width:380px){
+  html body .shoplab-public-ad>a{padding:10px 9px!important;gap:6px!important}
+  html body .shoplab-public-ad-title{font-size:13px!important}
+  html body .shoplab-public-ad-cta{padding:4px 6px!important;font-size:7px!important}
+  html body .shoplab-public-ad-price-chip b{font-size:14px!important}
+}
+
+/* ShopLab Ads mobile: remove a grade antiga 46/54 que deixava metade do card vazia. */
+@media (max-width:760px){
+  html body .shoplab-public-ad{
+    display:block!important;
+    grid-template-columns:none!important;
+    grid-template-rows:none!important;
+    min-height:0!important;
+  }
+  html body .shoplab-public-ad>a{
+    grid-column:auto!important;
+    grid-row:auto!important;
+  }
+}

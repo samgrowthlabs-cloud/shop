@@ -1,5 +1,5 @@
-const VERSION='shoplab-pwa-v12-dark-green';
-const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
+const VERSION='shoplab-pwa-v19-instant-navigation';
+const SHELL=['/','/index.html','/produto.html','/produtos.html','/busca.html','/categoria.html','/promocoes.html','/novidades.html','/comparar.html','/conta.html','/entrar.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
@@ -16,15 +16,10 @@ self.addEventListener('fetch',event=>{
   if(url.origin!==location.origin||url.pathname.startsWith('/api/'))return;
   if(request.mode==='navigate'){
     event.respondWith((async()=>{
-      const cached=await caches.match(request);
-      const network=fetch(request).then(async response=>{
-        if(response.ok){const copy=response.clone();const cache=await caches.open(VERSION);await cache.put(request,copy)}
-        return response;
-      });
-      // Keep navigation alive while an intelligent-search page and its API load.
+      const cache=await caches.open(VERSION),cacheKey=new Request(`${url.origin}${url.pathname}`,{method:'GET'}),cached=await cache.match(cacheKey);
+      const network=fetch(request).then(async response=>{if(response.ok)await cache.put(cacheKey,response.clone());return response});
       event.waitUntil(network.then(()=>undefined).catch(()=>undefined));
-      try{return await Promise.race([network,new Promise((_,reject)=>setTimeout(()=>reject(new Error('network-timeout')),15000))])}
-      catch{return cached||caches.match('/offline.html')}
+      return cached||network.catch(()=>caches.match('/offline.html'));
     })());
     return;
   }
