@@ -399,8 +399,8 @@ detail=async()=>{
   const html=await renderProductDetail(),slug=params.get('slug')||'habitos-atomicos',product=await getProductBySlug(slug);
   if(!product){setSeo({title:'Produto não encontrado | SHOPLAB',description:'Este produto não está disponível.',canonical:seoUrl('/produto',`?slug=${encodeURIComponent(slug)}`),robots:'noindex,follow'});return html}
   const image=product.primaryStorageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(product.primaryStorageKey)}`:product.primaryExternalUrl||'';
-  const canonical=seoUrl('/produto',`?slug=${encodeURIComponent(product.slug)}`),description=product.shortDescription||product.description||`Compare preço, oferta e detalhes de ${product.name} antes de comprar.`;
-  setSeo({title:`${product.name} | preço e análise | SHOPLAB`,description,canonical,image});
+  const canonical=seoUrl('/produto',`?slug=${encodeURIComponent(product.slug)}`),summary=String(product.shortDescription||product.description||'').trim(),description=summary?`${summary} Confira especificações, preço, ofertas e análise completa na SHOPLAB.`:`Confira o ${product.name}, especificações, preço, ofertas e análise completa na SHOPLAB.`;
+  setSeo({title:`${product.name} | SHOPLAB`,description,canonical,image});
   let schema=document.head.querySelector('script[data-seo-product]');
   if(!schema){schema=document.createElement('script');schema.type='application/ld+json';schema.dataset.seoProduct='';document.head.append(schema)}
   const images=(product.media||[]).map(media=>media.storageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(media.storageKey)}`:media.externalUrl).filter(url=>/^https?:\/\//i.test(String(url||'')));
