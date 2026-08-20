@@ -8152,3 +8152,38 @@ body[data-page="home"] .shoplab-public-ad{width:min(1410px,calc(100% - 48px))}
     grid-row:auto!important;
   }
 }
+/* Desconto no espaço inferior direito, sem cobrir a capa nem o preço. */
+body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price{position:relative!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"old old" "saving saving" "current badge"!important;align-items:end!important;column-gap:8px!important;padding-right:0!important}
+body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price>.old{grid-area:old!important}
+body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price>.current-price{grid-area:current!important;min-width:0!important;white-space:nowrap!important}
+body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price>.card-saving{grid-area:saving!important;justify-self:start!important}
+body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price>.discount-badge{position:static!important;grid-area:badge!important;align-self:end!important;justify-self:end!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:48px;padding:7px 10px!important;border-radius:999px!important;background:#06443c!important;color:#fff!important;font-size:12px!important;line-height:1!important;white-space:nowrap!important;box-shadow:none!important}
+@media(max-width:760px){body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price{grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"old old" "saving saving" "current badge"!important;column-gap:5px!important;row-gap:2px!important}body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price>.discount-badge{align-self:end!important;min-width:36px;padding:5px 6px!important;font-size:9px!important}body:not([data-admin-page]) .products:not(.promotion-products) .product-card .price>.current-price{min-width:0!important;width:auto!important;overflow:visible!important;font-size:17px!important;letter-spacing:-.04em!important}}
+/* Cards públicos sem ação de comparar; carrosséis mobile permanecem arrastáveis e animados, sem setas. */
+body:not([data-admin-page]) .product-card .card-compare{display:none!important}
+@media(max-width:760px){body:not([data-admin-page]) :is(.product-carousel-controls,.product-carousel-controls[hidden],.product-rail-arrow,.product-rail-arrow.previous,.product-rail-arrow.next){display:none!important;visibility:hidden!important;pointer-events:none!important}}
+/* Sem reserva vazia da antiga bandeja de comparação entre a home e os parceiros. */
+@media(max-width:760px){body[data-page="home"] main#conteudo{padding-bottom:0!important}}
+
+/* Banner sem filetes nas bordas e sem efeitos internos; o movimento vem apenas do carrossel. */
+body[data-page="home"] .home-banner,
+body[data-page="home"] .home-banner-slide,
+body[data-page="home"] .home-banner-slide picture,
+body[data-page="home"] .home-banner-slide picture img{border:0!important;outline:0!important;box-shadow:none!important}
+body[data-page="home"] .home-banner-slide::before,
+body[data-page="home"] .home-banner-slide::after{display:none!important}
+body[data-page="home"] .home-banner-slide picture,
+body[data-page="home"] .home-banner-slide picture img,
+body[data-page="home"] .home-banner-slide .home-banner-copy,
+body[data-page="home"] .home-banner-slide .home-banner-shade{animation:none!important;filter:none!important;clip-path:none!important}
+body[data-page="home"] .home-banner-slide,
+body[data-page="home"] .home-banner-slide picture,
+body[data-page="home"] .home-banner-slide picture img,
+body[data-page="home"] .home-banner-slide .home-banner-copy,
+body[data-page="home"] .home-banner-slide .home-banner-shade{transition:none!important}
+
+/* Reset definitivo: nenhum efeito visual no banner além do translateX aplicado pelo carrossel. */
+body[data-page="home"] .home-banner-slide{transform:none!important;opacity:0!important;visibility:hidden!important;filter:none!important;clip-path:none!important}
+body[data-page="home"] .home-banner-slide.is-active{transform:none!important;opacity:1!important;visibility:visible!important}
+body[data-page="home"] .home-banner-slide picture{transform:none!important;animation:none!important;transition:none!important;filter:none!important}
+body[data-page="home"] .home-banner-slide :is(img,.home-banner-copy,.home-banner-copy small,.home-banner-copy strong,.home-banner-copy>span,.home-banner-copy b,.home-banner-shade,.home-banner-overlay){animation:none!important;transition:none!important;filter:none!important;clip-path:none!important}

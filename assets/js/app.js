@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260808-mobile-compact-2';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260820-product-media-prefetch-1';
+import'./favicon.js?v=20260820-no-auto-reload-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260820-product-media-prefetch-1';
 import'./search-ui.js?v=20260803-media-domain-38';
 import'./public-media.js?v=20260820-product-images-instant-1';
 import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260820-related-images-1';
@@ -7,7 +7,7 @@ import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendati
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
 import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260820-ads-prefetch-1';
-import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260813-home-carousel-2';
+import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260820-banner-carousel-reset-1';
 import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-comparisons.js?v=20260820-home-cards-1';
 const mediaVariant=(key,width)=>`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(key)}?w=${width}&q=78`;
 const $=(s,r=document)=>r.querySelector(s)||(s==='#theme'?{}:null), money=v=>(v/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),parse=(value,fallback={})=>{try{return JSON.parse(value)||fallback}catch{return fallback}};
@@ -77,7 +77,7 @@ function bindHomeBanner(){
   const slides=[...carousel.querySelectorAll("[data-banner-slide]")];
   const dots=[...carousel.querySelectorAll("[data-banner-dot]")];
   if(slides.length<2)return;
-  let current=0,timer=null;
+  let current=0,timer=null,animating=false;
   let dragging=false,pointerId=null,startX=0,startY=0,deltaX=0,incoming=null,dir=0;
   const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -92,8 +92,23 @@ function bindHomeBanner(){
   };
 
   const stop=function(){clearTimeout(timer);timer=null};
-  const play=function(){stop();if(reduced||document.hidden||dragging)return;timer=setTimeout(function(){show(current+1);play()},Number(slides[current].dataset.displayDuration)||Number(carousel.dataset.interval)||6000)};
-  const go=function(index){show(index,true);play()};
+  const animateTo=function(index,userInitiated){
+    var target=(index+slides.length)%slides.length;
+    if(target===current||animating)return;
+    if(reduced){show(target,userInitiated);play();return}
+    stop();animating=true;
+    var active=slides[current],next=slides[target],direction=target===(current-1+slides.length)%slides.length?-1:1,w=carousel.clientWidth||1;
+    clearInline(active);clearInline(next);
+    active.style.zIndex='2';next.style.zIndex='1';next.style.setProperty('visibility','visible','important');next.style.setProperty('opacity','1','important');
+    next.style.setProperty('transform','translateX('+(direction*w)+'px)','important');
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      active.style.setProperty('transition','transform 320ms cubic-bezier(.22,1,.36,1)','important');next.style.setProperty('transition','transform 320ms cubic-bezier(.22,1,.36,1)','important');
+      active.style.setProperty('transform','translateX('+(-direction*w)+'px)','important');next.style.setProperty('transform','translateX(0)','important');
+    })});
+    setTimeout(function(){clearInline(active);clearInline(next);show(target,userInitiated);animating=false;play()},340);
+  };
+  const play=function(){stop();if(reduced||document.hidden||dragging||animating)return;timer=setTimeout(function(){animateTo(current+1,false)},Number(slides[current].dataset.displayDuration)||Number(carousel.dataset.interval)||6000)};
+  const go=function(index){animateTo(index,true)};
 
   const layoutDrag=function(){
     if(!incoming)return;
@@ -101,14 +116,14 @@ function bindHomeBanner(){
     var active=slides[current];
     active.style.zIndex="2";
     incoming.style.zIndex="1";
-    incoming.style.visibility="visible";
-    incoming.style.opacity="1";
+    incoming.style.setProperty("visibility","visible","important");
+    incoming.style.setProperty("opacity","1","important");
     if(dir>0){
-      active.style.transform="translateX("+Math.max(-w,Math.min(0,deltaX))+"px)";
-      incoming.style.transform="translateX("+Math.max(0,w+deltaX)+"px)";
+      active.style.setProperty("transform","translateX("+Math.max(-w,Math.min(0,deltaX))+"px)","important");
+      incoming.style.setProperty("transform","translateX("+Math.max(0,w+deltaX)+"px)","important");
     }else{
-      active.style.transform="translateX("+Math.min(w,Math.max(0,deltaX))+"px)";
-      incoming.style.transform="translateX("+Math.min(0,-w+deltaX)+"px)";
+      active.style.setProperty("transform","translateX("+Math.min(w,Math.max(0,deltaX))+"px)","important");
+      incoming.style.setProperty("transform","translateX("+Math.min(0,-w+deltaX)+"px)","important");
     }
   };
 
@@ -119,9 +134,9 @@ function bindHomeBanner(){
     var d=dir;
     var incomingStart=d>0?w:-w;
     if(inc){
-      active.style.transition=inc.style.transition="transform 220ms cubic-bezier(.22,1,.36,1)";
-      active.style.transform=toNext?("translateX("+(-incomingStart)+"px)"):"translateX(0)";
-      inc.style.transform=toNext?"translateX(0)":("translateX("+incomingStart+"px)");
+      active.style.setProperty("transition","transform 220ms cubic-bezier(.22,1,.36,1)","important");inc.style.setProperty("transition","transform 220ms cubic-bezier(.22,1,.36,1)","important");
+      active.style.setProperty("transform",toNext?("translateX("+(-incomingStart)+"px)"):"translateX(0)","important");
+      inc.style.setProperty("transform",toNext?"translateX(0)":("translateX("+incomingStart+"px)"),"important");
     }
     carousel.classList.remove("is-dragging");
     carousel.style.userSelect="";
@@ -136,7 +151,7 @@ function bindHomeBanner(){
   let onMove=null,onUp=null;
 
   const onDown=function(event){
-    if(event.pointerType==="mouse"&&event.button!==0)return;
+    if(animating||(event.pointerType==="mouse"&&event.button!==0))return;
     dragging=true;pointerId=event.pointerId;startX=event.clientX;startY=event.clientY;deltaX=0;incoming=null;dir=0;
     stop();
     carousel.classList.add("is-dragging");
@@ -291,9 +306,9 @@ function card(p,options={}){
   const premiumNote=p.premiumRelation?`<aside class="premium-relation relation-tone-${relationTone}"><strong>${esc(p.relationLabel||'Alternativa próxima')}</strong><span>${esc(p.relationReason||'Opção selecionada pela curadoria inteligente SHOPLAB+.')}</span><button type="button" class="premium-relation-toggle" data-premium-relation-toggle aria-expanded="false">Ver detalhes →</button></aside>`:'';
   const saving=oldPrice>price?`<span class="card-saving">Você economiza ${money(oldPrice-price)}</span>`:'';
   return `<article class="product-card${p.premiumRelation?' premium-related-card':''}" data-card-url="${esc(detailsUrl)}"${imageUrl?' data-media-ready="1"':''} tabindex="0" aria-label="Ver ${esc(p.name)}">
-    <a class="product-media" href="${detailsUrl}" tabindex="-1"><span class="badge${badge?'':' is-empty'}">${esc(badge)}</span>${media}</a>
-    <div class="card-actions"><button class="card-compare icon-compare compare-product" type="button" data-compare-product="${esc(p.slug)}" data-compare-name="${esc(p.name)}" data-compare-category="${esc(p.category||'Sem categoria')}" aria-label="Selecionar ${esc(p.name)} para comparar" aria-pressed="false">${compareIcon}</button></div>
-    <div class="product-body"><span class="meta">${esc(p.category)}${p.brand?` · ${esc(p.brand)}`:''}</span><h3>${esc(p.name)}</h3>${premiumNote}<span class="public-rating is-empty" data-rating-summary="${esc(p.slug)}"><span class="rating-stars" aria-hidden="true">★★★★★</span><small>Ainda sem avaliações</small></span><div class="price">${oldPrice?`<span class="old">${money(oldPrice)}</span>`:''}<strong class="current-price">${money(price)}</strong>${saving}</div></div>
+    <a class="product-media" href="${detailsUrl}" tabindex="-1">${discount>0?'':`<span class="badge${badge?'':' is-empty'}">${esc(badge)}</span>`}${media}</a>
+
+    <div class="product-body"><span class="meta">${esc(p.category)}${p.brand?` · ${esc(p.brand)}`:''}</span><h3>${esc(p.name)}</h3>${premiumNote}<span class="public-rating is-empty" data-rating-summary="${esc(p.slug)}"><span class="rating-stars" aria-hidden="true">★★★★★</span><small>Ainda sem avaliações</small></span><div class="price">${oldPrice?`<span class="old">${money(oldPrice)}</span>`:''}<strong class="current-price">${money(price)}</strong>${saving}${discount>0?`<span class="badge discount-badge">-${discount}%</span>`:''}</div></div>
   </article>`
 }
 function section(title,sub,items,id='',minimal=false){
