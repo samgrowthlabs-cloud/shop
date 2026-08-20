@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
+import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,session,currentUser,apiProfile,userApi,startPresence}from'./auth.js?v=20260820-auth-callback-1';
 import'./search-ui.js?v=20260803-media-domain-38';
 import{syncAccountLibrary,setCart}from'./user-library.js?v=20260807-card-compare-1';
 import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260726-mobile-header-4';
@@ -134,7 +134,14 @@ async function init(){
     return enhanceReferralGiftCards()
   }
   await initSiteHeader();
-  if(page==='callback'){location.replace('conta.html');return}
+  if(page==='callback'){
+    if(!session()){
+      document.querySelector('.auth-card').innerHTML='<h1>Não foi possível confirmar sua conta</h1><p>Abra novamente o link mais recente enviado para o seu e-mail. Se o problema continuar, solicite outro e-mail de confirmação.</p><a class="btn primary" href="entrar.html">Ir para entrar</a>';
+      return;
+    }
+    location.replace('conta');
+    return
+  }
   const form=$('#auth-form');if(!form)return;
   if(page==='reset'&&redirectError)message(redirectError.message);
   form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button[type=submit]');button.disabled=true;try{if(page==='signup'){await signUp({name:$('#name').value,email:$('#email').value,password:$('#password').value});message('Cadastro criado. Confira seu e-mail para confirmar a conta.','success');form.reset()}else if(page==='login'){await signIn($('#email').value,$('#password').value);location.replace(new URLSearchParams(location.search).get('next')||'conta.html')}else if(page==='recover'){await recover($('#email').value);message('Enviamos o link de recuperação, caso o e-mail esteja cadastrado.','success')}else if(page==='reset'){if(redirectError)throw redirectError;acceptRedirectSession();await updatePassword($('#password').value);form.reset();message('Senha alterada com sucesso. Agora você já pode entrar com a nova senha.','success')}}catch(error){message(error.message)}finally{button.disabled=false}};
