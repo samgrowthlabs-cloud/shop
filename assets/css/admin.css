@@ -693,3 +693,6 @@ html[data-admin-theme="dark"] .admin-context-menu{border-color:#315048;backgroun
 @keyframes studio-swipe{from{opacity:0;clip-path:inset(0 0 0 100%)}to{opacity:1;clip-path:inset(0)}}
 @keyframes studio-swipe-media{from{opacity:.45;filter:brightness(.7)}to{opacity:1;filter:brightness(1)}}
 @media(prefers-reduced-motion:reduce){#banner-modal .is-preview-animated.banner-animation-swipe .home-banner-copy,#banner-modal .is-preview-animated.banner-animation-swipe [data-banner-layer="image"]{animation-duration:700ms!important;animation-iteration-count:1!important}}
+
+/* Preview do banner igual ao site: computador em largura total com 270px de altura. */
+#banner-modal .banner-preview-device.desktop .home-banner,.banner-preview-device.desktop .home-banner{height:270px!important}
