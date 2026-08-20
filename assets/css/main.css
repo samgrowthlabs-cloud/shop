@@ -8365,3 +8365,21 @@ body:not([data-admin-page])[data-page="product"] #product-related .premium-relat
   .shoplab-public-ad.without-head .shoplab-public-ad-media:has(>img){width:100%;height:94px!important;min-height:94px!important;max-height:94px!important}
   .shoplab-public-ad.without-head .shoplab-public-ad-media>img{width:100%;height:100%!important;max-height:none!important;object-fit:cover}
 }
+
+/* Cards normais de produto: imagem maior e melhor aproveitamento da area visual. */
+@media(min-width:761px){
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card{height:372px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .product-media{flex-basis:190px!important;height:190px!important;min-height:190px!important;padding:10px 8px 6px!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .product-media img{width:100%!important;height:100%!important;max-width:100%!important;max-height:176px!important;object-fit:contain!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card:not(.premium-related-card){height:372px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card:not(.premium-related-card) .product-media{flex-basis:190px!important;height:190px!important;min-height:190px!important;padding:10px 8px 6px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card:not(.premium-related-card) .product-media img{width:100%!important;height:100%!important;max-height:176px!important;object-fit:contain!important}
+}
+@media(max-width:760px){
+  body:not([data-admin-page]) .products:not(.promotion-products) .product-card .product-media,
+  body:not([data-admin-page]) .product-carousel-track>.product-card .product-media,
+  body:not([data-admin-page]) .home-product-rail>.product-card .product-media{height:200px!important;min-height:200px!important;padding:16px 8px 8px!important}
+  body:not([data-admin-page]) .products:not(.promotion-products) .product-card .product-media img,
+  body:not([data-admin-page]) .product-carousel-track>.product-card .product-media img,
+  body:not([data-admin-page]) .home-product-rail>.product-card .product-media img{width:100%!important;height:100%!important;max-width:100%!important;max-height:184px!important;object-fit:contain!important}
+}
