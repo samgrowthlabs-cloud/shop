@@ -8281,3 +8281,77 @@ body:not([data-admin-page])[data-page="product"] #product-related .premium-relat
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media{flex-basis:136px!important;height:136px!important;min-height:136px!important;padding:8px!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:120px!important}
 }
+/* O criativo em v?deo preenche a faixa, sem as sobras laterais do modo contain. */
+.shoplab-public-ad-media>video{object-fit:cover}
+@media(min-width:761px){
+  .shoplab-public-ad-home_categories>a{grid-template-columns:minmax(180px,1fr) minmax(180px,.62fr) minmax(150px,.78fr);gap:clamp(12px,1.5cqi,22px)}
+}
+/* V?deos mant?m o enquadramento inteiro e ocupam s? a largura necess?ria. */
+.shoplab-public-ad-media:has(>video){justify-self:center;width:clamp(180px,18vw,300px);min-height:0;max-height:none;aspect-ratio:16/9}
+.shoplab-public-ad-media>video{object-fit:contain}
+@media(max-width:760px){
+  .shoplab-public-ad-media:has(>video){width:100%;aspect-ratio:auto}
+}
+
+@media(min-width:761px){
+  .shoplab-public-ad-media:has(>video){width:clamp(150px,12vw,210px);max-height:118px}
+}
+
+
+/* An?ncio sem texto: exibe apenas o criativo e o pre?o, sem colunas vazias. */
+@media(min-width:761px){
+  .shoplab-public-ad.without-head{width:fit-content!important;max-width:calc(100% - 32px)}
+  body[data-page="home"] .shoplab-public-ad.without-head{width:fit-content!important;max-width:calc(100% - 48px)}
+  .shoplab-public-ad.without-head>a{grid-template-columns:auto auto!important;grid-template-areas:"media price"!important;gap:22px;min-height:0;padding:12px 18px}
+  .shoplab-public-ad.without-head .shoplab-public-ad-media{justify-self:start}
+  .shoplab-public-ad.without-head .shoplab-public-ad-price-chip{justify-self:start}
+}
+
+
+
+
+
+/* Evita colapso de largura em an?ncios que n?o possuem texto. */
+@media(min-width:761px){
+  .shoplab-public-ad.without-head,
+  body[data-page="home"] .shoplab-public-ad.without-head{width:min(480px,calc(100% - 32px))!important}
+  .shoplab-public-ad.without-head>a{grid-template-columns:clamp(150px,12vw,210px) minmax(120px,1fr)!important;min-height:118px}
+}
+
+
+
+/* No cart?o compacto, o v?deo preenche integralmente o quadro reservado. */
+@media(min-width:761px){
+  .shoplab-public-ad.without-head .shoplab-public-ad-media>video{object-fit:cover}
+}
+
+
+@media(min-width:761px){
+  .shoplab-public-ad.without-head .shoplab-public-ad-media>video{height:100%!important;max-height:none!important}
+}
+
+@media(min-width:761px){
+  .shoplab-public-ad.without-head .shoplab-public-ad-price-chip{gap:4px}
+  .shoplab-public-ad.without-head .shoplab-public-ad-price-chip small{font-size:9px}
+  .shoplab-public-ad.without-head .shoplab-public-ad-price-chip b{font-size:22px!important;line-height:1.08!important}
+}
+
+
+
+/* Vers?o m?vel do cart?o compacto: mesmo enquadramento preenchido do desktop. */
+@media(max-width:760px){
+  .shoplab-public-ad.without-head>a{grid-template-columns:minmax(150px,46vw) minmax(0,1fr)!important;grid-template-areas:"media price"!important;min-height:0;padding:10px 12px}
+  .shoplab-public-ad.without-head .shoplab-public-ad-media:has(>video){width:100%;min-height:0;max-height:none;aspect-ratio:16/9}
+  .shoplab-public-ad.without-head .shoplab-public-ad-media>video{width:100%;height:100%!important;max-height:none!important;object-fit:cover}
+  .shoplab-public-ad.without-head .shoplab-public-ad-price-chip b{font-size:20px!important;line-height:1.08!important}
+}
+
+
+
+@media(max-width:760px){
+  .shoplab-public-ad.without-head>a{min-height:114px}
+  .shoplab-public-ad.without-head .shoplab-public-ad-media:has(>video){height:94px!important;min-height:94px!important;max-height:94px!important}
+}
+
+
+
