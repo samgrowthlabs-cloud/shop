@@ -487,6 +487,8 @@ CREATE TABLE IF NOT EXISTS shoplab_ads (
   link_url TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','active','paused')),
   priority INTEGER NOT NULL DEFAULT 1,
+  distribution_mode TEXT NOT NULL DEFAULT 'manual' CHECK(distribution_mode IN ('manual','weighted')),
+  distribution_weight INTEGER NOT NULL DEFAULT 25 CHECK(distribution_weight BETWEEN 1 AND 100),
   starts_at TEXT,
   ends_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

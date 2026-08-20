@@ -8355,3 +8355,13 @@ body:not([data-admin-page])[data-page="product"] #product-related .premium-relat
 
 
 
+
+/* Imagens do Shoplab Ads usam o mesmo cartao compacto dos videos, sem titulo. */
+@media(min-width:761px){
+  .shoplab-public-ad.without-head .shoplab-public-ad-media:has(>img){width:clamp(150px,12vw,210px);height:118px;min-height:118px;max-height:118px}
+  .shoplab-public-ad.without-head .shoplab-public-ad-media>img{width:100%;height:100%!important;max-height:none!important;object-fit:cover}
+}
+@media(max-width:760px){
+  .shoplab-public-ad.without-head .shoplab-public-ad-media:has(>img){width:100%;height:94px!important;min-height:94px!important;max-height:94px!important}
+  .shoplab-public-ad.without-head .shoplab-public-ad-media>img{width:100%;height:100%!important;max-height:none!important;object-fit:cover}
+}
