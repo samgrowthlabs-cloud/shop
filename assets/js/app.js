@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260820-ads-compact-media-2';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260820-product-media-prefetch-1';
+import'./favicon.js?v=20260820-product-card-image-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260820-product-media-prefetch-1';
 import'./search-ui.js?v=20260803-media-domain-38';
 import'./public-media.js?v=20260820-product-images-instant-1';
 import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260820-related-images-1';
