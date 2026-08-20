@@ -1,4 +1,4 @@
-import{getSiteConfig,cachedSiteConfig}from'./api.js';
+import{getSiteConfig,cachedSiteConfig}from'./api.js?v=20260820-product-media-prefetch-1';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const PREMIUM_BRAND_KEY='shoplab:premium-brand';
