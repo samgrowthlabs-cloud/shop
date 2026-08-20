@@ -1,13 +1,14 @@
-import'./favicon.js?v=20260808-mobile-compact-2';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260816-weekly-category-highlights-1';
+import'./favicon.js?v=20260820-no-auto-reload-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260820-product-media-prefetch-1';
 import'./search-ui.js?v=20260803-media-domain-38';
-import'./public-media.js?v=20260814-coming-soon-1';
-import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260814-coming-soon-1';
+import'./public-media.js?v=20260820-product-images-instant-1';
+import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260820-related-images-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260807-card-compare-1';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
-import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260816-home-top-ad-removed-1';
-import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260813-home-carousel-2';
+import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260820-ads-prefetch-1';
+import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260820-banner-carousel-reset-1';
+import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-comparisons.js?v=20260820-home-cards-1';
 const mediaVariant=(key,width)=>`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(key)}?w=${width}&q=78`;
 const $=(s,r=document)=>r.querySelector(s)||(s==='#theme'?{}:null), money=v=>(v/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),parse=(value,fallback={})=>{try{return JSON.parse(value)||fallback}catch{return fallback}};
 async function bindPremiumBrand(){
@@ -17,6 +18,13 @@ async function bindPremiumBrand(){
 }
 document.addEventListener('click',event=>{if(event.target.closest('.premium-grant-alert>button'))event.target.closest('.premium-grant-alert')?.remove()});
 const params=new URLSearchParams(location.search), page=document.body.dataset.page||'home';
+const productSlugFromTarget=target=>{const direct=target.closest?.('a[href*="produto.html?slug="]')?.href,card=target.closest?.('.product-card,[data-product-slug]'),candidate=direct||card?.dataset.cardUrl||(card?.dataset.productSlug?`produto.html?slug=${encodeURIComponent(card.dataset.productSlug)}`:'');try{return candidate?new URL(candidate,location.href).searchParams.get('slug')||'':''}catch{return''}};
+let lastPrefetchedProduct='';
+const warmProductTarget=event=>{const slug=productSlugFromTarget(event.target);if(!slug||slug===lastPrefetchedProduct)return;lastPrefetchedProduct=slug;prefetchProductMedia(slug).catch(()=>{})};
+document.addEventListener('pointerover',warmProductTarget,{passive:true});
+document.addEventListener('focusin',warmProductTarget,{passive:true});
+document.addEventListener('touchstart',warmProductTarget,{passive:true});
+function warmVisibleProducts(){if(!('IntersectionObserver'in window))return;let warmed=0;const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting||warmed>=4)return;const slug=productSlugFromTarget(entry.target);observer.unobserve(entry.target);if(slug){warmed+=1;(warmed<=2?prefetchProductMedia(slug):prefetchProduct(slug)).catch(()=>{})}if(warmed>=4)observer.disconnect()}),{rootMargin:'120px'});document.querySelectorAll('.product-card').forEach(card=>observer.observe(card))}
 const seoUrl=(path=location.pathname,search=location.search)=>new URL(`${path}${search}`,location.origin).href;
 function setSeo({title,description,canonical,robots='index,follow',image=''}={}){
   if(title)document.title=title;
@@ -69,7 +77,7 @@ function bindHomeBanner(){
   const slides=[...carousel.querySelectorAll("[data-banner-slide]")];
   const dots=[...carousel.querySelectorAll("[data-banner-dot]")];
   if(slides.length<2)return;
-  let current=0,timer=null;
+  let current=0,timer=null,animating=false;
   let dragging=false,pointerId=null,startX=0,startY=0,deltaX=0,incoming=null,dir=0;
   const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -84,8 +92,23 @@ function bindHomeBanner(){
   };
 
   const stop=function(){clearTimeout(timer);timer=null};
-  const play=function(){stop();if(reduced||document.hidden||dragging)return;timer=setTimeout(function(){show(current+1);play()},Number(slides[current].dataset.displayDuration)||Number(carousel.dataset.interval)||6000)};
-  const go=function(index){show(index,true);play()};
+  const animateTo=function(index,userInitiated){
+    var target=(index+slides.length)%slides.length;
+    if(target===current||animating)return;
+    if(reduced){show(target,userInitiated);play();return}
+    stop();animating=true;
+    var active=slides[current],next=slides[target],direction=target===(current-1+slides.length)%slides.length?-1:1,w=carousel.clientWidth||1;
+    clearInline(active);clearInline(next);
+    active.style.zIndex='2';next.style.zIndex='1';next.style.setProperty('visibility','visible','important');next.style.setProperty('opacity','1','important');
+    next.style.setProperty('transform','translateX('+(direction*w)+'px)','important');
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      active.style.setProperty('transition','transform 320ms cubic-bezier(.22,1,.36,1)','important');next.style.setProperty('transition','transform 320ms cubic-bezier(.22,1,.36,1)','important');
+      active.style.setProperty('transform','translateX('+(-direction*w)+'px)','important');next.style.setProperty('transform','translateX(0)','important');
+    })});
+    setTimeout(function(){clearInline(active);clearInline(next);show(target,userInitiated);animating=false;play()},340);
+  };
+  const play=function(){stop();if(reduced||document.hidden||dragging||animating)return;timer=setTimeout(function(){animateTo(current+1,false)},Number(slides[current].dataset.displayDuration)||Number(carousel.dataset.interval)||6000)};
+  const go=function(index){animateTo(index,true)};
 
   const layoutDrag=function(){
     if(!incoming)return;
@@ -93,14 +116,14 @@ function bindHomeBanner(){
     var active=slides[current];
     active.style.zIndex="2";
     incoming.style.zIndex="1";
-    incoming.style.visibility="visible";
-    incoming.style.opacity="1";
+    incoming.style.setProperty("visibility","visible","important");
+    incoming.style.setProperty("opacity","1","important");
     if(dir>0){
-      active.style.transform="translateX("+Math.max(-w,Math.min(0,deltaX))+"px)";
-      incoming.style.transform="translateX("+Math.max(0,w+deltaX)+"px)";
+      active.style.setProperty("transform","translateX("+Math.max(-w,Math.min(0,deltaX))+"px)","important");
+      incoming.style.setProperty("transform","translateX("+Math.max(0,w+deltaX)+"px)","important");
     }else{
-      active.style.transform="translateX("+Math.min(w,Math.max(0,deltaX))+"px)";
-      incoming.style.transform="translateX("+Math.min(0,-w+deltaX)+"px)";
+      active.style.setProperty("transform","translateX("+Math.min(w,Math.max(0,deltaX))+"px)","important");
+      incoming.style.setProperty("transform","translateX("+Math.min(0,-w+deltaX)+"px)","important");
     }
   };
 
@@ -111,9 +134,9 @@ function bindHomeBanner(){
     var d=dir;
     var incomingStart=d>0?w:-w;
     if(inc){
-      active.style.transition=inc.style.transition="transform 220ms cubic-bezier(.22,1,.36,1)";
-      active.style.transform=toNext?("translateX("+(-incomingStart)+"px)"):"translateX(0)";
-      inc.style.transform=toNext?"translateX(0)":("translateX("+incomingStart+"px)");
+      active.style.setProperty("transition","transform 220ms cubic-bezier(.22,1,.36,1)","important");inc.style.setProperty("transition","transform 220ms cubic-bezier(.22,1,.36,1)","important");
+      active.style.setProperty("transform",toNext?("translateX("+(-incomingStart)+"px)"):"translateX(0)","important");
+      inc.style.setProperty("transform",toNext?"translateX(0)":("translateX("+incomingStart+"px)"),"important");
     }
     carousel.classList.remove("is-dragging");
     carousel.style.userSelect="";
@@ -128,7 +151,7 @@ function bindHomeBanner(){
   let onMove=null,onUp=null;
 
   const onDown=function(event){
-    if(event.pointerType==="mouse"&&event.button!==0)return;
+    if(animating||(event.pointerType==="mouse"&&event.button!==0))return;
     dragging=true;pointerId=event.pointerId;startX=event.clientX;startY=event.clientY;deltaX=0;incoming=null;dir=0;
     stop();
     carousel.classList.add("is-dragging");
@@ -279,13 +302,13 @@ function card(p,options={}){
   const imageSrcset=p.primaryStorageKey?`${esc(mediaVariant(p.primaryStorageKey,240))} 240w, ${esc(mediaVariant(p.primaryStorageKey,480))} 480w, ${esc(mediaVariant(p.primaryStorageKey,640))} 640w`:'';
   const symbol=p.icon||'⌬';
   const media=imageUrl?`<img src="${esc(imageUrl)}" ${imageSrcset?`srcset="${imageSrcset}" sizes="(max-width:760px) 44vw, 360px"`:''} alt="${esc(p.primaryImageAlt||p.name||'Produto')}" ${eager?'loading="eager" fetchpriority="high"':'loading="lazy"'} decoding="async">`:`<span class="product-symbol" role="img" aria-label="Imagem ilustrativa">${esc(symbol)}</span>`;
-  const relationTone={cheaper_equivalent:'cheaper',more_performance:'performance',better_rated:'rating',best_value:'value'}[p.relationType]||'similar';
-  const premiumNote=p.premiumRelation?`<aside class="premium-relation relation-tone-${relationTone}"><strong>${esc(p.relationLabel||'Alternativa próxima')}</strong><span>${esc(p.relationReason||'Opção selecionada pela curadoria inteligente SHOPLAB+.')}</span><button type="button" class="premium-relation-toggle" data-premium-relation-toggle aria-expanded="false">Ver detalhes →</button></aside>`:'';
+  const relationTone={cheaper_equivalent:'cheaper',more_performance:'performance',better_rated:'rating',best_value:'value',premium_upgrade:'premium'}[p.relationType]||'similar';
+  const premiumNote=p.premiumRelation?`<aside class="premium-relation relation-tone-${relationTone}"><strong>${esc(p.relationLabel||'Alternativa próxima')}</strong>${p.comparedToName?`<small class="premium-relation-context">Comparado ao ${esc(p.comparedToName)}</small>`:''}<span>${esc(p.relationReason||'Veja os ganhos, as perdas e a diferença de preço antes de escolher.')}</span><button type="button" class="premium-relation-toggle" data-premium-relation-toggle aria-expanded="false">Ver comparação →</button></aside>`:'';
   const saving=oldPrice>price?`<span class="card-saving">Você economiza ${money(oldPrice-price)}</span>`:'';
   return `<article class="product-card${p.premiumRelation?' premium-related-card':''}" data-card-url="${esc(detailsUrl)}"${imageUrl?' data-media-ready="1"':''} tabindex="0" aria-label="Ver ${esc(p.name)}">
-    <a class="product-media" href="${detailsUrl}" tabindex="-1"><span class="badge${badge?'':' is-empty'}">${esc(badge)}</span>${media}</a>
-    <div class="card-actions"><button class="card-compare icon-compare compare-product" type="button" data-compare-product="${esc(p.slug)}" data-compare-name="${esc(p.name)}" data-compare-category="${esc(p.category||'Sem categoria')}" aria-label="Selecionar ${esc(p.name)} para comparar" aria-pressed="false">${compareIcon}</button></div>
-    <div class="product-body"><span class="meta">${esc(p.category)}${p.brand?` · ${esc(p.brand)}`:''}</span><h3>${esc(p.name)}</h3>${premiumNote}<span class="public-rating is-empty" data-rating-summary="${esc(p.slug)}"><span class="rating-stars" aria-hidden="true">★★★★★</span><small>Ainda sem avaliações</small></span><div class="price">${oldPrice?`<span class="old">${money(oldPrice)}</span>`:''}<strong class="current-price">${money(price)}</strong>${saving}</div></div>
+    <a class="product-media" href="${detailsUrl}" tabindex="-1">${discount>0?'':`<span class="badge${badge?'':' is-empty'}">${esc(badge)}</span>`}${media}</a>
+
+    <div class="product-body"><span class="meta">${esc(p.category)}${p.brand?` · ${esc(p.brand)}`:''}</span><h3>${esc(p.name)}</h3>${premiumNote}<span class="public-rating is-empty" data-rating-summary="${esc(p.slug)}"><span class="rating-stars" aria-hidden="true">★★★★★</span><small>Ainda sem avaliações</small></span><div class="price">${oldPrice?`<span class="old">${money(oldPrice)}</span>`:''}<strong class="current-price">${money(price)}</strong>${saving}${discount>0?`<span class="badge discount-badge">-${discount}%</span>`:''}</div></div>
   </article>`
 }
 function section(title,sub,items,id='',minimal=false){
@@ -350,7 +373,7 @@ function bindListingFilters(){
 function relatedLoadingSkeleton(){
   const cards='<article><i></i><b></b><span></span><span></span><strong></strong></article>'.repeat(5);
   return `<section class="section related-loading related-skeleton" aria-label="Carregando produtos relacionados" aria-busy="true"><div class="container"><header><span></span><b></b></header><div class="related-skeleton-grid">${cards}</div></div></section>`;
-}async function detail(){const slug=params.get('slug')||'habitos-atomicos',[p,categories]=await Promise.all([getProductBySlug(slug),getCategories()]);if(!p)return `<main class="container page-hero"><h1>Produto não encontrado</h1><a class="btn primary" href="produtos.html">Voltar ao catálogo</a></main>`;const viewedCategory=categories.find(category=>category.name===p.category)||{slug:p.categorySlug||String(p.category||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),name:p.category};rememberViewedProduct(p);rememberViewedCategory(viewedCategory);document.title=`${p.name} | SHOPLAB`;return `<main id="conteudo"><div class="container page-hero product-page-hero"><p class="muted product-breadcrumb"><a href="index.html">Início</a> / <a href="categoria.html?slug=${encodeURIComponent(viewedCategory.slug)}">${esc(p.category)}</a></p><div class="detail"><div class="detail-media"><span class="detail-media-loading" aria-hidden="true"></span></div><div><span class="eyebrow detail-score"><span>${esc(p.tag)} · NOTA ${p.score}/100</span>${Number(p.isFeatured)?'<span class="owner-recommended" title="Recomendado por mim" aria-label="Recomendado por mim">★</span>':''}</span><h1 class="page-title">${esc(p.name)}</h1><p class="muted">${esc(p.author||p.brand)}</p><button class="btn ghost detail-share" type="button" data-share-product="${esc(p.slug)}" data-share-name="${esc(p.name)}"> Compartilhar produto</button><div class="offer" id="ofertas"><span class="muted">Melhor oferta encontrada</span><div class="price">${money(p.price)} ${p.oldPrice?`<span class="old">${money(p.oldPrice)}</span>`:''}</div><p>Vendido por ${esc(p.store)} · preço verificado hoje</p><a class="btn primary" href="#" data-offer="${esc(p.slug)}">Comprar agora </a></div><small class="muted">O preço pode mudar após o redirecionamento. Link afiliado demonstrativo.</small></div></div></div>${productAdSlot('product_after_offer')}<section class="section alt"><div class="container"><div class="section-head"><div><span class="eyebrow">Análise editorial</span><h2>O que você precisa saber</h2></div></div><div class="detail"><div><h3>Para quem é indicado</h3><p>Pessoas que buscam uma opção bem avaliada, com boa relação entre qualidade, preço e utilidade prática.</p><h3>Pontos fortes</h3><p>✓ Curadoria editorial<br>✓ Oferta competitiva<br>✓ Informações claras</p></div><div><h3>Especificações</h3><div class="specs"><div class="spec"><small>Marca</small><strong>${esc(p.brand)}</strong></div><div class="spec"><small>Categoria</small><strong>${esc(p.category)}</strong></div><div class="spec"><small>Nota</small><strong>${p.score}/100</strong></div><div class="spec"><small>Atualização</small><strong>Hoje</strong></div></div></div></div></div></section>${productAdSlot('product_after_analysis')}${productAdSlot('product_before_related')}<div id="product-related" aria-live="polite">${relatedLoadingSkeleton()}</div>${productFooterSpotlight()}</main>`}
+}async function detail(){const slug=params.get('slug')||'habitos-atomicos',cachedCategories=cachedHomeData()?.categories||[],[p,categories]=await Promise.all([getProductBySlug(slug),cachedCategories.length?Promise.resolve(cachedCategories):getCategories().catch(()=>[])]);if(!p)return `<main class="container page-hero"><h1>Produto não encontrado</h1><a class="btn primary" href="produtos.html">Voltar ao catálogo</a></main>`;const viewedCategory=categories.find(category=>category.name===p.category)||{slug:p.categorySlug||String(p.category||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),name:p.category};rememberViewedProduct(p);rememberViewedCategory(viewedCategory);document.title=`${p.name} | SHOPLAB`;return `<main id="conteudo"><div class="container page-hero product-page-hero"><p class="muted product-breadcrumb"><a href="index.html">Início</a> / <a href="categoria.html?slug=${encodeURIComponent(viewedCategory.slug)}">${esc(p.category)}</a></p><div class="detail"><div class="detail-media"><span class="detail-media-loading" aria-hidden="true"></span></div><div><span class="eyebrow detail-score"><span>${esc(p.tag)} · NOTA ${p.score}/100</span>${Number(p.isFeatured)?'<span class="owner-recommended" title="Recomendado por mim" aria-label="Recomendado por mim">★</span>':''}</span><h1 class="page-title">${esc(p.name)}</h1><p class="muted">${esc(p.author||p.brand)}</p><button class="btn ghost detail-share" type="button" data-share-product="${esc(p.slug)}" data-share-name="${esc(p.name)}"> Compartilhar produto</button><div class="offer" id="ofertas"><span class="muted">Melhor oferta encontrada</span><div class="price">${money(p.price)} ${p.oldPrice?`<span class="old">${money(p.oldPrice)}</span>`:''}</div><p>Vendido por ${esc(p.store)} · preço verificado hoje</p><a class="btn primary" href="#" data-offer="${esc(p.slug)}">Comprar agora </a></div><small class="muted">O preço pode mudar após o redirecionamento. Link afiliado demonstrativo.</small></div></div></div>${productAdSlot('product_after_offer')}<section class="section alt"><div class="container"><div class="section-head"><div><span class="eyebrow">Análise editorial</span><h2>O que você precisa saber</h2></div></div><div class="detail"><div><h3>Para quem é indicado</h3><p>Pessoas que buscam uma opção bem avaliada, com boa relação entre qualidade, preço e utilidade prática.</p><h3>Pontos fortes</h3><p>✓ Curadoria editorial<br>✓ Oferta competitiva<br>✓ Informações claras</p></div><div><h3>Especificações</h3><div class="specs"><div class="spec"><small>Marca</small><strong>${esc(p.brand)}</strong></div><div class="spec"><small>Categoria</small><strong>${esc(p.category)}</strong></div><div class="spec"><small>Nota</small><strong>${p.score}/100</strong></div><div class="spec"><small>Atualização</small><strong>Hoje</strong></div></div></div></div></div></section>${productAdSlot('product_after_analysis')}${productAdSlot('product_before_related')}<div id="product-related" aria-live="polite">${relatedLoadingSkeleton()}</div>${productFooterSpotlight()}</main>`}
 const relatedFamily=product=>{const text=String([product?.name,product?.productType,product?.category,product?.shortDescription].join(' ')).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),rules=[['smartphone',/\b(smartphone|celular|iphone|telefone movel|poco phone)\b/],['notebook',/\b(notebook|laptop|ultrabook|macbook|vivobook|chromebook|galaxy book)\b/],['audio',/\b(fone|headset|headphone|earbuds|caixa de som|alto-falante)\b/],['smart_camera',/\b(camera|cam|webcam|filmadora|cftv|vigilancia)\b/],['tablet',/\b(tablet|ipad|galaxy tab)\b/],['smartwatch',/\b(smartwatch|relogio inteligente|smart band|smartband)\b/],['monitor',/\b(monitor|display gamer)\b/],['console',/\b(console|playstation|xbox|nintendo switch)\b/],['livro',/\b(livro|ebook|e-book|kindle|autor|editora)\b/]];return rules.find(([,pattern])=>pattern.test(text))?.[0]||''};
 const relatedUsageProfile=product=>{const text=String([product?.name,product?.productType,product?.category,product?.shortDescription,product?.fullDescription,JSON.stringify(product?.specifications||product?.specificationsJson||'')].join(' ')).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();if(relatedFamily(product)!=='notebook')return '';return/(?:rtx|gtx|radeon\s+rx|geforce|gamer|gaming|rog|legion|nitro|predator|tuf)/.test(text)?'gaming':'everyday'};const isCompatibleAlternative=(source,candidate)=>{const family=relatedFamily(source);if(family){const profile=relatedUsageProfile(source);return relatedFamily(candidate)===family&&(!profile||relatedUsageProfile(candidate)===profile)}return String(source?.category||'').trim().toLowerCase()===String(candidate?.category||'').trim().toLowerCase()&&String(source?.productType||'').trim().toLowerCase()===String(candidate?.productType||'').trim().toLowerCase()};
 async function loadProductRecommendations(){
@@ -371,8 +394,9 @@ async function loadProductRecommendations(){
       const historyCategories=new Set(historyProducts.map(product=>String(product.category||'').trim().toLocaleLowerCase('pt-BR')).filter(Boolean));
       const preferredCategories=historyCategories.size?historyCategories:new Set(sourceCategory?[sourceCategory]:[]);
       const categoryRecommendations=catalog.filter(product=>preferredCategories.has(String(product.category||'').trim().toLocaleLowerCase('pt-BR')));
-      const recommendationCandidates=unique([...personalized,...categoryRecommendations,...standardRaw,...catalog].map(completeProduct));
-      const recommendationTitle=historyCategories.size||personalized.length?'Recomendados para você':'Mais da categoria';
+      const isInPreferredCategory=product=>preferredCategories.has(String(product.category||'').trim().toLocaleLowerCase('pt-BR'));
+      const recommendationCandidates=unique([...personalized,...categoryRecommendations,...standardRaw].map(completeProduct)).filter(isInPreferredCategory);
+      const recommendationTitle=historyCategories.size||personalized.length?'Baseado no que você viu':'Você também pode gostar';
       const renderRecommendations=excludedSlugs=>recommendationCandidates.filter(product=>!excludedSlugs.has(product.slug)).slice(0,8).map(cleanStandard);
       const initialRecommendations=renderRecommendations(new Set());
       if(initialRecommendations.length){
@@ -381,7 +405,7 @@ async function loadProductRecommendations(){
       }
       const smartResult=await smartPromise;
       const alternativePool=unique(smartResult.products.map(completeProduct).filter(product=>isCompatibleAlternative(source,product)));
-      const alternatives=[...alternativePool].sort((a,b)=>(Number(b.editorialScore??b.score)||0)-(Number(a.editorialScore??a.score)||0)).slice(0,4).map(product=>({...product,premiumRelation:true,relationLabel:product.relationLabel||'Alternativa próxima',relationReason:product.relationReason||'Atende uma necessidade próxima. Compare os recursos essenciais, as limitações e o preço antes de decidir.'}));
+      const sortedAlternatives=[...alternativePool].sort((a,b)=>(Number(b.editorialScore??b.score)||0)-(Number(a.editorialScore??a.score)||0)),diverseAlternatives=[],seenRelationTypes=new Set();for(const product of sortedAlternatives){if(!seenRelationTypes.has(product.relationType)){diverseAlternatives.push(product);seenRelationTypes.add(product.relationType)}}const alternatives=[...diverseAlternatives,...sortedAlternatives.filter(product=>!diverseAlternatives.includes(product))].slice(0,4).map(product=>({...product,premiumRelation:true,comparedToName:source.name,relationLabel:product.relationLabel||'Alternativa próxima',relationReason:product.relationReason||'Veja os ganhos, as perdas e a diferença de preço antes de escolher.'}));
       const alternativeSlugs=new Set(alternatives.map(product=>product.slug));
       const recommendations=renderRecommendations(alternativeSlugs);
       if(!alternatives.length&&!recommendations.length)throw smartResult.error||new Error('Nenhuma recomendação relevante recebida');
@@ -399,8 +423,8 @@ detail=async()=>{
   const html=await renderProductDetail(),slug=params.get('slug')||'habitos-atomicos',product=await getProductBySlug(slug);
   if(!product){setSeo({title:'Produto não encontrado | SHOPLAB',description:'Este produto não está disponível.',canonical:seoUrl('/produto',`?slug=${encodeURIComponent(slug)}`),robots:'noindex,follow'});return html}
   const image=product.primaryStorageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(product.primaryStorageKey)}`:product.primaryExternalUrl||'';
-  const canonical=seoUrl('/produto',`?slug=${encodeURIComponent(product.slug)}`),description=product.shortDescription||product.description||`Compare preço, oferta e detalhes de ${product.name} antes de comprar.`;
-  setSeo({title:`${product.name} | preço e análise | SHOPLAB`,description,canonical,image});
+  const canonical=seoUrl('/produto',`?slug=${encodeURIComponent(product.slug)}`),summary=String(product.shortDescription||product.description||'').trim(),description=summary?`${summary} Confira especificações, preço, ofertas e análise completa na SHOPLAB.`:`Confira o ${product.name}, especificações, preço, ofertas e análise completa na SHOPLAB.`;
+  setSeo({title:`${product.name} | SHOPLAB`,description,canonical,image});
   let schema=document.head.querySelector('script[data-seo-product]');
   if(!schema){schema=document.createElement('script');schema.type='application/ld+json';schema.dataset.seoProduct='';document.head.append(schema)}
   const images=(product.media||[]).map(media=>media.storageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(media.storageKey)}`:media.externalUrl).filter(url=>/^https?:\/\//i.test(String(url||'')));
@@ -422,7 +446,8 @@ async function init(){
   syncSeasonalMobileLogo(siteConfig.theme);
   try{
     const configPromise=page==='home'?Promise.resolve(siteConfig):getSiteConfig().catch(()=>siteConfig),contentPromise=page==='home'?Promise.resolve(null):Promise.resolve(renderPage());
-    const configForInitialRender=page==='search'?Promise.race([configPromise,new Promise(resolve=>setTimeout(()=>resolve(siteConfig),400))]):configPromise;
+    const configWait=page==='search'?400:0;
+    const configForInitialRender=page==='product'?Promise.resolve(siteConfig):configWait?Promise.race([configPromise,new Promise(resolve=>setTimeout(()=>resolve(siteConfig),configWait))]):configPromise;
     const [freshConfig,initialBody]=await Promise.all([configForInitialRender,contentPromise]);
     siteConfig=freshConfig||siteConfig;
     applySiteTypography(siteConfig.typography);applySiteTheme(siteConfig.theme);applySeasonalPriceColors(siteConfig.theme);syncSeasonalMobileLogo(siteConfig.theme);
@@ -448,7 +473,8 @@ function homeProductRail(items=[]){
   return `<div class="product-rail product-carousel-section"><div class="products home-product-rail product-carousel-track">${(items||[]).map(card).join('')}</div></div>`;
 }
 home = async function () {
-  const [homeData,personalized]=await Promise.all([getHomeData(),authSession()?getPersonalizedRecommendations().catch(()=>[]):Promise.resolve([])]);
+  const cachedHome=cachedHomeData(),homeData=cachedHome||await getHomeData(),personalized=[];
+  if(cachedHome)setTimeout(()=>getHomeData().catch(()=>null),0);
   let {products=[],trending=[],campaigns=[],categories=[],collections=[],siteConfig:homeSiteConfig}=homeData||{};
   if(homeSiteConfig){siteConfig=homeSiteConfig;applySiteTypography(siteConfig.typography);applySiteTheme(siteConfig.theme);applySeasonalPriceColors(siteConfig.theme);warmHeaderMedia(siteConfig)}
   const promotedProducts=new Map(campaigns.flatMap(campaign=>campaign.products||[]).map(product=>[product.id,product]));
@@ -467,10 +493,13 @@ home = async function () {
   const regularDeals=products.filter(product=>product.discount>0&&!endingIds.has(product.id));
   const deals=(remainingCampaignDeals.length?remainingCampaignDeals:regularDeals).slice(0,16);
   const priceDrops=products.filter(product=>Number(product.oldPrice)>Number(product.price)&&Number(product.price)>0).map(product=>({...product,dropPercent:Math.round((Number(product.oldPrice)-Number(product.price))/Number(product.oldPrice)*100)})).sort((a,b)=>b.dropPercent-a.dropPercent).slice(0,16);
+  const personalizedComparisonProducts=completePersonalized.map((product,index)=>({...product,comparisonPriority:Math.max(8,32-index*3)}));
+  const comparisonProducts=completeList([...personalizedComparisonProducts,...featured,...products]).filter((product,index,list)=>product?.slug&&list.findIndex(item=>item?.slug===product.slug)===index);
+  const homeComparisons=selectAutomaticComparisons(comparisonProducts,6);
 
   const categoryBySlug=new Map(categories.map(category=>[category.slug,category]));
   const recentCategories=viewedCategories().map(item=>categoryBySlug.get(item.slug)||item).filter(category=>category?.slug&&category?.name);
-  const recentCategoryProducts=await Promise.all(recentCategories.map(async category=>{const fetched=await searchProducts({categorySlug:category.slug}).catch(()=>[]);const matching=fetched.length?fetched:products.filter(product=>String(product.category||'').trim().toLocaleLowerCase('pt-BR')===String(category.name||'').trim().toLocaleLowerCase('pt-BR'));return completeList(matching).slice(0,15)}));
+  const recentCategoryProducts=recentCategories.map(category=>completeList(products.filter(product=>String(product.category||'').trim().toLocaleLowerCase('pt-BR')===String(category.name||'').trim().toLocaleLowerCase('pt-BR'))).slice(0,15));
   const viewedCategoryRails=recentCategories.map((category,index)=>viewedCategorySection(category,recentCategoryProducts[index],index)).join('');
 
   return `<main id="conteudo">${homeBanner()}${mobileHomeCategories(categories)}${homeCategoryStrip(categories)}
@@ -480,6 +509,7 @@ home = async function () {
     </div></section>
     ${priceDrops.length?`<section class="home-section price-drops-section"><div class="container"><div class="simple-head"><div><span class="eyebrow">QUEDA DE PRE\u00c7O</span><h2><span class="price-drop-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 12.2 12.2 3.5H20.5V11.8L11.8 20.5 3.5 12.2Z"></path><circle cx="16.7" cy="7.3" r="1.4"></circle><text x="11.5" y="14.2" text-anchor="middle">%</text></svg></span>Produtos em oferta</h2><p>Itens abaixo do pre\u00e7o anterior cadastrado.</p></div><a href="promocoes.html">Ver todas as ofertas </a></div><div class="home-price-drop-grid">${priceDrops.slice(0,10).map(product=>{const imageUrl=product.primaryStorageKey?mediaVariant(product.primaryStorageKey,240):product.primaryExternalUrl||'';const media=imageUrl?`<img src="${esc(imageUrl)}" alt="${esc(product.primaryImageAlt||product.name)}" loading="lazy" decoding="async">`:`<span class="home-product-thumb-placeholder" aria-hidden="true">${esc(product.icon||'?')}</span>`;const detailsUrl=`produto.html?slug=${encodeURIComponent(product.slug)}`;return `<article class="home-price-drop-card" data-card-url="${esc(detailsUrl)}" data-product-slug="${esc(product.slug)}" tabindex="0" role="link" aria-label="Ver oferta de ${esc(product.name)}"><div class="home-product-thumb product-media">${media}</div><div class="home-price-drop-copy">${Number(product.oldPrice)>Number(product.price)?`<span class="old">${money(product.oldPrice)}</span>`:''}<b>${money(product.price)}</b></div></article>`}).join('')}</div></div></section>`:''}
     ${viewedCategoryRails}
+    ${automaticComparisonSection(homeComparisons)}
     ${(collections||[]).map(collection=>`<section class="home-section collection-showcase"><div class="container"><div class="simple-head"><div><span class="eyebrow">COLEÇÃO EM DESTAQUE</span><h2>${esc(collection.homeTitle||collection.name)}</h2><p>${esc(collection.description||"Seleção especial da SHOPLAB.")}</p></div><a href="colecao.html?slug=${encodeURIComponent(collection.slug)}">Ver coleção </a></div>${homeProductRail(collection.products||[])}</div></section>`).join("")}\n    ${completePersonalized.length?`<section class="home-section personalized-section"><div class="container">
       <div class="simple-head"><div><span class="eyebrow">PARA VOCÊ</span><h2>Para você</h2><p>Baseados nas suas pesquisas, visualizações e interações recentes.</p></div></div>
       ${homeProductRail(completePersonalized)}
@@ -600,7 +630,7 @@ institutional=()=>{
   return `<main id="conteudo"><article class="container legal-page"><span class="eyebrow">TRANSPARÚNCIA</span><h1 class="page-title">${content.title}</h1><p class="legal-intro">${content.intro}</p><p class="legal-updated">Última atualização: ${content.updated||'15 de julho de 2026'}.</p>${content.sections.map(([title,text])=>`<section><h2>${title}</h2><p>${text}</p></section>`).join('')}</article></main>`;
 };
 
-init().then(async()=>{startPresence();bindHomeBanner();bindHomeBannerSwipeGuard();bindProductCarousels();await syncAccountLibrary().catch(()=>null);await bindLibraryUI();bindProductImpressions();await Promise.all([bindAccountHeader(),bindPremiumBrand(),bindRatingSummaries().catch(()=>null)])});
+init().then(async()=>{startPresence();bindHomeBanner();bindHomeBannerSwipeGuard();bindProductCarousels();warmVisibleProducts();await syncAccountLibrary().catch(()=>null);await bindLibraryUI();bindProductImpressions();await Promise.all([bindAccountHeader(),bindPremiumBrand(),bindRatingSummaries().catch(()=>null)])});
 
 function bindProductImpressions(){
   if(!authSession()||!('IntersectionObserver'in window))return;
@@ -668,7 +698,7 @@ document.addEventListener('click',event=>{
   const button=event.target.closest('[data-premium-relation-toggle]');if(!button)return;
   event.preventDefault();event.stopPropagation();
   const relation=button.closest('.premium-relation'),expanded=button.getAttribute('aria-expanded')==='true';
-  relation?.classList.toggle('is-expanded',!expanded);button.setAttribute('aria-expanded',String(!expanded));button.textContent=expanded?'Ver detalhes →':'Ver menos';
+  relation?.classList.toggle('is-expanded',!expanded);button.setAttribute('aria-expanded',String(!expanded));button.textContent=expanded?'Ver comparação →':'Ver menos';
 });
 document.addEventListener('click',async event=>{
   const button=event.target.closest('[data-copy-coupon]');

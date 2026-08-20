@@ -1,4 +1,5 @@
 import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
+import{getProductBySlug}from'./api.js?v=20260820-product-media-prefetch-1';
 import{session,userApi}from'./auth.js';
 
 const cache=new Map();
@@ -13,7 +14,7 @@ function cachedInsight(slug){
   try{const item=JSON.parse(sessionStorage.getItem(key)||'null');if(item&&Date.now()-item.savedAt<INSIGHT_CACHE_TTL)return Promise.resolve(item.value)}catch{}
   return userApi(`products/${encodeURIComponent(slug)}/plus-insight`).then(value=>{if(value?.conclusion?.length)try{sessionStorage.setItem(key,JSON.stringify({savedAt:Date.now(),value}))}catch{}return value});
 }
-async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=fetch(`${C.API_BASE_URL}/api/v1/products/${encodeURIComponent(slug)}?mediaVersion=2`,{cache:'default'}).then(r=>r.ok?r.json():null).then(j=>j?.data||null).catch(()=>null);cache.set(slug,promise);return promise}
+async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=getProductBySlug(slug).catch(()=>null);cache.set(slug,promise);return promise}
 const url=(m,width=0)=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}${width?`?w=${width}&q=78`:''}`:m?.externalUrl||'';
 const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
@@ -232,13 +233,14 @@ function openGallery(items,startIndex,name){
 
 async function detailMedia(){
   const box=document.querySelector('.detail-media');if(!box||box.dataset.mediaReady)return;box.dataset.mediaReady='1';
-  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null;renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data);const items=(data?.media||[]).filter(item=>url(item));if(!items.length)return;box.classList.toggle('has-multiple-media',items.length>1);
+  const slug=new URLSearchParams(location.search).get('slug'),data=slug?await getProduct(slug):null,enhance=()=>{renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document.querySelector('.user-product-actions')){arrangeMobileOffer();actionObserver.disconnect()}});actionObserver.observe(document.querySelector('.page-hero .detail')||document.body,{childList:true,subtree:true});matchMedia('(max-width:760px)').addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data)},items=(data?.media||[]).filter(item=>url(item));if(!items.length){enhance();return}box.classList.toggle('has-multiple-media',items.length>1);
   const main=items.find(x=>x.isPrimary)||items[0],mainIndex=items.indexOf(main),visible=items.slice(0,4);
   const responsiveImage=(item)=>({src:url(item,960),srcset:[320,640,960,1280].map(width=>`${url(item,width)} ${width}w`).join(', ')});
   const mainSource=responsiveImage(main);
   const thumbs=visible.map((item,index)=>{const remaining=items.length-3,isMore=items.length>4&&index===3;return `<button type="button" class="${item.id===main.id?'active':''} ${isMore?'more-images':''}" data-index="${index}" aria-label="${isMore?`Ver mais ${remaining} imagens`:`Ver imagem ${index+1}`}"><img src="${url(item,160)}" alt="" width="72" height="72" loading="lazy" decoding="async">${isMore?`<span>+${remaining}</span>`:''}</button>`}).join('');
   const dots=items.map((item,index)=>`<span class="${index===mainIndex?'active':''}" aria-hidden="true"></span>`).join('');
   box.innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${mainSource.src}" srcset="${mainSource.srcset}" sizes="(max-width:760px) calc(100vw - 44px), (max-width:1200px) 56vw, 720px" alt="${safe(main.altText||data.name||'Produto')}" fetchpriority="high" decoding="async" style="display:block;width:100%;height:100%;max-width:100%;max-height:100%;padding:24px;object-fit:contain;object-position:center;transform:none"><span class="detail-image-magnifier" aria-hidden="true"></span></button>${items.length>1?`<div class="detail-gallery-dots" aria-label="Imagem ${mainIndex+1} de ${items.length}">${dots}</div><div class="detail-thumbs">${thumbs}</div>`:''}`;
+  enhance();
   const mainButton=box.querySelector('.detail-main-image'),mainImage=mainButton.querySelector('img'),magnifier=mainButton.querySelector('.detail-image-magnifier'),syncMagnifier=()=>{magnifier.style.backgroundImage=`url("${String(mainImage.currentSrc||mainImage.src).replaceAll('"','%22')}")`};
   const syncDesktopGalleryRatio=()=>{if(matchMedia('(min-width:761px)').matches&&mainImage.naturalWidth&&mainImage.naturalHeight)mainButton.style.setProperty('--detail-image-ratio',String(mainImage.naturalWidth/mainImage.naturalHeight))};
   syncMagnifier();syncDesktopGalleryRatio();
