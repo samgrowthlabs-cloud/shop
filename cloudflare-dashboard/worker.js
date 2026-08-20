@@ -386,6 +386,30 @@ export default {
       );
     }
   },
+
+  async email(message, env, ctx) {
+    const recipient = message.to.toLowerCase();
+
+    console.log(JSON.stringify({
+      event: "incoming_email",
+      from: message.from,
+      to: recipient,
+      subject: message.headers.get("subject") || "",
+      size: message.rawSize
+    }));
+
+    if (recipient === "contato@shoplab.com.br") {
+      await Promise.all([
+        message.forward("bidjorysamuel@gmail.com"),
+        message.forward("bidjorys@gmail.com")
+      ]);
+
+      return;
+    }
+
+    message.setReject("Endereço de e-mail não encontrado.");
+  },
+
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(sendPremiumPassExpiryReminders(env));
   },

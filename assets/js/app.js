@@ -1,13 +1,14 @@
 import'./favicon.js?v=20260808-mobile-compact-2';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260816-weekly-category-highlights-1';
 import'./search-ui.js?v=20260803-media-domain-38';
 import'./public-media.js?v=20260814-coming-soon-1';
-import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260814-coming-soon-1';
+import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260820-related-images-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260807-card-compare-1';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
 import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260816-home-top-ad-removed-1';
 import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260813-home-carousel-2';
+import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-comparisons.js?v=20260820-home-cards-1';
 const mediaVariant=(key,width)=>`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(key)}?w=${width}&q=78`;
 const $=(s,r=document)=>r.querySelector(s)||(s==='#theme'?{}:null), money=v=>(v/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),parse=(value,fallback={})=>{try{return JSON.parse(value)||fallback}catch{return fallback}};
 async function bindPremiumBrand(){
@@ -467,6 +468,9 @@ home = async function () {
   const regularDeals=products.filter(product=>product.discount>0&&!endingIds.has(product.id));
   const deals=(remainingCampaignDeals.length?remainingCampaignDeals:regularDeals).slice(0,16);
   const priceDrops=products.filter(product=>Number(product.oldPrice)>Number(product.price)&&Number(product.price)>0).map(product=>({...product,dropPercent:Math.round((Number(product.oldPrice)-Number(product.price))/Number(product.oldPrice)*100)})).sort((a,b)=>b.dropPercent-a.dropPercent).slice(0,16);
+  const personalizedComparisonProducts=completePersonalized.map((product,index)=>({...product,comparisonPriority:Math.max(8,32-index*3)}));
+  const comparisonProducts=completeList([...personalizedComparisonProducts,...featured,...products]).filter((product,index,list)=>product?.slug&&list.findIndex(item=>item?.slug===product.slug)===index);
+  const homeComparisons=selectAutomaticComparisons(comparisonProducts,6);
 
   const categoryBySlug=new Map(categories.map(category=>[category.slug,category]));
   const recentCategories=viewedCategories().map(item=>categoryBySlug.get(item.slug)||item).filter(category=>category?.slug&&category?.name);
@@ -480,6 +484,7 @@ home = async function () {
     </div></section>
     ${priceDrops.length?`<section class="home-section price-drops-section"><div class="container"><div class="simple-head"><div><span class="eyebrow">QUEDA DE PRE\u00c7O</span><h2><span class="price-drop-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 12.2 12.2 3.5H20.5V11.8L11.8 20.5 3.5 12.2Z"></path><circle cx="16.7" cy="7.3" r="1.4"></circle><text x="11.5" y="14.2" text-anchor="middle">%</text></svg></span>Produtos em oferta</h2><p>Itens abaixo do pre\u00e7o anterior cadastrado.</p></div><a href="promocoes.html">Ver todas as ofertas </a></div><div class="home-price-drop-grid">${priceDrops.slice(0,10).map(product=>{const imageUrl=product.primaryStorageKey?mediaVariant(product.primaryStorageKey,240):product.primaryExternalUrl||'';const media=imageUrl?`<img src="${esc(imageUrl)}" alt="${esc(product.primaryImageAlt||product.name)}" loading="lazy" decoding="async">`:`<span class="home-product-thumb-placeholder" aria-hidden="true">${esc(product.icon||'?')}</span>`;const detailsUrl=`produto.html?slug=${encodeURIComponent(product.slug)}`;return `<article class="home-price-drop-card" data-card-url="${esc(detailsUrl)}" data-product-slug="${esc(product.slug)}" tabindex="0" role="link" aria-label="Ver oferta de ${esc(product.name)}"><div class="home-product-thumb product-media">${media}</div><div class="home-price-drop-copy">${Number(product.oldPrice)>Number(product.price)?`<span class="old">${money(product.oldPrice)}</span>`:''}<b>${money(product.price)}</b></div></article>`}).join('')}</div></div></section>`:''}
     ${viewedCategoryRails}
+    ${automaticComparisonSection(homeComparisons)}
     ${(collections||[]).map(collection=>`<section class="home-section collection-showcase"><div class="container"><div class="simple-head"><div><span class="eyebrow">COLEÇÃO EM DESTAQUE</span><h2>${esc(collection.homeTitle||collection.name)}</h2><p>${esc(collection.description||"Seleção especial da SHOPLAB.")}</p></div><a href="colecao.html?slug=${encodeURIComponent(collection.slug)}">Ver coleção </a></div>${homeProductRail(collection.products||[])}</div></section>`).join("")}\n    ${completePersonalized.length?`<section class="home-section personalized-section"><div class="container">
       <div class="simple-head"><div><span class="eyebrow">PARA VOCÊ</span><h2>Para você</h2><p>Baseados nas suas pesquisas, visualizações e interações recentes.</p></div></div>
       ${homeProductRail(completePersonalized)}
