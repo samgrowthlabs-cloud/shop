@@ -6955,7 +6955,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .meta{min-height:11px!important;margin-bottom:6px!important}
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card h3{min-height:34px!important;max-height:34px!important;margin:0 0 5px!important;font-size:13px!important;line-height:1.35!important}
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .public-rating{flex:0 0 18px!important;min-height:18px!important;margin:0 0 5px!important;overflow:hidden!important;white-space:nowrap!important}
-  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .price{flex:0 0 78px!important;height:78px!important;min-height:78px!important;margin-top:auto!important;padding-top:8px!important;overflow:hidden!important;border-top:1px solid #e2e7e5!important;align-content:start!important}
+  body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .price{flex:0 0 78px!important;height:78px!important;min-height:78px!important;margin-top:auto!important;padding-top:8px!important;overflow:hidden!important;border-top:1px solid #e2e7e5!important;align-content:end!important}
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .price .old{min-height:11px!important;margin-bottom:1px!important}
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .price .current-price{font-size:20px!important;line-height:1.1!important}
   body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .card-saving{margin-top:5px!important;padding:4px 6px!important;border-radius:5px!important;font-size:8px!important;line-height:1.15!important}
@@ -6974,7 +6974,7 @@ body[data-page="promotions"] .promotion-products .product-card:is(:hover,:focus,
   body:not([data-admin-page])[data-page="product"] #product-related .product-card .meta{min-height:11px!important;margin-bottom:6px!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card h3{min-height:34px!important;max-height:34px!important;margin:0 0 5px!important;font-size:13px!important;line-height:1.35!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card .public-rating{flex:0 0 18px!important;min-height:18px!important;margin:0 0 5px!important;overflow:hidden!important;white-space:nowrap!important}
-  body:not([data-admin-page])[data-page="product"] #product-related .product-card .price{flex:0 0 78px!important;height:78px!important;min-height:78px!important;margin-top:auto!important;padding-top:8px!important;overflow:hidden!important;border-top:1px solid #e2e7e5!important;align-content:start!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card .price{flex:0 0 78px!important;height:78px!important;min-height:78px!important;margin-top:auto!important;padding-top:8px!important;overflow:hidden!important;border-top:1px solid #e2e7e5!important;align-content:end!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card .price .old{min-height:11px!important;margin-bottom:1px!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card .price .current-price{font-size:20px!important;line-height:1.1!important}
   body:not([data-admin-page])[data-page="product"] #product-related .product-card .card-saving{margin-top:5px!important;padding:4px 6px!important;border-radius:5px!important;font-size:8px!important;line-height:1.15!important}
@@ -8187,3 +8187,73 @@ body[data-page="home"] .home-banner-slide{transform:none!important;opacity:0!imp
 body[data-page="home"] .home-banner-slide.is-active{transform:none!important;opacity:1!important;visibility:visible!important}
 body[data-page="home"] .home-banner-slide picture{transform:none!important;animation:none!important;transition:none!important;filter:none!important}
 body[data-page="home"] .home-banner-slide :is(img,.home-banner-copy,.home-banner-copy small,.home-banner-copy strong,.home-banner-copy>span,.home-banner-copy b,.home-banner-shade,.home-banner-overlay){animation:none!important;transition:none!important;filter:none!important;clip-path:none!important}
+
+/* Home mobile: hero colado ao cabeçalho e sem moldura lateral do container. */
+@media(max-width:760px){
+  html body[data-page="home"] .header,
+  html body[data-page="home"] .mobile-home-header,
+  html body[data-page="home"] .home-banner-section,
+  html body[data-page="home"] .home-banner-section > .container,
+  html body[data-page="home"] .home-banner{margin-bottom:0!important}
+  html body[data-page="home"] .home-banner-section > .container,
+  html body[data-page="home"] .home-banner{width:100%!important;max-width:none!important;padding-left:0!important;padding-right:0!important}
+  html body[data-page="home"] .home-banner{border-radius:0!important}
+}
+
+/* Mobile: remove o contorno claro decorativo que criava uma linha fina no banner. */
+@media(max-width:760px){
+  html body[data-page="home"] .home-banner::after{display:none!important}
+}
+
+/* Faixas residuais do banner da home no mobile. */
+@media(max-width:760px){
+  html body[data-page="home"] .header,
+  html body[data-page="home"] .header .subnav,
+  html body[data-page="home"] .home-banner-section,
+  html body[data-page="home"] .home-banner-section > .container,
+  html body[data-page="home"] .home-banner{
+    border:0!important;
+    outline:0!important;
+  }
+  html body[data-page="home"] .home-banner-section,
+  html body[data-page="home"] .home-banner-section > .container,
+  html body[data-page="home"] .home-banner,
+  html body[data-page="home"] .home-banner-slide,
+  html body[data-page="home"] .home-banner-slide picture,
+  html body[data-page="home"] .home-banner-slide img{
+    box-sizing:border-box!important;
+  }
+}
+
+/* Garante continuidade visual entre o cabeçalho e o banner na home mobile. */
+@media(max-width:760px){
+  html body[data-page="home"] .header{border-bottom:0!important;box-shadow:none!important}
+  html body[data-page="home"] .home-banner-section,
+  html body[data-page="home"] .home-banner-section > .container{background:#001e1b!important;overflow:hidden!important}
+  html body[data-page="home"] .home-banner-section{line-height:0!important}
+  html body[data-page="home"] .home-banner{display:block!important;line-height:normal!important}
+}
+
+/* Recorte de segurança: cobre o último filete no topo e à direita, sem deslocar a borda esquerda. */
+@media(max-width:760px){
+  html body[data-page="home"] .home-banner-slide picture,
+  html body[data-page="home"] .home-banner-slide picture img{
+    width:calc(100% + 2px)!important;
+    height:calc(100% + 2px)!important;
+  }
+  html body[data-page="home"] .home-banner-slide picture img{
+    transform:translateY(-1px)!important;
+  }
+}
+
+/* Amplia a cobertura do banner sobre os filetes residuais do viewport mobile. */
+@media(max-width:760px){
+  html body[data-page="home"] .home-banner-slide picture,
+  html body[data-page="home"] .home-banner-slide picture img{
+    width:calc(100% + 6px)!important;
+    height:calc(100% + 6px)!important;
+  }
+  html body[data-page="home"] .home-banner-slide picture img{
+    transform:translateY(-3px)!important;
+  }
+}
