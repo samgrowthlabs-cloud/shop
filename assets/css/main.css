@@ -8188,7 +8188,7 @@ body[data-page="home"] .home-banner-slide.is-active{transform:none!important;opa
 body[data-page="home"] .home-banner-slide picture{transform:none!important;animation:none!important;transition:none!important;filter:none!important}
 body[data-page="home"] .home-banner-slide :is(img,.home-banner-copy,.home-banner-copy small,.home-banner-copy strong,.home-banner-copy>span,.home-banner-copy b,.home-banner-shade,.home-banner-overlay){animation:none!important;transition:none!important;filter:none!important;clip-path:none!important}
 
-/* Home mobile: hero colado ao cabeçalho e sem moldura lateral do container. */
+/* Home mobile: hero colado ao cabeï¿½alho e sem moldura lateral do container. */
 @media(max-width:760px){
   html body[data-page="home"] .header,
   html body[data-page="home"] .mobile-home-header,
@@ -8225,7 +8225,7 @@ body[data-page="home"] .home-banner-slide :is(img,.home-banner-copy,.home-banner
   }
 }
 
-/* Garante continuidade visual entre o cabeçalho e o banner na home mobile. */
+/* Garante continuidade visual entre o cabeï¿½alho e o banner na home mobile. */
 @media(max-width:760px){
   html body[data-page="home"] .header{border-bottom:0!important;box-shadow:none!important}
   html body[data-page="home"] .home-banner-section,
@@ -8234,7 +8234,7 @@ body[data-page="home"] .home-banner-slide :is(img,.home-banner-copy,.home-banner
   html body[data-page="home"] .home-banner{display:block!important;line-height:normal!important}
 }
 
-/* Recorte de segurança: cobre o último filete no topo e à direita, sem deslocar a borda esquerda. */
+/* Recorte de seguranï¿½a: cobre o ï¿½ltimo filete no topo e ï¿½ direita, sem deslocar a borda esquerda. */
 @media(max-width:760px){
   html body[data-page="home"] .home-banner-slide picture,
   html body[data-page="home"] .home-banner-slide picture img{
@@ -8256,4 +8256,18 @@ body[data-page="home"] .home-banner-slide :is(img,.home-banner-copy,.home-banner
   html body[data-page="home"] .home-banner-slide picture img{
     transform:translateY(-3px)!important;
   }
+}
+
+/* Alternativas: decisÃ£o rÃ¡pida, contexto visÃ­vel e cards mais compactos. */
+body:not([data-admin-page])[data-page="product"] #product-related .premium-relation-context{display:block;overflow:hidden;color:#687572;font-size:10px;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+body:not([data-admin-page])[data-page="product"] #product-related .premium-relation.relation-tone-premium strong{color:#c26416!important}
+@media(min-width:761px){
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card{min-height:270px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media{flex-basis:160px!important;height:160px!important;min-height:160px!important;padding:10px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:136px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-body{padding:11px 14px 13px!important}
+}
+@media(max-width:760px){
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media{flex-basis:136px!important;height:136px!important;min-height:136px!important;padding:8px!important}
+  body:not([data-admin-page])[data-page="product"] #product-related .product-card.premium-related-card .product-media img{max-height:120px!important}
 }
