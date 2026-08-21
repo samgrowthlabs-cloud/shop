@@ -8475,3 +8475,66 @@ body[data-page="home"] :is(.home-section,.section) :is(.products,.product-carous
   html body:not([data-admin-page]) .shoplab-public-ad.without-head .shoplab-public-ad-media>img,html body:not([data-admin-page]) .shoplab-public-ad.without-head .shoplab-public-ad-media>video{width:100%!important;height:68px!important;max-height:68px!important;object-fit:cover!important}
   html body:not([data-admin-page]) .shoplab-public-ad.without-head .shoplab-public-ad-price-chip{min-width:0!important;max-width:100%!important;overflow:hidden!important}
   html body:not([data-admin-page]) .shoplab-public-ad.without-head .shoplab-public-ad-price-chip b{display:block;max-width:100%;font-size:clamp(16px,4.5vw,20px)!important;line-height:1.1!important;white-space:nowrap!important}
+
+/* T?tulos dos produtos com um pouco mais de presen?a visual. */
+body:not([data-admin-page]) .product-card h3{
+  font-size:17px!important;
+  line-height:1.3!important;
+}
+@media(max-width:760px){
+  body:not([data-admin-page]) .product-card h3{font-size:16px!important;line-height:1.28!important}
+}
+
+/* Refor?o sutil da leitura dos t?tulos de produto. */
+body:not([data-admin-page]) .product-card h3{
+  font-size:17.5px!important;
+  font-weight:450!important;
+}
+@media(max-width:760px){
+  body:not([data-admin-page]) .product-card h3{font-size:16.5px!important}
+}
+
+/* Segundo ajuste sutil de destaque nos t?tulos de produto. */
+body:not([data-admin-page]) .product-card h3{
+  font-size:18px!important;
+  font-weight:475!important;
+}
+@media(max-width:760px){
+  body:not([data-admin-page]) .product-card h3{font-size:17px!important}
+}
+
+/* Mesma tipografia em todos os cards de produtos, inclusive trilhos e relacionados. */
+html body:not([data-admin-page]) :is(.products,.product-carousel-track,.home-product-rail)>.product-card h3,
+html body:not([data-admin-page]) #product-related .product-card h3,
+html body:not([data-admin-page]) .product-card h3{
+  font-size:18px!important;
+  font-weight:475!important;
+  line-height:1.3!important;
+}
+@media(max-width:760px){
+  html body:not([data-admin-page]) :is(.products,.product-carousel-track,.home-product-rail)>.product-card h3,
+  html body:not([data-admin-page]) #product-related .product-card h3,
+  html body:not([data-admin-page]) .product-card h3{font-size:17px!important;line-height:1.28!important}
+}
+
+/* An?ncios com cantos mais sutis em todo o site. */
+html body:not([data-admin-page]) .shoplab-public-ad{border-radius:8px!important}
+html body:not([data-admin-page]) .shoplab-public-ad>a{border-radius:inherit!important}
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media,
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media>img,
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media>video{border-radius:6px!important}
+@media(max-width:760px){
+  html body:not([data-admin-page]) .shoplab-public-ad{border-radius:7px!important}
+
+/* Card de an?ncio quase quadrado, como o formato indicado. */
+html body:not([data-admin-page]) .shoplab-public-ad{border-radius:3px!important}
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media,
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media>img,
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media>video{border-radius:2px!important}
+@media(max-width:760px){html body:not([data-admin-page]) .shoplab-public-ad{border-radius:3px!important}}
+
+/* An?ncios com formato totalmente quadrado. */
+html body:not([data-admin-page]) .shoplab-public-ad,
+html body:not([data-admin-page]) .shoplab-public-ad>a,
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media,
+html body:not([data-admin-page]) .shoplab-public-ad .shoplab-public-ad-media>img,
