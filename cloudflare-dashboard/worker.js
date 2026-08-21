@@ -6975,7 +6975,7 @@ async function createHeaderSpotlight(req, env, id) {
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const spotlightId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,spotlight_position_x,spotlight_position_y,spotlight_scale,spotlight_rotation,spotlight_animation,spotlight_animation_duration,spotlight_animation_delay,display_duration_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO header_spotlights(id,name,link_url,alt_text,starts_at,ends_at,is_active,sort_order,spotlight_position_x,spotlight_position_y,spotlight_scale,spotlight_rotation,spotlight_animation,spotlight_animation_duration,spotlight_animation_delay,display_duration_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(spotlightId, ...headerSpotlightValues(body)).run();
   return ok(req, env, { id: spotlightId }, id);
 }
