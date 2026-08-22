@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS partners (
 
 CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
+  cta_code TEXT UNIQUE,
   subtitle TEXT NOT NULL DEFAULT '', product_type TEXT NOT NULL DEFAULT 'affiliate',
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','archived')),
   category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,

@@ -325,7 +325,11 @@ async function listing(){
   const intelligentSearchPromise=page==='search'&&q?searchProductsWithMeta({q,categorySlug:'',sort:'',smart:params.get('smart')==='1'}):Promise.resolve(null);
   const categories=await categoriesPromise,pageCategory=page==='category'?categories.find(item=>item.slug===slug):null;
   if(page==='category')rememberViewedCategory(pageCategory||{slug,name:slug.replace(/-/g,' ')});
-  const intelligentSearch=await intelligentSearchPromise;
+const intelligentSearch=await intelligentSearchPromise;
+  if(page==='search'&&intelligentSearch?.meta?.ctaCodeMatch&&intelligentSearch.data?.[0]?.slug){
+    location.replace(`produto.html?slug=${encodeURIComponent(intelligentSearch.data[0].slug)}`);
+    return '';
+  }
   let all=intelligentSearch?.data||await searchProducts({q,category:pageCategory?.name||'',categorySlug:pageCategory?.slug||'',sort:'',store});
   if(page==='brand'&&slug)all=all.filter(product=>(product.brand||'').toLocaleLowerCase('pt-BR')===decodeURIComponent(slug).replace(/-/g,' ').toLocaleLowerCase('pt-BR'));
   if(page==='author'&&slug)all=all.filter(product=>(product.author||'').toLocaleLowerCase('pt-BR')===decodeURIComponent(slug).replace(/-/g,' ').toLocaleLowerCase('pt-BR'));
