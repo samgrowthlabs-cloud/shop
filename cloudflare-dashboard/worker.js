@@ -3375,11 +3375,12 @@ async function createProductV2(req, env, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO products(id,name,slug,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,price_source,price_source_item_id,price_source_offer_id,price_source_url,price_sync_enabled,price_synced_at,price_sync_status,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ?=1 THEN 'ok' ELSE NULL END,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
+      `INSERT INTO products(id,name,slug,cta_code,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,price_source,price_source_item_id,price_source_offer_id,price_source_url,price_sync_enabled,price_synced_at,price_sync_status,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ?=1 THEN 'ok' ELSE NULL END,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
     ).bind(
       productId,
       String(body.name).trim(),
       body.slug,
+      shoplabCtaCode(body.ctaCode),
       productType,
       status,
       body.categoryId || null,
@@ -3469,10 +3470,11 @@ async function updateProductV2(req, env, productId, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   const statements = [
     env.DB.prepare(
-      `UPDATE products SET name=?,slug=?,product_type=?,status=CASE WHEN ?=1 THEN ? ELSE status END,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?=1 AND ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE products SET name=?,slug=?,cta_code=?,product_type=?,status=CASE WHEN ?=1 THEN ? ELSE status END,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?=1 AND ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(
       String(body.name).trim(),
       body.slug,
+      shoplabCtaCode(body.ctaCode),
       productType,
       owner ? 1 : 0,
       body.status || "draft",
@@ -3823,7 +3825,11 @@ async function searchV2(req, env, url, ctx, id) {
   const originalQuery = (url.searchParams.get("q") || "").trim().slice(0, 100);
   const normalizedQuery = normalizeSearch(originalQuery);
   if (normalizedQuery.length < 2)
-    return ok(req, env, [], id, { query: originalQuery, total: 0 });
+    return ok(req, env, [], id, { query: originalQuery, total: 0 });  const ctaCode = shoplabCtaCode(originalQuery);
+  if (ctaCode) {
+    const match = await env.DB.prepare(`${PRODUCT_CARD_SELECT} WHERE p.status='published' AND p.cta_code=? LIMIT 1`).bind(ctaCode).first();
+    if (match) return ok(req, env, [normalizeProduct(match)], id, { query: originalQuery, total: 1, ctaCodeMatch: true });
+  }
   const searchUser = req.headers.has("authorization") ? await activeUser(req, env) : null;
   const premium = searchUser ? await premiumSubscriptionData(env, searchUser.id) : null;
   const premiumEnabled = Boolean(premium?.premium);
@@ -4738,7 +4744,7 @@ async function adminProductDetail(req, env, productId, id) {
   if (!actor)
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const product = await env.DB.prepare(
-    `SELECT id,name,slug,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson,price_source priceSource,price_source_item_id priceSourceItemId,price_source_offer_id priceSourceOfferId,price_source_url priceSourceUrl,price_sync_enabled priceSyncEnabled,price_synced_at priceSyncedAt,price_sync_status priceSyncStatus,price_sync_error priceSyncError FROM products WHERE id=?`,
+    `SELECT id,name,slug,cta_code ctaCode,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson,price_source priceSource,price_source_item_id priceSourceItemId,price_source_offer_id priceSourceOfferId,price_source_url priceSourceUrl,price_sync_enabled priceSyncEnabled,price_synced_at priceSyncedAt,price_sync_status priceSyncStatus,price_sync_error priceSyncError FROM products WHERE id=?`,
   )
     .bind(productId)
     .first();
@@ -6001,15 +6007,15 @@ async function adminProducts(req, env, url, id) {
   let where = "1=1";
   const args = [];
   if (q) {
-    where += " AND (p.name LIKE ? OR p.slug LIKE ?)";
-    args.push(`%${q}%`, `%${q}%`);
+    where += " AND (p.name LIKE ? OR p.slug LIKE ? OR p.cta_code LIKE ?)";
+    args.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
   if (status) {
     where += " AND p.status=?";
     args.push(status);
   }
   const { results } = await env.DB.prepare(
-    `SELECT p.id,p.name,p.slug,p.product_type productType,p.status,p.editorial_score editorialScore,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) previousPrice FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE ${where} ORDER BY p.updated_at DESC LIMIT 100`,
+    `SELECT p.id,p.name,p.slug,p.cta_code ctaCode,p.product_type productType,p.status,p.editorial_score editorialScore,p.updated_at updatedAt,c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,COALESCE(o.previous_price_cents,p.compare_at_price_cents) previousPrice FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE ${where} ORDER BY p.updated_at DESC LIMIT 100`,
   )
     .bind(...args)
     .all();
@@ -8998,6 +9004,7 @@ async function verifyTurnstile(token, req, env) {
   );
   return res.json();
 }
+function shoplabCtaCode(value) { const code=String(value||'').trim().toUpperCase(); return code ? (code.startsWith('SL-') ? code : `SL-${code}`) : null; }
 function validateProduct(b) {
   if (!b || typeof b !== "object") return "Dados inválidos";
   if (!String(b.name || "").trim() || String(b.name).length > 160)

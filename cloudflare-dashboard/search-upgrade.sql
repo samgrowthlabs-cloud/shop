@@ -16,7 +16,7 @@ CREATE TRIGGER products_fts_insert AFTER INSERT ON products BEGIN
     new.name,
     COALESCE((SELECT name FROM brands WHERE id=new.brand_id),''),
     COALESCE((SELECT name FROM categories WHERE id=new.category_id),''),
-    COALESCE(new.subtitle,'') || ' ' || COALESCE(new.short_description,'') || ' ' || COALESCE(new.full_description,'') || ' ' || COALESCE(new.tags_json,'[]')
+    COALESCE(new.cta_code,'') || ' ' || COALESCE(new.subtitle,'') || ' ' || COALESCE(new.short_description,'') || ' ' || COALESCE(new.full_description,'') || ' ' || COALESCE(new.tags_json,'[]')
   );
 END;
 
@@ -29,7 +29,7 @@ CREATE TRIGGER products_fts_update AFTER UPDATE ON products BEGIN
     new.name,
     COALESCE((SELECT name FROM brands WHERE id=new.brand_id),''),
     COALESCE((SELECT name FROM categories WHERE id=new.category_id),''),
-    COALESCE(new.subtitle,'') || ' ' || COALESCE(new.short_description,'') || ' ' || COALESCE(new.full_description,'') || ' ' || COALESCE(new.tags_json,'[]')
+    COALESCE(new.cta_code,'') || ' ' || COALESCE(new.subtitle,'') || ' ' || COALESCE(new.short_description,'') || ' ' || COALESCE(new.full_description,'') || ' ' || COALESCE(new.tags_json,'[]')
   );
 END;
 
@@ -45,7 +45,7 @@ SELECT
   p.name,
   COALESCE(b.name,''),
   COALESCE(c.name,''),
-  COALESCE(p.subtitle,'') || ' ' || COALESCE(p.short_description,'') || ' ' || COALESCE(p.full_description,'') || ' ' || COALESCE(p.tags_json,'[]')
+  COALESCE(p.cta_code,'') || ' ' || COALESCE(p.subtitle,'') || ' ' || COALESCE(p.short_description,'') || ' ' || COALESCE(p.full_description,'') || ' ' || COALESCE(p.tags_json,'[]')
 FROM products p
 LEFT JOIN brands b ON b.id=p.brand_id
 LEFT JOIN categories c ON c.id=p.category_id;
