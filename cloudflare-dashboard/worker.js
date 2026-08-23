@@ -974,10 +974,10 @@ async function resolvedCatalogSettings(env){
   catch(error){if(/no such table/i.test(String(error?.message||error)))return{noveltyDays:30};throw error}
 }
 
-const SOCIAL_LINK_FIELDS=["instagram","tiktok","youtube","facebook","linkedin","x","whatsapp"];
+const SOCIAL_LINK_FIELDS=["instagram","tiktok","threads","youtube","facebook","linkedin","x","whatsapp"];
 async function socialLinksRecord(env){
   const empty=Object.fromEntries(SOCIAL_LINK_FIELDS.map(key=>[key,""]));
-  try{return {...empty,...(await env.DB.prepare("SELECT instagram,tiktok,youtube,facebook,linkedin,x,whatsapp FROM social_links WHERE id='default'").first()||{})}}
+  try{return {...empty,...(await env.DB.prepare("SELECT instagram,tiktok,threads,youtube,facebook,linkedin,x,whatsapp FROM social_links WHERE id='default'").first()||{})}}
   catch(error){if(/no such table/i.test(String(error?.message||error)))return empty;throw error}
 }
 async function adminSocialLinks(req,env,id){
@@ -988,7 +988,7 @@ async function updateSocialLinks(req,env,id){
   if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
   const body=await readJson(req,8192),links={};
   for(const key of SOCIAL_LINK_FIELDS){const value=String(body[key]||"").trim();if(value){let url;try{url=new URL(value)}catch{return fail(req,env,"VALIDATION_ERROR",`Informe uma URL válida para ${key}`,422,id)}if(!/^https?:$/.test(url.protocol))return fail(req,env,"VALIDATION_ERROR",`Informe uma URL válida para ${key}`,422,id)}links[key]=value}
-  try{await env.DB.prepare("INSERT INTO social_links(id,instagram,tiktok,youtube,facebook,linkedin,x,whatsapp,updated_at) VALUES('default',?,?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET instagram=excluded.instagram,tiktok=excluded.tiktok,youtube=excluded.youtube,facebook=excluded.facebook,linkedin=excluded.linkedin,x=excluded.x,whatsapp=excluded.whatsapp,updated_at=CURRENT_TIMESTAMP").bind(...SOCIAL_LINK_FIELDS.map(key=>links[key])).run()}
+  try{await env.DB.prepare("INSERT INTO social_links(id,instagram,tiktok,threads,youtube,facebook,linkedin,x,whatsapp,updated_at) VALUES('default',?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET instagram=excluded.instagram,tiktok=excluded.tiktok,threads=excluded.threads,youtube=excluded.youtube,facebook=excluded.facebook,linkedin=excluded.linkedin,x=excluded.x,whatsapp=excluded.whatsapp,updated_at=CURRENT_TIMESTAMP").bind(...SOCIAL_LINK_FIELDS.map(key=>links[key])).run()}
   catch(error){if(/no such table/i.test(String(error?.message||error)))return fail(req,env,"SOCIAL_LINKS_MIGRATION_REQUIRED","Execute social-links-upgrade.sql no banco D1 e publique novamente.",503,id);throw error}
   return ok(req,env,links,id);
 }

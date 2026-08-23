@@ -70,7 +70,7 @@ function specificationIcon(name){const key=name.toLocaleLowerCase('pt-BR');let i
 function renderProductInformation(data){
   if(!data||document.querySelector('.product-information-sections'))return;
   const specifications=productSpecifications(data),detailCopy=document.querySelector('.detail > div:last-child'),offer=detailCopy?.querySelector('.offer');
-  const productTitle=detailCopy?.querySelector('h1');if(productTitle&&data.brand&&!detailCopy.querySelector('.detail-brand')){const brandLogo=data.brandLogoUrl?`<img src="${safe(data.brandLogoUrl)}" alt="Logo ${safe(data.brand)}">`:'';productTitle.insertAdjacentHTML('afterend',`<div class="detail-brand">${brandLogo}<span><small>Marca</small><strong>${safe(data.brand)}</strong></span></div>`);const oldBrandText=[...detailCopy.querySelectorAll(':scope > p.muted')].find(item=>item.textContent.trim()===String(data.brand).trim());oldBrandText?.remove()}
+  const productTitle=detailCopy?.querySelector('h1'),brandSummary=detailCopy?.querySelector('.product-brand-summary');if(brandSummary)detailCopy.querySelector('.detail-brand')?.remove();if(productTitle&&data.brand&&!brandSummary&&!detailCopy.querySelector('.detail-brand')){const brandLogo=data.brandLogoUrl?`<img src="${safe(data.brandLogoUrl)}" alt="Logo ${safe(data.brand)}">`:'';productTitle.insertAdjacentHTML('afterend',`<div class="detail-brand">${brandLogo}<span><small>Marca</small><strong>${safe(data.brand)}</strong></span></div>`);const oldBrandText=[...detailCopy.querySelectorAll(':scope > p.muted')].find(item=>item.textContent.trim()===String(data.brand).trim());oldBrandText?.remove()}
   const shareButton=detailCopy?.querySelector('.detail-share'),compareSvg='<img src="assets/icons/compare.svg" alt="">';if(shareButton&&!detailCopy.querySelector('.detail-favorite')){shareButton.innerHTML='<img src="assets/icons/share.svg" alt=""><span>Compartilhar</span>';shareButton.insertAdjacentHTML('beforebegin',`<button class="btn ghost detail-favorite icon-compare compare-product" type="button" data-compare-product="${safe(data.slug)}" data-compare-name="${safe(data.name)}" data-compare-category="${safe(data.category||'Sem categoria')}" aria-pressed="false">${compareSvg}<span>Comparar</span></button>`)}
   const currentPrice=Number(data.price||0),oldPrice=Number(data.oldPrice||0),discount=oldPrice>currentPrice&&currentPrice>0?Math.round((1-currentPrice/oldPrice)*100):Number(data.discount||0);
   if(offer){const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),logo=data.storeLogoUrl?`<img src="${safe(data.storeLogoUrl)}" alt="Logo ${safe(data.store||'da loja')}">`:'<span aria-hidden="true">🤝</span>';offer.innerHTML=`<small class="offer-label">Melhor preço encontrado</small><div class="offer-price-top">${oldPrice>currentPrice?`<span class="old">${money(oldPrice)}</span>`:''}${discount>0?`<span class="detail-discount">-${discount}%</span>`:''}</div><div class="price">${money(currentPrice)}</div><div class="offer-seller">${logo}<p>Vendido por <strong>${safe(data.store||'loja parceira')}</strong> · parceiro verificado</p><img class="offer-verified" src="assets/icons/verified.svg" alt="Verificado"></div><a class="btn primary" href="#" data-offer="${safe(data.slug)}">Ir para oferta <span aria-hidden="true"></span></a><small class="offer-redirect"><img src="assets/icons/shield-check.svg" alt=""> Você será redirecionado para a loja parceira.</small>`}
@@ -108,6 +108,9 @@ function arrangeMobileOffer(){
     actionsAnchor.dataset.actionsPosition='true';
     actions.insertAdjacentElement('beforebegin',actionsAnchor);
   }
+  const brand=detail.querySelector('.product-brand-summary'),compare=detail.querySelector('.detail-favorite'),share=detail.querySelector('.detail-share');
+  const quickItems=[[brand,'brand'],[compare,'compare'],[share,'share']];
+  quickItems.forEach(([element,key])=>{if(!element||copy.querySelector(`[data-quick-position="${key}"]`))return;const marker=document.createElement('span');marker.hidden=true;marker.dataset.quickPosition=key;element.insertAdjacentElement('beforebegin',marker)});
   const mobile=matchMedia('(max-width:760px)').matches;
   if(mobile){
     let titleSlot=detail.querySelector(':scope > .mobile-product-title-slot');
@@ -123,11 +126,19 @@ function arrangeMobileOffer(){
       slot.className='mobile-offer-slot';
       media.insertAdjacentElement('afterend',slot);
     }
+    let quick=detail.querySelector(':scope > .mobile-product-quick-actions');
+    if(!quick){quick=document.createElement('div');quick.className='mobile-product-quick-actions';slot.insertAdjacentElement('beforebegin',quick)}
+    quickItems.forEach(([element])=>{if(element){if(element.dataset.desktopStyle===undefined)element.dataset.desktopStyle=element.getAttribute('style')||'';quick.append(element)}});
+    quick.style.cssText='display:grid!important;grid-template-columns:minmax(104px,1fr) auto auto!important;align-items:stretch!important;gap:6px!important;width:100%!important;min-width:0!important;margin:10px 0 12px!important';
+    if(brand)brand.style.cssText+=';display:flex!important;width:100%!important;min-width:0!important;max-width:100%!important;height:44px!important;min-height:44px!important;margin:0!important;padding:5px 7px 5px 5px!important';
+    [compare,share].forEach(button=>{if(button)button.style.cssText='display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:5px!important;width:auto!important;min-width:0!important;height:44px!important;min-height:44px!important;margin:0!important;padding:7px 9px!important;border-radius:10px!important;font-size:10px!important;white-space:nowrap!important'});
     slot.append(offer);
     if(disclaimer)slot.append(disclaimer);
     if(insight)slot.append(insight);
     if(actions)slot.append(actions);
   }else{
+    quickItems.forEach(([element,key])=>{const marker=copy.querySelector(`[data-quick-position="${key}"]`);if(element&&marker){marker.insertAdjacentElement('afterend',element);if(element.dataset.desktopStyle!==undefined){element.setAttribute('style',element.dataset.desktopStyle);delete element.dataset.desktopStyle}}});
+    detail.querySelector(':scope > .mobile-product-quick-actions')?.remove();
     if(title&&titleAnchor)titleAnchor.insertAdjacentElement('afterend',title);
     detail.querySelector(':scope > .mobile-product-title-slot')?.remove();
     anchor.insertAdjacentElement('afterend',offer);
