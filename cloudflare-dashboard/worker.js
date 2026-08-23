@@ -815,7 +815,11 @@ async function route(request, env, ctx, requestId) {
   if (request.method === "POST" && path === "/api/v1/admin/typography/font")
     return uploadTypographyFont(request, env, requestId);
   if (request.method === "DELETE" && path === "/api/v1/admin/typography/font")
-    return removeTypographyFont(request, env, requestId);  if (request.method === "GET" && path === "/api/v1/admin/themes")
+    return removeTypographyFont(request, env, requestId);  if (request.method === "GET" && path === "/api/v1/admin/social-links")
+    return adminSocialLinks(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/social-links")
+    return updateSocialLinks(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/themes")
     return adminThemes(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/themes")
     return createTheme(request, env, requestId);
@@ -970,6 +974,24 @@ async function resolvedCatalogSettings(env){
   catch(error){if(/no such table/i.test(String(error?.message||error)))return{noveltyDays:30};throw error}
 }
 
+const SOCIAL_LINK_FIELDS=["instagram","tiktok","youtube","facebook","linkedin","x","whatsapp"];
+async function socialLinksRecord(env){
+  const empty=Object.fromEntries(SOCIAL_LINK_FIELDS.map(key=>[key,""]));
+  try{return {...empty,...(await env.DB.prepare("SELECT instagram,tiktok,youtube,facebook,linkedin,x,whatsapp FROM social_links WHERE id='default'").first()||{})}}
+  catch(error){if(/no such table/i.test(String(error?.message||error)))return empty;throw error}
+}
+async function adminSocialLinks(req,env,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
+  return ok(req,env,await socialLinksRecord(env),id);
+}
+async function updateSocialLinks(req,env,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
+  const body=await readJson(req,8192),links={};
+  for(const key of SOCIAL_LINK_FIELDS){const value=String(body[key]||"").trim();if(value){let url;try{url=new URL(value)}catch{return fail(req,env,"VALIDATION_ERROR",`Informe uma URL válida para ${key}`,422,id)}if(!/^https?:$/.test(url.protocol))return fail(req,env,"VALIDATION_ERROR",`Informe uma URL válida para ${key}`,422,id)}links[key]=value}
+  try{await env.DB.prepare("INSERT INTO social_links(id,instagram,tiktok,youtube,facebook,linkedin,x,whatsapp,updated_at) VALUES('default',?,?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET instagram=excluded.instagram,tiktok=excluded.tiktok,youtube=excluded.youtube,facebook=excluded.facebook,linkedin=excluded.linkedin,x=excluded.x,whatsapp=excluded.whatsapp,updated_at=CURRENT_TIMESTAMP").bind(...SOCIAL_LINK_FIELDS.map(key=>links[key])).run()}
+  catch(error){if(/no such table/i.test(String(error?.message||error)))return fail(req,env,"SOCIAL_LINKS_MIGRATION_REQUIRED","Execute social-links-upgrade.sql no banco D1 e publique novamente.",503,id);throw error}
+  return ok(req,env,links,id);
+}
 async function publicSiteConfig(req, env, id) {
   const [banners, theme, stores, brands, headerPromotions, headerSpotlights, headerAds] = await env.DB.batch([
     env.DB.prepare(
@@ -1000,7 +1022,7 @@ async function publicSiteConfig(req, env, id) {
   const mediaUrl = (key) =>
     key ? `${origin}/media/${encodeURIComponent(key)}` : null;
   const publicBannerStyle=banner=>{const style=parse(banner.styleJson||"{}",{});return JSON.stringify({...style,overlays:(Array.isArray(style.overlays)?style.overlays:[]).map(layer=>({...layer,imageUrl:mediaUrl(layer.storageKey),storageKey:undefined}))})};
-  const catalogSettings=await resolvedCatalogSettings(env);
+  const [catalogSettings,socialLinks]=await Promise.all([resolvedCatalogSettings(env),socialLinksRecord(env)]);
   const response = ok(
     req,
     env,
@@ -1042,6 +1064,7 @@ async function publicSiteConfig(req, env, id) {
       stores: stores.results || [],
       brands: brands.results || [],
       catalog: catalogSettings,
+      socialLinks,
       headerPromotions: (headerPromotions.results || []).map((promotion) => ({
         ...promotion,
         ...parse(promotion.rulesJson, {}),
@@ -7331,7 +7354,7 @@ function adminPermissionForRequest(method, path) {
   if (path.includes("/header-spotlights")) return "header_spotlights.manage";
   if (path.includes("/header-ads") || path.includes("/shoplab-ads") || path.includes("/shoplab-ad-assignments")) return "header_ads.manage";
   if (path.includes("/banners")) return "banners.manage";
-  if (path.includes("/typography")) return "themes.manage";
+  if (path.includes("/typography") || path.includes("/social-links")) return "themes.manage";
   if (path.includes("/themes")) return "themes.manage";
   return "dashboard.view";
 }
