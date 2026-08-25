@@ -15,6 +15,7 @@
 | Catálogo | `brand-store-logo-upgrade.sql`, `category-image-upgrade.sql`, `category-image-position-upgrade.sql`, `category-image-scale-upgrade.sql`, `product-collections-upgrade.sql`, `product-media-hover-upgrade.sql` |
 | Promoções | `promotion-upgrade.sql` |
 | Temas, logos e tipografia | `site-customization-upgrade.sql`, `theme-logo-media-upgrade.sql`, `theme-logo-color-upgrade.sql`, `theme-component-colors-upgrade.sql`, `theme-icon-color-upgrade.sql`, `site-typography-upgrade.sql` |
+| Redes sociais do rodapé | `social-links-upgrade.sql`; se a tabela já existir sem Threads, execute também `social-links-threads-upgrade.sql` |
 | Banners e cabeçalho | `banner-style-editor-upgrade.sql`, `banner-image-controls-upgrade.sql`, `banner-personalization-upgrade.sql`, `header-spotlight-upgrade.sql`, `header-spotlight-animation-upgrade.sql`, `header-spotlight-image-controls-upgrade.sql`, `header-theme-media-upgrade.sql`, `header-theme-image-controls-upgrade.sql`, `header-ad-strips-upgrade.sql`, `header-ad-editor-upgrade.sql`, `header-ad-layers-upgrade.sql`, `ad-placement-duration-upgrade.sql` |
 | Administração | `admin-collaborators-upgrade.sql`, `ai-feature-settings-upgrade.sql` |
 | Usuários, biblioteca e recompensas | `user-auth-upgrade.sql`, `user-library-upgrade.sql`, `user-library-isolation-cleanup.sql`, `user-engagement-referrals-upgrade.sql`, `gift-card-rewards-upgrade.sql`, `manual-user-rewards-upgrade.sql`, `manual-reward-redemption-upgrade.sql` |

@@ -1,4 +1,4 @@
-const VERSION='shoplab-pwa-v39-card-title-single-source';
+const VERSION='shoplab-pwa-v50-social-links-threads';
 const SHELL=['/','/index.html','/produto.html','/produtos.html','/busca.html','/categoria.html','/promocoes.html','/novidades.html','/comparar.html','/conta.html','/entrar.html','/offline.html','/manifest.webmanifest','/assets/css/main.css','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png','/assets/img/pwa-maskable.svg','/assets/js/pwa.js','/assets/js/mobile-enhancements.js'];
 
 self.addEventListener('install',event=>{
