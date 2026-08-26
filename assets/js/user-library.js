@@ -208,12 +208,19 @@ export async function bindLibraryUI() {
       const active = Number(star.dataset.star) <= value;
       star.classList.toggle("active", active);
       star.setAttribute("aria-pressed", String(active));
+      star.setAttribute(
+        "aria-label",
+        Number(star.dataset.star) === value && value > 0
+          ? `${value} estrelas; clique novamente para remover sua avaliação`
+          : `${star.dataset.star} estrelas`,
+      );
     });
   paintStars(local.ratings[slug] || 0);
   document.querySelectorAll("[data-star]").forEach((button) => {
     button.onclick = async () => {
-      const value = Number(button.dataset.star);
       const previous = localLibrary().ratings[slug] || 0;
+      const selected = Number(button.dataset.star);
+      const value = selected === previous ? 0 : selected;
       paintStars(value);
       try {
         await rateProduct(slug, value);

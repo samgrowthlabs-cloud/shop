@@ -12,6 +12,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
 const WORKER_BUILD = "2026-08-09-collaborator-ad-access-v1";
 const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
+const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
   ["dashboard.view", "Painel", "Ver painel e métricas", true],
   ["logs.view", "Painel", "Ver logs e atividade recente", true],
@@ -575,6 +576,8 @@ async function route(request, env, ctx, requestId) {
     return serveMedia(request, env, decodeURIComponent(path.slice(7)), ctx);
   if (request.method === "POST" && path === "/api/v1/events")
     return recordEvent(request, env, ctx, requestId);
+  if (path === "/api/v1/auth/account-exists" && request.method === "POST")
+    return publicAccountExists(request, env, requestId);
   if (path === "/api/v1/user/profile" && request.method === "GET")
     return userProfile(request, env, requestId);
   if (path === "/api/v1/user/profile" && request.method === "PUT")
@@ -7494,6 +7497,25 @@ async function userProfile(req, env, id) {
   const profile = await env.DB.prepare(`SELECT user_id userId,email,display_name displayName,status,created_at createdAt FROM user_profiles WHERE user_id=?`).bind(user.id).first();
   return ok(req, env, profile, id);
 }
+async function publicAccountExists(req, env, id) {
+  const ip = String(req.headers.get("CF-Connecting-IP") || "unknown");
+  const limitKey = await sha256(`${env.ACCOUNT_CHECK_HASH_SECRET || env.REFERRAL_HASH_SECRET || "shoplab"}|${ip}`);
+  const now = Date.now(), windowMs = 10 * 60 * 1000;
+  const attempts = (ACCOUNT_CHECK_ATTEMPTS.get(limitKey) || []).filter(timestamp => now - timestamp < windowMs);
+  if (attempts.length >= 10)
+    return fail(req, env, "RATE_LIMITED", "Muitas tentativas. Aguarde alguns minutos e tente novamente.", 429, id);
+  attempts.push(now);
+  ACCOUNT_CHECK_ATTEMPTS.set(limitKey, attempts);
+  if (ACCOUNT_CHECK_ATTEMPTS.size > 2000)
+    for (const [key, timestamps] of ACCOUNT_CHECK_ATTEMPTS)
+      if (!timestamps.some(timestamp => now - timestamp < windowMs)) ACCOUNT_CHECK_ATTEMPTS.delete(key);
+  const body = await readJson(req, 2048);
+  const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return fail(req, env, "INVALID_EMAIL", "Informe um e-mail válido", 422, id);
+  const account = await env.DB.prepare("SELECT 1 found FROM user_profiles WHERE email=? COLLATE NOCASE LIMIT 1").bind(email).first();
+  return ok(req, env, { exists: Boolean(account) }, id);
+}
 async function updateUserProfile(req, env, id) {
   const user = await authenticatedUser(req);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
@@ -8999,8 +9021,8 @@ async function updateUserLibraryItem(req, env, path, id) {
   }
   if (type === "ratings") {
     const rating = clamp(body.rating,1,5,0);
-    if (!rating) return fail(req,env,"VALIDATION_ERROR","Escolha de 1 a 5 estrelas",422,id);
-    await env.DB.prepare(`INSERT INTO user_ratings(user_id,product_slug,rating) VALUES(?,?,?) ON CONFLICT(user_id,product_slug) DO UPDATE SET rating=excluded.rating,updated_at=CURRENT_TIMESTAMP`).bind(user.id,slug,rating).run();
+    if (!rating) await env.DB.prepare("DELETE FROM user_ratings WHERE user_id=? AND product_slug=?").bind(user.id,slug).run();
+    else await env.DB.prepare(`INSERT INTO user_ratings(user_id,product_slug,rating) VALUES(?,?,?) ON CONFLICT(user_id,product_slug) DO UPDATE SET rating=excluded.rating,updated_at=CURRENT_TIMESTAMP`).bind(user.id,slug,rating).run();
     const summary = await env.DB.prepare(`SELECT ROUND(AVG(rating),1) average,COUNT(*) total FROM user_ratings WHERE product_slug=?`).bind(slug).first();
     return ok(req,env,{slug,rating,average:Number(summary?.average||0),total:Number(summary?.total||0)},id);
   }
