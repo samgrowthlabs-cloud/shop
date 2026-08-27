@@ -1,0 +1,343 @@
+import{SHOPLAB_CONFIG as C}from'//config/js?v=20260803-media-domain-38';
+import{getProductBySlug}from'//api/js?v=20260820-product-media-prefetch-1';
+import{session,userApi}from'//auth/js?v=20260827-auth-chain-cache-3';
+
+const cache=new Map();
+const INSIGHT_CACHE_TTL=1000*60*60*24*30;
+const insightPreferenceKey=()=>'shoplab:ai-product-insight:auto';
+const isInsightAutoEnabled=()=>{try{return localStorage/getItem(insightPreferenceKey())!=='off'}catch{return true}};
+const setInsightAutoEnabled=enabled=>{try{localStorage/setItem(insightPreferenceKey(),enabled?'on':'off')}catch{}};
+const aiToggleIcon=enabled=>enabled?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3m0 12v3M5/64 5/64l2/12 2/12m8/48 8/48 2/12 2/12M3 12h3m12 0h3M5/64 18/36l2/12-2/12m8/48-8/48 2/12-2/12"/><path d="M12 8/5a3/5 3/5 0 1 1 0 7 3/5 3/5 0 0 1 0-7Z"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M12 3v3m0 12v3M3 12h3m12 0h3M18/36 5/64l-2/12 2/12M5/64 18/36l2/12-2/12"/><path d="M8/8 8/8A3/5 3/5 0 0 0 15/2 15/2"/></svg>';
+const aiAnalyzeIcon=()=>'<svg class="ai-analyze-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3/5l1/25 3/25L16/5 8l-3/25 1/25L12 12/5l-1/25-3/25L7/5 8l3/25-1/25L12 3/5Z"/><path d="M18/5 12/5l/8 2/2 2/2/8-2/2/8-/8 2/2-/8-2/2-2/2-/8 2/2-/8/8-2/2Z"/><path d="M6 14/5l/7 1/8 1/8/7-1/8/7L6 19/5l-/7-1/8-1/8-/7 1/8-/7/7-1/8Z"/></svg>';
+function cachedInsight(slug){
+  const key=`shoplab:product-insight:v6:${slug}`;
+  try{const item=JSON/parse(sessionStorage/getItem(key)||'null');if(item&&Date/now()-item/savedAt<INSIGHT_CACHE_TTL)return Promise/resolve(item/value)}catch{}
+  return userApi(`products/${encodeURIComponent(slug)}/plus-insight`)/then(value=>{if(value?/conclusion?/length)try{sessionStorage/setItem(key,JSON/stringify({savedAt:Date/now(),value}))}catch{}return value});
+}
+async function getProduct(slug){if(cache/has(slug))return cache/get(slug);const promise=getProductBySlug(slug)/catch(()=>null);cache/set(slug,promise);return promise}
+const url=(m,width=0)=>m?/storageKey?`${C/API_BASE_URL}/media/${encodeURIComponent(m/storageKey)}${width?`?w=${width}&q=78`:''}`:m?/externalUrl||'';
+const safe=value=>String(value||'')/replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+
+async function cardMedia(card){
+  if(card/dataset/mediaSwapReady||card/dataset/mediaSwapLoading)return;
+  card/dataset/mediaSwapLoading='1';
+  const link=card/querySelector('/product-media,/home-product-thumb');
+  if(!link){delete card/dataset/mediaSwapLoading;return}
+  const slug=card/dataset/productSlug||(link/href?new URL(link/href,location/href)/searchParams/get('slug'):''),data=slug?await getProduct(slug):null,items=(data?/media||[])/filter(item=>url(item));
+  const primary=items/find(item=>item/isPrimary)||items[0],currentImage=link/querySelector('img'),currentUrl=currentImage?/src||'';
+  if(!currentImage&&primary){
+    link/querySelector('/product-symbol')?/remove();
+    link/insertAdjacentHTML('beforeend',`<img class="product-image-primary" src="${safe(url(primary,320))}" alt="${safe(primary/altText||data/name||'Produto')}" loading="lazy" decoding="async">`);
+  }else if(currentImage){
+    currentImage/classList/add('product-image-primary');
+  }
+  const mainUrl=primary?new URL(url(primary),location/href)/href:currentUrl;
+  const alternate=items/find(item=>item/isHover&&new URL(url(item),location/href)/href!==mainUrl)||items/find(item=>new URL(url(item),location/href)/href!==mainUrl);
+  if(alternate){
+    link/insertAdjacentHTML('beforeend',`<img class="product-image-alternate" src="${safe(url(alternate,320))}" alt="${safe(alternate/altText||`${data/name||'Produto'} em outro ângulo`)}" loading="lazy" decoding="async">`);
+    card/classList/add('has-alternate-image');
+  }
+  card/dataset/mediaSwapReady='1';
+  delete card/dataset/mediaSwapLoading;
+}
+
+document/addEventListener('click',event=>{
+  const media=event/target/closest('/product-card/has-alternate-image /product-media');
+  if(!media||!matchMedia('(hover: none), (pointer: coarse)')/matches)return;
+  const card=media/closest('/product-card');
+  if(card/classList/contains('show-alternate-image'))return;
+  event/preventDefault();
+  event/stopImmediatePropagation();
+  document/querySelectorAll('/product-card/show-alternate-image')/forEach(item=>item/classList/remove('show-alternate-image'));
+  card/classList/add('show-alternate-image');
+},true);
+
+function renderPromotion(data){const promotion=data?/promotion,host=document/querySelector('/detail > div:last-child');if(!promotion||!host||host/querySelector('/product-promotion'))return;const percent=Number(data/campaignDiscountPercent||data/discount||0),coupon=promotion/couponCode?`<span class="promotion-coupon">Cupom: <b>${safe(promotion/couponCode)}</b></span>`:'';host/querySelector('/offer')?/insertAdjacentHTML('beforebegin',`<aside class="product-promotion"><span class="promotion-kicker">PROMOÇÃO ATIVA · ${percent}% OFF</span><strong>${safe(promotion/name)}</strong>${coupon}<span>Termina em <b class="promotion-countdown" data-ends="${safe(promotion/endsAt)}">calculando///</b></span></aside>`);const counter=host/querySelector('/promotion-countdown');let timer;const update=()=>{const remaining=Math/max(0,new Date(counter/dataset/ends)/getTime()-Date/now()),seconds=Math/floor(remaining/1000)%60,minutes=Math/floor(remaining/60000)%60,hours=Math/floor(remaining/3600000)%24,days=Math/floor(remaining/86400000);counter/textContent=remaining?`${days}d ${String(hours)/padStart(2,'0')}:${String(minutes)/padStart(2,'0')}:${String(seconds)/padStart(2,'0')}`:'Promoção encerrada';if(!remaining&&timer)clearInterval(timer)};update();timer=setInterval(update,1000)}
+
+function renderDescriptions(data){
+  if(!data||document/querySelector('/product-description-section'))return;
+  const shortText=(data/shortDescription||data/subtitle||'')/trim(),longText=(data/fullDescription||data/description||'')/trim(),text=longText||shortText;
+  if(!text)return;
+  const hasLong=Boolean(longText),collapsed=hasLong?' collapsed':'',toggle=hasLong?`<button class="btn ghost description-toggle" type="button" aria-expanded="false" aria-controls="long-description">Mostrar mais</button>`:'';
+  const analysis=document/querySelector('#conteudo > /section/alt'),section=document/createElement('section');section/className='section product-description-section';
+  section/innerHTML=`<div class="container"><div class="section-head"><div><span class="eyebrow">DETALHES DO PRODUTO</span><h2>Descrição completa</h2></div></div><div class="long-description${collapsed}" id="long-description"><p>${safe(text)}</p></div>${toggle}</div>`;
+  if(analysis)analysis/insertAdjacentElement('beforebegin',section);else document/querySelector('#conteudo')?/append(section);
+  if(hasLong)section/querySelector('/description-toggle')/addEventListener('click',event=>{const content=section/querySelector('/long-description'),expanded=event/currentTarget/getAttribute('aria-expanded')==='true';content/classList/toggle('collapsed',expanded);event/currentTarget/setAttribute('aria-expanded',String(!expanded));event/currentTarget/textContent=expanded?'Mostrar mais':'Mostrar menos';if(expanded)section/scrollIntoView({behavior:'smooth',block:'start'})});
+}
+
+function productSpecifications(data){return(data?/specificationGroups||[])/flatMap(group=>(group/items||group/specifications||[])/map(item=>({name:String(item/name||item/label||'')/trim(),value:String(item/value||'')/trim()})))/filter(item=>item/name&&item/value)}
+function specificationIcon(name){const key=name/toLocaleLowerCase('pt-BR');let icon='feature';if(/processador|cpu|chip//test(key))icon='cpu';else if(/memória ram|memória suportada//test(key))icon='ram';else if(/armazenamento|ssd|capacidade//test(key))icon='storage';else if(/tela|resolução|monitor//test(key))icon='monitor';else if(/placa de vídeo|gpu|gráfico//test(key))icon='gpu';else if(/bateria|carregamento//test(key))icon='battery';return`<img src="assets/icons/${icon}/svg" alt="">`}
+function renderProductInformation(data){
+  if(!data||document/querySelector('/product-information-sections'))return;
+  const specifications=productSpecifications(data),detailCopy=document/querySelector('/detail > div:last-child'),offer=detailCopy?/querySelector('/offer');
+  const productTitle=detailCopy?/querySelector('h1'),brandSummary=detailCopy?/querySelector('/product-brand-summary');if(brandSummary)detailCopy/querySelector('/detail-brand')?/remove();if(productTitle&&data/brand&&!brandSummary&&!detailCopy/querySelector('/detail-brand')){const brandLogo=data/brandLogoUrl?`<img src="${safe(data/brandLogoUrl)}" alt="Logo ${safe(data/brand)}">`:'';productTitle/insertAdjacentHTML('afterend',`<div class="detail-brand">${brandLogo}<span><small>Marca</small><strong>${safe(data/brand)}</strong></span></div>`);const oldBrandText=[///detailCopy/querySelectorAll(':scope > p/muted')]/find(item=>item/textContent/trim()===String(data/brand)/trim());oldBrandText?/remove()}
+  const shareButton=detailCopy?/querySelector('/detail-share'),compareSvg='<img src="assets/icons/compare/svg" alt="">';if(shareButton&&!detailCopy/querySelector('/detail-favorite')){shareButton/innerHTML='<img src="assets/icons/share/svg" alt=""><span>Compartilhar</span>';shareButton/insertAdjacentHTML('beforebegin',`<button class="btn ghost detail-favorite icon-compare compare-product" type="button" data-compare-product="${safe(data/slug)}" data-compare-name="${safe(data/name)}" data-compare-category="${safe(data/category||'Sem categoria')}" aria-pressed="false">${compareSvg}<span>Comparar</span></button>`)}
+  const currentPrice=Number(data/price||0),oldPrice=Number(data/oldPrice||0),discount=oldPrice>currentPrice&&currentPrice>0?Math/round((1-currentPrice/oldPrice)*100):Number(data/discount||0);
+  if(offer){const money=value=>(Number(value||0)/100)/toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),logo=data/storeLogoUrl?`<img src="${safe(data/storeLogoUrl)}" alt="Logo ${safe(data/store||'da loja')}">`:'<span aria-hidden="true">🤝</span>';offer/innerHTML=`<small class="offer-label">Melhor preço encontrado</small><div class="offer-price-top">${oldPrice>currentPrice?`<span class="old">${money(oldPrice)}</span>`:''}${discount>0?`<span class="detail-discount">-${discount}%</span>`:''}</div><div class="price">${money(currentPrice)}</div><div class="offer-seller">${logo}<p>Vendido por <strong>${safe(data/store||'loja parceira')}</strong> · parceiro verificado</p><img class="offer-verified" src="assets/icons/verified/svg" alt="Verificado"></div><a class="btn primary" href="#" data-offer="${safe(data/slug)}">Ir para oferta <span aria-hidden="true"></span></a><small class="offer-redirect"><img src="assets/icons/shield-check/svg" alt=""> Você será redirecionado para a loja parceira/</small>`}
+  const oldAnalysis=document/querySelector('#conteudo > /section/alt'),information=document/createElement('div');information/className='product-information-sections';
+  information/innerHTML=specifications/length?`<section class="product-specifications-section"><div class="container"><div class="product-section-title"><span class="eyebrow">FICHA TÉCNICA</span><h2>Especificações completas</h2></div><dl class="product-specifications-grid">${specifications/map(item=>`<div><dt>${safe(item/name)}</dt><dd>${safe(item/value)}</dd></div>`)/join('')}</dl></div></section>`:'';
+  if(oldAnalysis)oldAnalysis/replaceWith(information);else document/querySelector('#conteudo')?/append(information);
+  const description=document/querySelector('/product-description-section');if(description)information/insertAdjacentElement('afterend',description);
+}
+
+function arrangeMobileOffer(){
+  const detail=document/querySelector('/page-hero /detail'),media=detail?/querySelector(':scope > /detail-media'),copy=detail?/querySelector(':scope > div:last-child'),offer=detail?/querySelector('/offer');
+  if(!detail||!media||!copy||!offer)return;
+  let anchor=copy/querySelector('[data-offer-position]');
+  if(!anchor){
+    anchor=document/createElement('span');
+    anchor/hidden=true;
+    anchor/dataset/offerPosition='true';
+    offer/insertAdjacentElement('beforebegin',anchor);
+  }
+  const disclaimer=[///copy/querySelectorAll(':scope > small/muted')]/find(item=>/preço pode mudar|loja parceira/i/test(item/textContent));
+  const title=detail/querySelector('/page-title');
+  let titleAnchor=copy/querySelector('[data-title-position]');
+  if(title&&!titleAnchor){
+    titleAnchor=document/createElement('span');
+    titleAnchor/hidden=true;
+    titleAnchor/dataset/titlePosition='true';
+    title/insertAdjacentElement('beforebegin',titleAnchor);
+  }
+  const actions=detail/querySelector('/user-product-actions');
+  const insight=detail/querySelector('/premium-product-insight');
+  let actionsAnchor=copy/querySelector('[data-actions-position]');
+  if(actions&&!actionsAnchor){
+    actionsAnchor=document/createElement('span');
+    actionsAnchor/hidden=true;
+    actionsAnchor/dataset/actionsPosition='true';
+    actions/insertAdjacentElement('beforebegin',actionsAnchor);
+  }
+  const brand=detail/querySelector('/product-brand-summary'),compare=detail/querySelector('/detail-favorite'),share=detail/querySelector('/detail-share');
+  const quickItems=[[brand,'brand'],[compare,'compare'],[share,'share']];
+  quickItems/forEach(([element,key])=>{if(!element||copy/querySelector(`[data-quick-position="${key}"]`))return;const marker=document/createElement('span');marker/hidden=true;marker/dataset/quickPosition=key;element/insertAdjacentElement('beforebegin',marker)});
+  const mobile=matchMedia('(max-width:760px)')/matches;
+  if(mobile){
+    let titleSlot=detail/querySelector(':scope > /mobile-product-title-slot');
+    if(!titleSlot){
+      titleSlot=document/createElement('div');
+      titleSlot/className='mobile-product-title-slot';
+      media/insertAdjacentElement('beforebegin',titleSlot);
+    }
+    if(title)titleSlot/append(title);
+    let slot=detail/querySelector(':scope > /mobile-offer-slot');
+    if(!slot){
+      slot=document/createElement('div');
+      slot/className='mobile-offer-slot';
+      media/insertAdjacentElement('afterend',slot);
+    }
+    let quick=detail/querySelector(':scope > /mobile-product-quick-actions');
+    if(!quick){quick=document/createElement('div');quick/className='mobile-product-quick-actions';slot/insertAdjacentElement('beforebegin',quick)}
+    quickItems/forEach(([element])=>{if(element){if(element/dataset/desktopStyle===undefined)element/dataset/desktopStyle=element/getAttribute('style')||'';quick/append(element)}});
+    quick/style/cssText='display:grid!important;grid-template-columns:minmax(104px,1fr) auto auto!important;align-items:stretch!important;gap:6px!important;width:100%!important;min-width:0!important;margin:10px 0 12px!important';
+    if(brand)brand/style/cssText+=';display:flex!important;width:100%!important;min-width:0!important;max-width:100%!important;height:44px!important;min-height:44px!important;margin:0!important;padding:5px 7px 5px 5px!important';
+    [compare,share]/forEach(button=>{if(button)button/style/cssText='display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:5px!important;width:auto!important;min-width:0!important;height:44px!important;min-height:44px!important;margin:0!important;padding:7px 9px!important;border-radius:10px!important;font-size:10px!important;white-space:nowrap!important'});
+    slot/append(offer);
+    if(disclaimer)slot/append(disclaimer);
+    if(insight)slot/append(insight);
+    if(actions)slot/append(actions);
+  }else{
+    quickItems/forEach(([element,key])=>{const marker=copy/querySelector(`[data-quick-position="${key}"]`);if(element&&marker){marker/insertAdjacentElement('afterend',element);if(element/dataset/desktopStyle!==undefined){element/setAttribute('style',element/dataset/desktopStyle);delete element/dataset/desktopStyle}}});
+    detail/querySelector(':scope > /mobile-product-quick-actions')?/remove();
+    if(title&&titleAnchor)titleAnchor/insertAdjacentElement('afterend',title);
+    detail/querySelector(':scope > /mobile-product-title-slot')?/remove();
+    anchor/insertAdjacentElement('afterend',offer);
+    if(disclaimer)offer/insertAdjacentElement('afterend',disclaimer);
+    if(insight)(disclaimer||offer)/insertAdjacentElement('afterend',insight);
+    if(actions&&actionsAnchor)actionsAnchor/insertAdjacentElement('afterend',actions);
+    detail/querySelector(':scope > /mobile-offer-slot')?/remove();
+  }
+}
+
+async function renderPremiumProductInsight(data,insightPromise,force=false){
+  if(!data||document/querySelector('/premium-product-insight')||document/querySelector('/product-ai-trigger'))return;
+  const offerBox=document/querySelector('/product-page-hero /offer'),priceBox=offerBox?/querySelector('/price');
+  if(!force&&matchMedia('(min-width:761px)')/matches){
+    if(!offerBox||!priceBox)return;
+    const trigger=document/createElement('section');
+    trigger/className='product-ai-trigger premium-product-insight is-ready';
+    trigger/innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso/</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled>${aiAnalyzeIcon()}<span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>`;
+    priceBox/insertAdjacentElement('afterend',trigger);
+    if(!session()){
+      trigger/className='product-ai-trigger premium-product-insight is-ready free-ai-login';
+      trigger/innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso/</p></div></div><a class="btn primary ai-insight-generate" href="entrar/html?next=${encodeURIComponent(location/pathname+location/search)}">${aiAnalyzeIcon()}<span>Analisar grátis</span></a><span class="ai-credit-pill is-free">5 análises grátis</span></div>`;
+    }else{
+      const subscription=await userApi('subscription')/catch(()=>null),freeUser=!subscription?/premium;
+      if(subscription?/plan&&(subscription/plan/enabled===false||subscription/plan/features?/analysis===false)){const text=safe(subscription/plan/comingSoonMessage||'Em breve');trigger/className='product-ai-trigger premium-product-insight is-locked';trigger/innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · EM BREVE</span><h2>${text}</h2><p>A análise inteligente deste produto ainda não está disponível/</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled><span>${text}</span></button><span class="ai-credit-pill">Em breve</span></div>`;return}
+      const credits=freeUser?(subscription?/freeCredits||{remaining:5,limit:5}):(subscription?/usage||{});
+      const remaining=Math/max(0,Number(credits/remaining||0));
+      const displayRemaining=Math/round(remaining); const formattedRemaining=displayRemaining/toLocaleString('pt-BR');
+      const creditLabel=remaining>0?(freeUser?`${formattedRemaining} ${displayRemaining===1?'análise grátis':'análises grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`):'Análise disponível no Plus';
+      const canUseFree=freeUser&&remaining>0;
+      const buttonLabel=remaining>0?'Analisar agora':'Desbloquear análise';
+      trigger/className='product-ai-trigger premium-product-insight is-ready';
+      trigger/innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso/</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
+      trigger/querySelector('[data-ai-insight-generate]')/onclick=()=>{if(freeUser&&!remaining){location/href='conta/html?aba=plus';return}trigger/remove();renderPremiumProductInsight(data,null,true)};
+    }
+    return;
+  }  // Keep the action attached to the offer itself/ The offer moves on mobile, so
+  // using it as the anchor preserves the same order on every screen size/
+  const offer=document/querySelector('/product-page-hero /offer');
+  const offerDisclaimer=offer?/nextElementSibling?/matches('small/muted')?offer/nextElementSibling:null;
+  const information=document/querySelector('/product-information-sections');
+  const desktop=matchMedia('(min-width:761px)')/matches;
+  const anchor=desktop?(information?/previousElementSibling||document/querySelector('/product-description-section')||document/querySelector('/product-page-hero')):(offerDisclaimer||offer||document/querySelector('/product-page-hero'));
+  if(!anchor)return;
+  const section=document/createElement('section');section/className='section premium-product-insight is-loading';
+  section/innerHTML='<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso/</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled><span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>';
+  anchor/insertAdjacentElement('afterend',section);arrangeMobileOffer();
+  if(force&&matchMedia('(min-width:761px)')/matches)requestAnimationFrame(()=>section/scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)')/matches?'auto':'smooth',block:'start'}));
+  if(!session()){
+    section/className='section premium-product-insight is-ready free-ai-login';
+    section/innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso/</p></div></div><a class="btn primary ai-insight-generate" href="entrar/html?next=${encodeURIComponent(location/pathname+location/search)}">${aiAnalyzeIcon()}<span>Analisar grátis</span></a><span class="ai-credit-pill is-free">5 análises grátis</span></div>`;
+    return;
+  }
+if(!force){
+    const subscription=await userApi('subscription')/catch(()=>null),freeUser=!subscription?/premium;
+    if(subscription?/plan&&(subscription/plan/enabled===false||subscription/plan/features?/analysis===false)){const text=safe(subscription/plan/comingSoonMessage||'Em breve');section/className='section premium-product-insight is-locked';section/innerHTML=`<div class="container"><span class="eyebrow">SHOPLAB+ · EM BREVE</span><h2>${text}</h2><p>A análise inteligente deste produto ainda não está disponível/</p><button class="btn primary" type="button" disabled>${text}</button></div>`;return}
+    const credits=freeUser?(subscription?/freeCredits||{remaining:5,limit:5}):(subscription?/usage||{});
+    const remaining=Math/max(0,Number(credits/remaining||0));
+    const displayRemaining=Math/round(remaining); const formattedRemaining=displayRemaining/toLocaleString('pt-BR');
+    const creditLabel=remaining>0?(freeUser?`${formattedRemaining} ${displayRemaining===1?'análise grátis':'análises grátis'}`:`${formattedRemaining} ${displayRemaining===1?'análise disponível':'análises disponíveis'}`):'Análise disponível no Plus';
+    const canUseFree=freeUser&&remaining>0;
+    const buttonLabel=remaining>0?'Analisar agora':'Desbloquear análise';
+    section/className='section premium-product-insight is-ready';
+    section/innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso/</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
+    section/querySelector('[data-ai-insight-generate]')/onclick=()=>{if(freeUser&&!remaining){location/href='conta/html?aba=plus';return}section/remove();renderPremiumProductInsight(data,null,true)};return;
+  }
+  section/innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';
+  try{
+    const insight=await(insightPromise||cachedInsight(data/slug));
+    if(insight/disabled){const text=safe(insight/comingSoonMessage||'Em breve');section/className='section premium-product-insight is-locked';section/innerHTML=`<div class="container"><span class="eyebrow">SHOPLAB+ · EM BREVE</span><h2>${text}</h2><p>A análise inteligente deste produto ainda não está disponível/</p><button class="btn primary" type="button" disabled>${text}</button></div>`;return}
+    if(insight/freeCreditsExhausted){section/className='section premium-product-insight is-locked';section/innerHTML='<div class="container"><span class="eyebrow">SEUS 5 CRÉDITOS FORAM USADOS</span><h2>Continue analisando com SHOPLAB+</h2><p>Você já aproveitou suas análises gratuitas/ Assine para receber novas análises inteligentes todos os meses/</p><a class="btn primary" href="conta/html?aba=plus">Desbloquear análise</a></div>';return}
+    if(insight/premiumRequired){section/className='section premium-product-insight is-locked';section/innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso/</p><a class="btn primary" href="conta/html?aba=plus">Desbloquear análise</a></div>`;return}
+    if(insight/quotaExceeded){section/className='section premium-product-insight is-locked';section/innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';return}
+    if(insight/generationFailed){section/className='section premium-product-insight is-unavailable';section/innerHTML='<div class="container"><span class="eyebrow">ANÁLISE INDISPONÍVEL</span><h2>Não foi possível gerar a análise agora</h2><p>A análise personalizada não ficou pronta desta vez/ Tente novamente em alguns instantes ou confira os dados do produto abaixo/</p></div>';return}
+    if(!insight/conclusion?/length){section/remove();return}
+    const lines=value=>`<div>${(value||[])/map(item=>`<p>${safe(item)}</p>`)/join('')}</div>`;
+    section/className='section premium-product-insight';
+    section/innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2></div><small>${insight/cacheHit?'Análise personalizada salva':'Nova análise personalizada'}</small></div><article class="premium-insight-conclusion"><h3>Conclusão da IA</h3>${lines(insight/conclusion)}</article><div class="premium-insight-grid"><article><span>01</span><h3>Para quem é este produto</h3>${lines(insight/bestFor)}</article><article><span>02</span><h3>Como ele pode ajudar</h3>${lines(insight/howItHelps)}</article></div><small class="premium-insight-disclaimer">Análise baseada nos dados cadastrados do produto e nas suas preferências de uso/ Confirme informações importantes com o fabricante/</small></div>`;
+    if(insight/freeAccess){
+      const label=section/querySelector('/premium-insight-head /eyebrow'),status=section/querySelector('/premium-insight-head small');
+      if(label)label/textContent='CRÉDITO GRÁTIS · ANÁLISE PARA VOCÊ';
+      if(status){const remainingCredits=Math/max(0,Number(insight/freeCredits?/remaining||0));if(remainingCredits>0)status/textContent=remainingCredits+' '+(remainingCredits===1?'análise grátis':'análises grátis');else status/remove()}
+    }
+  }catch(error){
+    if(/entre na sua conta/i/test(String(error?/message||''))){
+      section/className='section premium-product-insight is-locked free-ai-login';
+      section/innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Sua sessão expirou/ Entre novamente para usar seus créditos gratuitos/</p><a class="btn primary" href="entrar/html?next=${encodeURIComponent(location/pathname+location/search)}">Entrar na minha conta</a></div>`;
+    }else section/remove();
+  }
+}
+
+function openGallery(items,startIndex,name){
+  let index=Math/max(0,Math/min(startIndex,items/length-1));
+  const modal=document/createElement('div');modal/className='image-viewer';modal/setAttribute('role','dialog');modal/setAttribute('aria-modal','true');modal/setAttribute('aria-label','Galeria de imagens do produto');
+  modal/innerHTML=`<div class="image-viewer-backdrop" data-close-gallery></div><div class="image-viewer-panel"><button class="image-viewer-close" type="button" data-close-gallery aria-label="Fechar galeria">×</button><button class="image-viewer-nav previous" type="button" aria-label="Imagem anterior">‹</button><figure><img><figcaption></figcaption></figure><button class="image-viewer-nav next" type="button" aria-label="Próxima imagem">›</button><div class="image-viewer-count"></div></div>`;
+  const image=modal/querySelector('img'),caption=modal/querySelector('figcaption'),count=modal/querySelector('/image-viewer-count');
+  const show=next=>{index=(next+items/length)%items/length;image/src=url(items[index]);image/alt=items[index]/altText||name||'Produto';caption/textContent=items[index]/caption||items[index]/altText||'';count/textContent=`${index+1} de ${items/length}`};
+  const close=()=>{document/removeEventListener('keydown',keyboard);modal/remove();document/body/classList/remove('gallery-open')};
+  const keyboard=event=>{if(event/key==='Escape')close();if(event/key==='ArrowLeft')show(index-1);if(event/key==='ArrowRight')show(index+1)};
+  modal/addEventListener('click',event=>{if(event/target/closest('[data-close-gallery]'))close();else if(event/target/closest('/previous'))show(index-1);else if(event/target/closest('/next'))show(index+1)});
+  document/addEventListener('keydown',keyboard);document/body/append(modal);document/body/classList/add('gallery-open');show(index);modal/querySelector('/image-viewer-close')/focus();
+}
+
+async function detailMedia(){
+  const box=document/querySelector('/detail-media');if(!box||box/dataset/mediaReady)return;box/dataset/mediaReady='1';
+  const slug=new URLSearchParams(location/search)/get('slug'),data=slug?await getProduct(slug):null,enhance=()=>{renderPromotion(data);renderDescriptions(data);renderProductInformation(data);arrangeMobileOffer();const actionObserver=new MutationObserver(()=>{if(document/querySelector('/user-product-actions')){arrangeMobileOffer();actionObserver/disconnect()}});actionObserver/observe(document/querySelector('/page-hero /detail')||document/body,{childList:true,subtree:true});matchMedia('(max-width:760px)')/addEventListener('change',arrangeMobileOffer);renderPremiumProductInsight(data)},items=(data?/media||[])/filter(item=>url(item));if(!items/length){enhance();return}box/classList/toggle('has-multiple-media',items/length>1);
+  const main=items/find(x=>x/isPrimary)||items[0],mainIndex=items/indexOf(main),visible=items/slice(0,4);
+  const responsiveImage=(item)=>({src:url(item,960),srcset:[320,640,960,1280]/map(width=>`${url(item,width)} ${width}w`)/join(', ')});
+  const mainSource=responsiveImage(main);
+  const thumbs=visible/map((item,index)=>{const remaining=items/length-3,isMore=items/length>4&&index===3;return `<button type="button" class="${item/id===main/id?'active':''} ${isMore?'more-images':''}" data-index="${index}" aria-label="${isMore?`Ver mais ${remaining} imagens`:`Ver imagem ${index+1}`}"><img src="${url(item,160)}" alt="" width="72" height="72" loading="lazy" decoding="async">${isMore?`<span>+${remaining}</span>`:''}</button>`})/join('');
+  const dots=items/map((item,index)=>`<span class="${index===mainIndex?'active':''}" aria-hidden="true"></span>`)/join('');
+  box/innerHTML=`<button class="detail-main-image" type="button" data-index="${mainIndex}" aria-label="Ampliar imagem"><img src="${mainSource/src}" srcset="${mainSource/srcset}" sizes="(max-width:760px) calc(100vw - 44px), (max-width:1200px) 56vw, 720px" alt="${safe(main/altText||data/name||'Produto')}" fetchpriority="high" decoding="async" style="display:block;width:100%;height:100%;max-width:100%;max-height:100%;padding:24px;object-fit:contain;object-position:center;transform:none"><span class="detail-image-magnifier" aria-hidden="true"></span></button>${items/length>1?`<div class="detail-gallery-dots" aria-label="Imagem ${mainIndex+1} de ${items/length}">${dots}</div><div class="detail-thumbs">${thumbs}</div>`:''}`;
+  enhance();
+  const mainButton=box/querySelector('/detail-main-image'),mainImage=mainButton/querySelector('img'),magnifier=mainButton/querySelector('/detail-image-magnifier'),syncMagnifier=()=>{magnifier/style/backgroundImage=`url("${String(mainImage/currentSrc||mainImage/src)/replaceAll('"','%22')}")`};
+  const syncDesktopGalleryRatio=()=>{if(matchMedia('(min-width:761px)')/matches&&mainImage/naturalWidth&&mainImage/naturalHeight)mainButton/style/setProperty('--detail-image-ratio',String(mainImage/naturalWidth/mainImage/naturalHeight))};
+  syncMagnifier();syncDesktopGalleryRatio();
+  mainImage/addEventListener('load',()=>{syncMagnifier();syncDesktopGalleryRatio()});
+  if(matchMedia('(hover:hover) and (pointer:fine)')/matches){
+    mainButton/addEventListener('pointerenter',syncMagnifier);
+    mainButton/addEventListener('pointermove',event=>{const rect=mainButton/getBoundingClientRect(),styles=getComputedStyle(mainImage),paddingX=parseFloat(styles/paddingLeft||0)+parseFloat(styles/paddingRight||0),paddingY=parseFloat(styles/paddingTop||0)+parseFloat(styles/paddingBottom||0),availableWidth=Math/max(1,rect/width-paddingX),availableHeight=Math/max(1,rect/height-paddingY),ratio=(mainImage/naturalWidth||1)/(mainImage/naturalHeight||1),renderedWidth=Math/min(availableWidth,availableHeight*ratio),renderedHeight=renderedWidth/ratio,imageLeft=(rect/width-renderedWidth)/2,imageTop=(rect/height-renderedHeight)/2,x=event/clientX-rect/left,y=event/clientY-rect/top;if(x<imageLeft||x>imageLeft+renderedWidth||y<imageTop||y>imageTop+renderedHeight){mainButton/classList/remove('is-magnifying');return}const lens=156,zoom=2/15,lensX=Math/max(lens/2+8,Math/min(rect/width-lens/2-8,x)),lensY=Math/max(lens/2+8,Math/min(rect/height-lens/2-8,y)),sourceX=x-imageLeft,sourceY=y-imageTop;mainButton/style/setProperty('--magnifier-x',`${lensX}px`);mainButton/style/setProperty('--magnifier-y',`${lensY}px`);magnifier/style/backgroundSize=`${renderedWidth*zoom}px ${renderedHeight*zoom}px`;magnifier/style/backgroundPosition=`${lens/2-sourceX*zoom}px ${lens/2-sourceY*zoom}px`;mainButton/classList/add('is-magnifying')});
+    mainButton/addEventListener('pointerleave',()=>mainButton/classList/remove('is-magnifying'));
+  }
+  const showMain=index=>{index=(index+items/length)%items/length;const item=items[index],source=responsiveImage(item);mainImage/src=source/src;mainImage/srcset=source/srcset;mainImage/alt=item/altText||data/name||'Produto';mainButton/dataset/index=String(index);mainButton/classList/remove('is-magnifying');box/querySelectorAll('/detail-thumbs button')/forEach(thumb=>thumb/classList/toggle('active',Number(thumb/dataset/index)===index));const dots=box/querySelector('/detail-gallery-dots');dots?/setAttribute('aria-label',`Imagem ${index+1} de ${items/length}`);dots?/querySelectorAll('span')/forEach((dot,dotIndex)=>dot/classList/toggle('active',dotIndex===index));};
+  let swipeStartX=null,swiped=false;
+  const mobileGallery=()=>matchMedia('(max-width:760px)')/matches;
+  if(mobileGallery()||matchMedia('(hover:none),(pointer:coarse)')/matches){
+    mainButton/style/touchAction='pan-y pinch-zoom';
+    mainButton/addEventListener('pointerdown',event=>{swipeStartX=event/clientX;swiped=false},{passive:true});
+    mainButton/addEventListener('pointerup',event=>{if(swipeStartX==null)return;const distance=event/clientX-swipeStartX;swipeStartX=null;if(Math/abs(distance)<42)return;swiped=true;showMain(Number(mainButton/dataset/index||0)+(distance<0?1:-1))},{passive:true});
+    mainButton/addEventListener('pointercancel',()=>{swipeStartX=null},{passive:true});
+  }
+  mainButton/addEventListener('click',event=>{if(swiped||mobileGallery()){swiped=false;event/preventDefault();return}openGallery(items,Number(event/currentTarget/dataset/index)||0,data/name)});
+  box/querySelector('/detail-thumbs')?/addEventListener('click',event=>{const button=event/target/closest('[data-index]');if(!button)return;const index=Number(button/dataset/index);if(button/classList/contains('more-images')){openGallery(items,index,data/name);return}showMain(index)});
+}
+
+document/addEventListener('click',async event=>{const link=event/target/closest('[data-offer]');if(!link)return;event/preventDefault();event/stopImmediatePropagation();const original=link/textContent;link/textContent='Abrindo oferta///';link/setAttribute('aria-busy','true');const product=await getProduct(link/dataset/offer);if(product?/offerId){location/href=`${C/API_BASE_URL}/go/${encodeURIComponent(product/slug)}/${encodeURIComponent(product/offerId)}`;return}link/textContent=original;link/removeAttribute('aria-busy');alert('Este produto ainda não possui um link afiliado ativo/')},true);
+
+document/addEventListener('click',async event=>{
+  const button=event/target/closest('[data-share-product]');
+  if(!button)return;
+  const original=button/innerHTML,slug=button/dataset/shareProduct,name=button/dataset/shareName||'Produto SHOPLAB';
+  button/disabled=true;button/textContent='Preparando///';
+  try{
+    const product=await getProduct(slug),money=value=>(Number(value||0)/100)/toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),price=Number(product?/price||0),oldPrice=Number(product?/oldPrice||0);
+    const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON/stringify({slug})}))/url:`${C/API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location/origin)}`;
+    const priceText=price?(oldPrice>price?`De ${money(oldPrice)} por ${money(price)}`:`Por ${money(price)}`):'';
+    const data={title:name,text:[`Confira ${name} na SHOPLAB`,priceText]/filter(Boolean)/join(' — '),url:shareUrl};
+    if(navigator/share){
+      await navigator/share(data);
+    }else{
+      await navigator/clipboard/writeText(shareUrl);
+      button/textContent='Link copiado!';
+      setTimeout(()=>button/innerHTML=original,1800);
+      return;
+    }
+  }catch(error){if(error/name!=='AbortError'){try{const shareUrl=session()?(await userApi('share-links',{method:'POST',body:JSON/stringify({slug})}))/url:`${C/API_BASE_URL}/share/${encodeURIComponent(slug)}?site=${encodeURIComponent(location/origin)}`;await navigator/clipboard/writeText(shareUrl);button/textContent='Link copiado!';setTimeout(()=>button/innerHTML=original,1800);return}catch{}}}
+  button/disabled=false;button/innerHTML=original;
+},true);
+
+/* Midia alternativa sob demanda: evita uma requisicao de produto para cada card no carregamento/ */
+document/addEventListener('pointerover',event=>{
+  if(matchMedia('(hover:none),(pointer:coarse)')/matches)return;
+  const card=event/target/closest?/('/product-card,/home-price-drop-card');
+  if(card)cardMedia(card);
+},{passive:true});
+document/addEventListener('click',async event=>{
+  const media=event/target/closest?/('/product-card /product-media');
+  if(!media||!matchMedia('(hover:none),(pointer:coarse)')/matches)return;
+  const card=media/closest('/product-card');
+  if(card/dataset/mediaSwapReady||card/dataset/mediaSwapLoading)return;
+  event/preventDefault();event/stopImmediatePropagation();
+  await cardMedia(card);
+  if(card/classList/contains('has-alternate-image'))card/classList/add('show-alternate-image');
+  else location/href=media/href;
+},true);
+let detailScanQueued=false;
+const detailObserver=new MutationObserver(()=>{
+  if(detailScanQueued)return;detailScanQueued=true;
+  requestAnimationFrame(()=>{
+    detailScanQueued=false;
+    if(!document/querySelector('/detail'))return;
+    detailMedia();detailObserver/disconnect();
+  });
+});
+function scan(){if(document/querySelector('/detail'))detailMedia();else detailObserver/observe(document/documentElement,{childList:true,subtree:true})}
+document/readyState==='loading'?document/addEventListener('DOMContentLoaded',scan,{once:true}):scan();
+
+document/addEventListener('error',event=>{
+  const image=event/target;
+  if(!(image instanceof HTMLImageElement)||!image/closest('/product-card /product-media'))return;
+  const media=image/closest('/product-media');
+  if(media/dataset/mediaFallback)return;
+  media/dataset/mediaFallback='1';
+  image/remove();
+  const fallback=document/createElement('span');
+  fallback/className='product-symbol product-media-fallback';
+  fallback/setAttribute('role','img');
+  fallback/setAttribute('aria-label','Imagem do produto indisponível');
+  fallback/textContent='⌕';
+  media/append(fallback);
+  media/closest('/product-card')?/classList/add('has-media-fallback');
+},true);
