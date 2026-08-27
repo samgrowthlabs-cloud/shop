@@ -2,7 +2,7 @@ import'./favicon.js?v=20260820-ads-render-no-title-1';import{getProducts,getTren
 import'./search-ui.js?v=20260803-media-domain-38';
 import'./public-media.js?v=20260823-product-brand-mobile-2';
 import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare.js?v=20260820-related-images-1';
-import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js';
+import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth.js?v=20260827-auth-syntax-cache-1';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js?v=20260807-card-compare-1';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';

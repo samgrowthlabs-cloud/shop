@@ -1,4 +1,4 @@
-import { session, userApi } from "./auth.js";
+import { session, userApi } from "./auth.js?v=20260827-auth-syntax-cache-1";
 
 const LEGACY_KEYS = {
   favorites: "shoplab:favorites",

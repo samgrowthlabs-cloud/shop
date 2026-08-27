@@ -763,3 +763,5 @@ body[data-admin-page="collaborators"] .permission-option:has(input:checked){bord
 @media(max-width:650px){body[data-admin-page="collaborators"] .role-manager{padding:16px}body[data-admin-page="collaborators"] .role-chip-card{grid-template-columns:7px 1fr}body[data-admin-page="collaborators"] .role-chip-card .btn{grid-column:auto}body[data-admin-page="collaborators"] .collaborator-card{grid-template-columns:1fr;padding:16px}body[data-admin-page="collaborators"] .collaborator-card .status{position:static;margin:8px 0 0}body[data-admin-page="collaborators"] .collaborator-card-actions{grid-column:1;grid-row:auto;justify-content:flex-start;flex-wrap:wrap}}
 
 .user-scroll-sentinel{display:grid;min-height:52px;margin:10px 0;color:var(--muted);font-size:12px;font-weight:700;place-items:center}.user-delete-button{margin-left:auto!important;background:#b4232c!important;border-color:#b4232c!important;color:#fff!important}.user-delete-button:hover{background:#941b23!important}
+
+.ads-editor .form-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px}.ads-editor .form-actions #deleteAd{margin-right:auto}
