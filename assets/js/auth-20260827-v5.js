@@ -1,0 +1,50 @@
+import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
+const KEY='shoplab:user-session',REFERRAL_KEY='shoplab:referral-attribution',headers=()=>({'apikey':C.SUPABASE_PUBLISHABLE_KEY,'content-type':'application/json'});
+const redirectValues=new URLSearchParams(location.hash.slice(1));
+if(!/\/redefinir-senha\.html$/i.test(location.pathname)&&(redirectValues.get('type')==='recovery'||redirectValues.has('error_code')||redirectValues.has('error_description'))){const target=new URL('redefinir-senha.html',location.href);target.hash=location.hash;location.replace(target.href)}
+const incomingReferral=new URLSearchParams(location.search).get('ref');if(/^[a-zA-Z0-9_-]{8,100}$/.test(incomingReferral||'')){localStorage.setItem(REFERRAL_KEY,incomingReferral);const clean=new URL(location.href);clean.searchParams.delete('ref');history.replaceState({},'',clean.pathname+clean.search+clean.hash)}
+const referralHeader=()=>{const value=localStorage.getItem(REFERRAL_KEY)||'';return /^[a-zA-Z0-9_-]{8,100}$/.test(value)?{'x-shoplab-ref':value}:{}};
+export function session(){try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch{return null}}
+function save(value){value?localStorage.setItem(KEY,JSON.stringify(value)):localStorage.removeItem(KEY);window.dispatchEvent(new CustomEvent('shoplab:auth'));return value}
+function authError(data={},status=0){const code=String(data.code||data.error_code||data.error||'').toLowerCase(),detail=String(data.msg||data.message||data.error_description||'').toLowerCase();if(code==='otp_expired'||/expired|expirad/.test(detail))return'O link de recuperação expirou. Solicite um novo link.';if(code==='access_denied'||/invalid.*(?:token|link)|token.*invalid|invalid claim/.test(detail))return'O link de recuperação é inválido ou já foi utilizado.';if(code==='weak_password'||/weak password|password.*(?:weak|short)|at least.*characters/.test(detail))return'A senha é muito fraca. Use pelo menos 8 caracteres, misturando letras e números.';if(code==='same_password'||/same password|different from the old/.test(detail))return'A nova senha precisa ser diferente da senha atual.';if(code==='over_request_rate_limit'||status===429||/rate limit|too many requests/.test(detail))return'Muitas tentativas foram feitas. Aguarde alguns minutos e tente novamente.';if(code==='user_already_exists'||code==='email_exists'||/user already registered|already exists|already been registered|email.*registered/.test(detail))return'Esta conta já existe. Entre com seu e-mail e senha.';if(code==='user_not_found'||/user not found/.test(detail))return'Não encontramos uma conta com esse e-mail.';if(code==='invalid_credentials'||/invalid login credentials/.test(detail))return'E-mail ou senha incorretos.';if(/network|fetch/.test(detail))return'Não foi possível conectar ao serviço de autenticação. Verifique sua internet e tente novamente.';return'Não foi possível concluir a autenticação. Tente novamente.'}
+async function request(path,body,token,method='POST'){let response;try{response=await fetch(`${C.SUPABASE_URL}/auth/v1/${path}`,{method,headers:{...headers(),...(token?{authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:JSON.stringify(body)})}catch(error){throw Error(authError({message:error?.message}))}const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(authError(data,response.status));return data}
+// The public host serves clean URLs. Going directly to the canonical route avoids an HTTP redirect between Supabase and the page that reads the tokens.
+const publicAuthUrl = (path) => {
+  const local = /^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i.test(
+    location.hostname
+  );
+
+  const suffix = local ? '.html' : '';
+
+  return new URL('/' + path + suffix, location.origin).href;
+};
+export async function signUp({name,email,password}){const checkResponse=await fetch(`${C.API_BASE_URL}/api/v1/auth/account-exists`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email})});const checkData=await checkResponse.json().catch(()=>({}));if(checkResponse.status===429)throw Error(checkData?.error?.message||'Muitas tentativas. Aguarde alguns minutos.');if(checkResponse.ok&&checkData?.data?.exists)throw Error('Esta conta já existe. Entre com seu e-mail e senha.');const result=await request(`signup?redirect_to=${encodeURIComponent(publicAuthUrl('auth-callback'))}`,{email,password,data:{display_name:name}});if(Array.isArray(result?.user?.identities)&&result.user.identities.length===0)throw Error('Esta conta já existe. Entre com seu e-mail e senha.');return result}
+export async function signIn(email,password){return save(await request('token?grant_type=password',{email,password}))}
+export async function signOut(){const current=session();try{if(current?.access_token)await request('logout',undefined,current.access_token)}finally{save(null)}}
+export async function recover(email){return request(`recover?redirect_to=${encodeURIComponent(publicAuthUrl('redefinir-senha'))}`,{email})}
+export async function updatePassword(password){const current=await validSession();if(!current)throw Error('Sessão de recuperação inválida.');return request('user',{password},current.access_token,'PUT')}
+export async function updateAccountCredentials(changes={}){const current=await validSession();if(!current)throw Error('Entre novamente para alterar os dados de acesso.');const body={};if(changes.email)body.email=String(changes.email).trim();if(changes.password)body.password=String(changes.password);if(!Object.keys(body).length)throw Error('Nenhuma alteração foi informada.');return request('user',body,current.access_token,'PUT')}
+export function acceptRedirectSession(){const values=new URLSearchParams(location.hash.slice(1)||location.search);if(values.has('error')||values.has('error_code')){const error=new Error(authError({error:values.get('error'),error_code:values.get('error_code'),error_description:values.get('error_description')}));save(null);history.replaceState({},'',location.pathname);throw error}if(!values.get('access_token'))return null;const value={access_token:values.get('access_token'),refresh_token:values.get('refresh_token'),expires_at:Number(values.get('expires_at'))||Math.floor(Date.now()/1000)+Number(values.get('expires_in')||3600),token_type:values.get('token_type')||'bearer',recovery:values.get('type')==='recovery'};save(value);history.replaceState({},'',location.pathname);return value}
+export async function validSession(){let current=session();if(!current)return null;if(Number(current.expires_at||0)>Math.floor(Date.now()/1000)+30)return current;if(!current.refresh_token){save(null);return null}try{current=await request('token?grant_type=refresh_token',{refresh_token:current.refresh_token});return save(current)}catch{save(null);return null}}
+export async function currentUser(){const current=await validSession();if(!current)return null;try{return await request('user',undefined,current.access_token,'GET')}catch{save(null);return null}}
+export async function apiProfile(options={}){const current=await validSession();if(!current)throw Error('Entre na sua conta.');const response=await fetch(`${C.API_BASE_URL}/api/v1/user/profile`,{...options,credentials:'include',headers:{authorization:`Bearer ${current.access_token}`,...referralHeader(),...(options.body?{'content-type':'application/json'}:{})}}),data=await response.json();if(!response.ok||!data.success)throw Error(data.error?.message||'Não foi possível carregar o perfil.');return data.data}
+export async function userApi(path,options={}){
+  const current=await validSession();
+  if(!current)throw Error('Entre na sua conta.');
+  const response=await fetch(`${C.API_BASE_URL}/api/v1/user/${path}`,{
+    ...options,
+    credentials:'include',
+    headers:{
+      authorization:`Bearer ${current.access_token}`,
+      ...referralHeader(),
+      ...(options.body?{'content-type':'application/json'}:{})
+    }
+  });
+  // Uma sessão local pode estar desatualizada/revogada no servidor. Ao receber
+  // 401, descartamos o token para não repetir chamadas que só geram erro.
+  if(response.status===401){save(null);}
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.success)throw Error(data.error?.message||'Não foi possível concluir.');
+  return data.data;
+}
+export function startPresence(){if(!session()||window.__shoplabPresence)return;window.__shoplabPresence=true;let id=sessionStorage.getItem('shoplab:visit-session');if(!id){id=crypto.randomUUID();sessionStorage.setItem('shoplab:visit-session',id)}let sending=false;const ping=async()=>{if(document.hidden||!session()||sending)return;sending=true;try{await userApi('presence',{method:'POST',body:JSON.stringify({sessionId:id})})}catch{}finally{sending=false}};ping();setInterval(ping,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)ping()});window.addEventListener('focus',ping)}
