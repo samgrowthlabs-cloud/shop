@@ -1,6 +1,6 @@
 import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 import{getProductBySlug}from'./api.js?v=20260820-product-media-prefetch-1';
-import{session,userApi}from'./auth.js?v=20260827-auth-syntax-cache-1';
+import{session,userApi}from'./auth.js?v=20260827-auth-syntax-cache-2';
 
 const cache=new Map();
 const INSIGHT_CACHE_TTL=1000*60*60*24*30;
