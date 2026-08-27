@@ -1,6 +1,6 @@
 import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,session,currentUser,apiProfile,userApi,startPresence}from'./auth-20260827-v5.js';
 import'./search-ui.js?v=20260803-media-domain-38';
-import{syncAccountLibrary,setCart}from'./user-library.js?v=20260807-card-compare-1';
+import{syncAccountLibrary,setCart}from'./user-library-20260827-v5.js';
 import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260726-mobile-header-4';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
 const $=selector=>document.querySelector(selector),page=document.body.dataset.authPage;
