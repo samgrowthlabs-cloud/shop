@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260803-media-domain-38';import{currentUser,userApi}from'./auth.js?v=20260827-auth-syntax-cache-2';
+import'./favicon.js?v=20260803-media-domain-38';import{currentUser,userApi}from'./auth.js?v=20260827-auth-chain-cache-3';
 
 const $=selector=>document.querySelector(selector);
 const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});

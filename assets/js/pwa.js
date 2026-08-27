@@ -94,6 +94,6 @@ function showInstallPrompt(){
 ensureHead();
 
 
-if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?v=20260827-auth-syntax-cache-2').then(registration=>registration.update()).catch(()=>{}));
+if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?v=20260827-auth-chain-cache-3').then(registration=>registration.update()).catch(()=>{}));
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installEvent=event;armInstallPrompt()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installMobileNavigation,{once:true});else installMobileNavigation();
