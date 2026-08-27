@@ -120,11 +120,9 @@ function enhanceProductCards(){
 
 function prioritizeMobileContent(){
   const images=[...document.querySelectorAll('main img:not([data-mobile-priority]),.home-banner img:not([data-mobile-priority]),.product-card img:not([data-mobile-priority])')];
-  const viewport=innerHeight,measurements=images.map(image=>({image,rect:image.getBoundingClientRect()}));
-  measurements.forEach(({image,rect})=>{
+  images.forEach(image=>{
     image.dataset.mobilePriority='1';
-    if(rect.top<viewport*1.25&&rect.bottom>-80){image.loading='eager';image.fetchPriority=rect.top<viewport?'high':'auto'}
-    else if(!image.hasAttribute('loading'))image.loading='lazy';
+    if(!image.hasAttribute('loading'))image.loading='lazy';
     image.decoding='async';
   });
   document.querySelectorAll('main .home-section:not(.mobile-deferred-section),main .product-related-section:not(.mobile-deferred-section),main>section:not(.mobile-deferred-section)').forEach((section,index)=>{
@@ -154,10 +152,10 @@ function appToast(message,type='info'){
 }
 
 function compactHeaderOnScroll(){
-  let last=scrollY,frame=0;
-  const sync=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{const header=document.querySelector('.header');if(!header)return;const current=scrollY,compact=current>88;header.classList.toggle('is-app-compact',compact);header.classList.toggle('is-scrolling-up',current<last-4);last=current})};
+  let last=scrollY,frame=0,header=document.querySelector('.header');
+  const sync=()=>{if(frame)return;frame=requestAnimationFrame(()=>{frame=0;header=header?.isConnected?header:document.querySelector('.header');if(!header)return;const current=scrollY,compact=current>88;header.classList.toggle('is-app-compact',compact);header.classList.toggle('is-scrolling-up',current<last-4);last=current})};
   addEventListener('scroll',sync,{passive:true});
-  new MutationObserver(sync).observe(document.body,{childList:true,subtree:true});
+  new MutationObserver(()=>{if(!header?.isConnected)sync()}).observe(document.body,{childList:true});
   sync();
 }
 
