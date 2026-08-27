@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,session,currentUser,apiProfile,userApi,startPresence}from'./auth.js?v=20260827-auth-chain-cache-3';
+import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,session,currentUser,apiProfile,userApi,startPresence}from'./auth.js';
 import'./search-ui.js?v=20260803-media-domain-38';
 import{syncAccountLibrary,setCart}from'./user-library.js?v=20260807-card-compare-1';
 import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260726-mobile-header-4';
