@@ -697,3 +697,69 @@ html[data-admin-theme="dark"] .admin-context-menu{border-color:#315048;backgroun
 /* Preview do banner igual ao site: computador em largura total com 270px de altura. */
 #banner-modal .banner-preview-device.desktop .home-banner,.banner-preview-device.desktop .home-banner{height:270px!important}
 .ads-distribution select{margin-top:6px}.ads-distribution small,#weightSummary{display:block;margin-top:8px;line-height:1.45}.form-field#weightField{position:relative;padding:14px;border:1px solid #cfe2dd;border-radius:10px;background:#f5fbf9}.form-field#weightField input[type=range]{width:calc(100% - 56px)}#weightValue{display:inline-grid;place-items:center;min-width:42px;margin-left:8px;padding:5px 8px;border-radius:8px;background:#087c70;color:#fff;font-weight:800}
+
+/* Aplicação administrativa única: shell persistente e abas HTML reais. */
+.admin-app-shell .sidebar nav{display:grid;gap:7px}
+.admin-app-shell .admin-area-tab{display:grid;width:100%;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:10px;min-height:48px;padding:8px 11px;border:1px solid transparent;border-radius:10px;background:transparent;color:#566a65;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.admin-app-shell .admin-area-tab>span{display:grid;width:30px;height:30px;border-radius:8px;background:#f1f5f4;color:#54706a;place-items:center}
+.admin-app-shell .admin-area-tab svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* Cards de banners: nenhum conteúdo pode aumentar ou invadir a coluna do grid. */
+#banner-list{min-width:0;max-width:100%;overflow:hidden}
+#banner-list .banner-admin-grid{width:100%;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+#banner-list .banner-admin-card{width:100%;max-width:100%;min-width:0;overflow:hidden;box-sizing:border-box}
+#banner-list .banner-admin-card>img{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+#banner-list .banner-admin-card>div{min-width:0;max-width:100%}
+#banner-list .banner-admin-card h3,#banner-list .banner-admin-card p,#banner-list .banner-admin-card small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#banner-list .banner-admin-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;width:100%;box-sizing:border-box}
+#banner-list .banner-admin-actions .btn{flex:0 0 auto;margin:0}
+@media(max-width:900px){#banner-list .banner-admin-grid{grid-template-columns:1fr}}
+.admin-app-shell .admin-area-tab.active{border-color:#c9e3dd;background:#eaf6f3;color:#076d63}
+.admin-app-shell .admin-area-tab.active>span{background:#087c70;color:#fff}
+.admin-app-header{display:grid!important;grid-template-columns:minmax(0,1fr) auto;min-height:132px;margin-bottom:24px!important;padding-bottom:0!important}
+.admin-page-tabs{display:flex;grid-column:1/-1;align-self:end;min-height:52px;align-items:flex-end;gap:2px;overflow-x:auto}
+.admin-page-tabs button{position:relative;display:flex;align-items:center;min-height:46px;padding:0 15px;border:0;background:transparent;color:#61736f;font:inherit;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer}
+.admin-page-tabs button.active{color:#087c70}
+.admin-page-tabs button.active:after{content:'';position:absolute;right:12px;bottom:0;left:12px;height:3px;border-radius:3px 3px 0 0;background:#087c70}
+.admin-page-tabs button:focus-visible,.admin-area-tab:focus-visible{outline:2px solid #087c70;outline-offset:2px}
+.admin-app-shell [role=tabpanel]{min-height:240px}
+html.admin-is-navigating:before{content:'';position:fixed;z-index:9999;top:0;right:0;left:0;height:3px;background:#087c70;animation:admin-app-progress 1s ease-in-out infinite}
+@keyframes admin-app-progress{from{transform:scaleX(.08);transform-origin:left}to{transform:scaleX(.75);transform-origin:left}}
+@media(max-width:800px){.admin-app-shell .sidebar nav{display:flex;overflow-x:auto}.admin-app-shell .admin-area-tab{display:flex;min-width:max-content}.admin-app-header{grid-template-columns:1fr;min-height:0}.admin-app-header .admin-actions{justify-content:flex-start}.admin-page-tabs{grid-column:1}}
+
+/* Team access redesign 2026 */
+body[data-admin-page="collaborators"] #content{max-width:1240px}
+body[data-admin-page="collaborators"] .promo-help{position:relative;margin:0 0 20px;padding:18px 20px 18px 54px;border:1px solid #b9dfd6;border-radius:14px;background:linear-gradient(135deg,#e8f7f3,#f8fcfb);color:#46645d;line-height:1.55}
+body[data-admin-page="collaborators"] .promo-help:before{content:'✓';position:absolute;left:18px;top:16px;display:grid;width:25px;height:25px;border-radius:8px;background:#087c70;color:#fff;font-weight:900;place-items:center}
+body[data-admin-page="collaborators"] .promo-help b{display:block;margin-bottom:2px;color:#124c43;font-size:14px}
+body[data-admin-page="collaborators"] .role-manager{padding:22px;border-radius:16px;box-shadow:0 8px 28px rgba(23,62,53,.05)}
+body[data-admin-page="collaborators"] .role-manager .section-head{align-items:center;margin-bottom:18px}
+body[data-admin-page="collaborators"] .role-manager .section-head h2{margin:5px 0 4px;font-size:19px}
+body[data-admin-page="collaborators"] .role-manager .section-head p{margin:0}
+body[data-admin-page="collaborators"] .role-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
+body[data-admin-page="collaborators"] .role-chip-card{grid-template-columns:7px minmax(0,1fr) auto auto;min-height:72px;padding:12px 14px;border-radius:12px;background:#fbfdfc;transition:border-color .16s ease,box-shadow .16s ease}
+body[data-admin-page="collaborators"] .role-chip-card:hover{border-color:#a7d5ca;box-shadow:0 7px 20px rgba(22,66,56,.07)}
+body[data-admin-page="collaborators"] .role-chip-card>i{width:7px;height:44px}
+body[data-admin-page="collaborators"] .role-chip-card small{overflow:hidden;max-width:100%;text-overflow:ellipsis;white-space:nowrap}
+body[data-admin-page="collaborators"] .role-chip-card .btn{padding:9px 11px}
+body[data-admin-page="collaborators"] .collaborator-grid{grid-template-columns:1fr;gap:10px;margin-top:18px}
+body[data-admin-page="collaborators"] .collaborator-grid:before{content:'PESSOAS COM ACESSO';display:block;margin:4px 0 0;color:#087c70;font-size:10px;font-weight:900;letter-spacing:.1em}
+body[data-admin-page="collaborators"] .collaborator-card{grid-template-columns:minmax(260px,1.2fr) minmax(300px,1fr) auto;align-items:center;gap:18px;min-height:126px;padding:18px 20px;border-radius:14px;box-shadow:none;transition:border-color .16s ease,box-shadow .16s ease}
+body[data-admin-page="collaborators"] .collaborator-card:hover{border-color:#a7d5ca;box-shadow:0 8px 24px rgba(23,62,53,.06)}
+body[data-admin-page="collaborators"] .collaborator-card .section-head{margin:0}
+body[data-admin-page="collaborators"] .collaborator-card .section-head h2{margin:5px 0 0;font-size:17px}
+body[data-admin-page="collaborators"] .collaborator-card .section-head p{overflow:hidden;max-width:330px;text-overflow:ellipsis;white-space:nowrap}
+body[data-admin-page="collaborators"] .collaborator-card .status{position:absolute;margin-left:190px;margin-top:-3px}
+body[data-admin-page="collaborators"] .collaborator-card{position:relative}
+body[data-admin-page="collaborators"] .collaborator-permission-summary{max-height:61px;overflow:hidden;align-content:flex-start}
+body[data-admin-page="collaborators"] .collaborator-permission-summary span{padding:5px 8px;font-size:10px}
+body[data-admin-page="collaborators"] .collaborator-card-actions{flex-wrap:nowrap}
+body[data-admin-page="collaborators"] .collaborator-card-actions .btn{white-space:nowrap}
+body[data-admin-page="collaborators"] .role-modal-card,body[data-admin-page="collaborators"] .collaborator-modal-card{border-radius:18px;box-shadow:0 24px 70px rgba(8,40,34,.24)}
+body[data-admin-page="collaborators"] .permission-groups fieldset{border-radius:14px;background:#fbfdfc}
+body[data-admin-page="collaborators"] .permission-option{border:1px solid #e4eeeb;background:#fff}
+body[data-admin-page="collaborators"] .permission-option:has(input:checked){border-color:#71cdb9;background:#e7f7f3}
+@media(max-width:980px){body[data-admin-page="collaborators"] .role-list{grid-template-columns:1fr}body[data-admin-page="collaborators"] .collaborator-card{grid-template-columns:1fr auto}body[data-admin-page="collaborators"] .collaborator-permission-summary{grid-column:1/-1}body[data-admin-page="collaborators"] .collaborator-card-actions{grid-column:2;grid-row:1}}
+@media(max-width:650px){body[data-admin-page="collaborators"] .role-manager{padding:16px}body[data-admin-page="collaborators"] .role-chip-card{grid-template-columns:7px 1fr}body[data-admin-page="collaborators"] .role-chip-card .btn{grid-column:auto}body[data-admin-page="collaborators"] .collaborator-card{grid-template-columns:1fr;padding:16px}body[data-admin-page="collaborators"] .collaborator-card .status{position:static;margin:8px 0 0}body[data-admin-page="collaborators"] .collaborator-card-actions{grid-column:1;grid-row:auto;justify-content:flex-start;flex-wrap:wrap}}
+
+.user-scroll-sentinel{display:grid;min-height:52px;margin:10px 0;color:var(--muted);font-size:12px;font-weight:700;place-items:center}.user-delete-button{margin-left:auto!important;background:#b4232c!important;border-color:#b4232c!important;color:#fff!important}.user-delete-button:hover{background:#941b23!important}

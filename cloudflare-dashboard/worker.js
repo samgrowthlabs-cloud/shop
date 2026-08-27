@@ -32,7 +32,11 @@ const ADMIN_PERMISSION_DEFINITIONS = [
   ["promotions.manage", "Marketing", "Gerenciar promoções", true],
   ["banners.manage", "Marketing", "Gerenciar banners principais", true],
   ["header_spotlights.manage", "Marketing", "Gerenciar destaques do cabeçalho", true],
-  ["header_ads.manage", "Marketing", "Anúncios do site", "Criar, editar, agendar, ativar e remover anúncios exibidos no site", true],
+  ["header_ads.manage", "Marketing", "Anúncios abaixo do menu", "Criar e administrar as faixas publicitárias abaixo do menu", true],
+  ["shoplab_ads.view", "SHOPLAB Ads", "Visualizar anúncios", "Abrir a biblioteca e visualizar os anúncios cadastrados", true],
+  ["shoplab_ads.manage", "SHOPLAB Ads", "Criar e editar anúncios", "Criar, editar, ativar, pausar e excluir anúncios", true],
+  ["shoplab_ads.placements", "SHOPLAB Ads", "Organizar posições", "Distribuir anúncios nas posições reais do site", true],
+  ["shoplab_ads.analytics", "SHOPLAB Ads", "Ver analytics dos anúncios", "Consultar impressões, cliques, alcance e CTR", true],
   ["themes.manage", "Aparência", "Gerenciar temas e identidade visual", true],
   ["ai.manage", "Inteligência artificial", "Configurar modelos, recursos e créditos de IA", true],
   ["premium.manage", "SHOPLAB+", "Configurar o SHOPLAB+", true],
@@ -48,7 +52,7 @@ const ADMIN_ROLE_PERMISSIONS = {
   vice_admin: [...ADMIN_ASSIGNABLE_PERMISSIONS].filter((permission) => !permission.startsWith("users.")),
   catalog_editor: ["dashboard.view", "products.view", "products.create", "products.edit", "products.media", "products.import", "products.ai", "categories.manage", "brands.manage", "partners.manage"],
   pricer: ["products.view", "prices.edit"],
-  marketing: ["dashboard.view", "products.view", "promotions.manage", "banners.manage", "header_spotlights.manage", "header_ads.manage", "themes.manage"],
+  marketing: ["dashboard.view", "products.view", "promotions.manage", "banners.manage", "header_spotlights.manage", "header_ads.manage", "shoplab_ads.view", "shoplab_ads.manage", "shoplab_ads.placements", "shoplab_ads.analytics", "themes.manage"],
   custom: [],
 };
 const ADMIN_ROLE_LABELS = {
@@ -629,7 +633,8 @@ async function route(request, env, ctx, requestId) {
     const actor = await adminActor(request, env);
     if (!actor)
       return fail(request, env, "UNAUTHORIZED", "Sessão administrativa inválida", 401, requestId);
-    if (permission && !actor.permissions.includes("*") && !actor.permissions.includes(permission))
+    const allowedByFeatureDependency=request.method==="GET" && path==="/api/v1/admin/products" && actor.permissions.includes("promotions.manage");
+    if (permission && !actor.permissions.includes("*") && !actor.permissions.includes(permission) && !allowedByFeatureDependency)
       return fail(request, env, "FORBIDDEN", "Seu cargo não permite realizar esta ação", 403, requestId);
   }
   if (request.method === "GET" && path === "/api/v1/admin/collaborators")
@@ -670,6 +675,8 @@ async function route(request, env, ctx, requestId) {
     return adminUserEvents(request, env, path.split("/").at(-2), url, requestId);
   if (request.method === "GET" && /^\/api\/v1\/admin\/users\/[^/]+$/.test(path))
     return adminUserDetail(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/users\/[^/]+$/.test(path))
+    return deleteAdminUser(request, env, path.split("/").pop(), requestId);
   if (request.method === "PUT" && /^\/api\/v1\/admin\/users\/[^/]+\/access$/.test(path))
     return updateAdminUserAccess(request, env, path.split("/").at(-2), requestId);
   if (request.method === "POST" && /^\/api\/v1\/admin\/users\/[^/]+\/premium-access$/.test(path))
@@ -5260,6 +5267,28 @@ async function adminUsers(req,env,url,id){
   return ok(req,env,{items:rows.slice(0,limit),hasMore,nextOffset:offset+limit},id);
 }
 
+async function deleteAdminUser(req,env,userId,id){
+  const actor=await adminActor(req,env);
+  if(!actor)return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
+  if(actor.role!=="owner")return fail(req,env,"FORBIDDEN","Somente o proprietário pode excluir usuários definitivamente",403,id);
+  const profile=await env.DB.prepare("SELECT display_name displayName,email FROM user_profiles WHERE user_id=?").bind(userId).first();
+  if(!profile)return fail(req,env,"USER_NOT_FOUND","Usuário não encontrado",404,id);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM reward_gift_cards WHERE reward_id IN (SELECT id FROM referral_rewards WHERE user_id=?)").bind(userId),
+    env.DB.prepare("DELETE FROM share_visits WHERE share_link_id IN (SELECT id FROM share_links WHERE user_id=?) OR converted_user_id=?").bind(userId,userId),
+    env.DB.prepare("DELETE FROM referrals WHERE referrer_user_id=? OR referred_user_id=?").bind(userId,userId),
+    env.DB.prepare("DELETE FROM referral_rewards WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM manual_user_rewards WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM user_sessions WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM share_links WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM user_favorites WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM user_ratings WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM user_cart WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM user_view_history WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM events WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_product_insight_cache WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM premium_subscriptions WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_ai_usage WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM free_ai_credit_usage WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_pass_payments WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM premium_notification_log WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_access_grants WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM user_profiles WHERE user_id=?").bind(userId)
+  ]);
+  return ok(req,env,{userId,displayName:profile.displayName||"",email:profile.email||""},id);
+}
 async function adminUserDetail(req,env,userId,id){
   if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
   const [profile,shares,referrals,rewards,sessions,events,usage,topProducts,activityByDay,eventBreakdown,topSearches,topCategories,manualRewards]=await env.DB.batch([
@@ -5759,18 +5788,22 @@ async function adminLogs(req, env, url, id) {
   return ok(req, env, { scope, items: items.slice(0, limit), types: (typeRows.results || []).map(row => row.value), offset, nextOffset: offset + limit, hasMore }, id);
 }
 
+function normalizedAssignablePermissions(permissions) {
+  const selected=new Set((Array.isArray(permissions) ? permissions : [])
+    .map((permission) => String(permission))
+    .filter((permission) => ADMIN_ASSIGNABLE_PERMISSIONS.has(permission)));
+  if (["shoplab_ads.manage","shoplab_ads.placements","shoplab_ads.analytics"].some(permission=>selected.has(permission))) selected.add("shoplab_ads.view");
+  return [...selected];
+}
+
 function normalizedCollaboratorPermissions(role, permissions) {
   if (!ADMIN_ROLE_PERMISSIONS[role]) return null;
   if (role !== "custom") return [...ADMIN_ROLE_PERMISSIONS[role]];
-  return [...new Set((Array.isArray(permissions) ? permissions : [])
-    .map((permission) => String(permission))
-    .filter((permission) => ADMIN_ASSIGNABLE_PERMISSIONS.has(permission)))];
+  return normalizedAssignablePermissions(permissions);
 }
 
 function normalizedRolePermissions(permissions) {
-  return [...new Set((Array.isArray(permissions) ? permissions : [])
-    .map((permission) => String(permission))
-    .filter((permission) => ADMIN_ASSIGNABLE_PERMISSIONS.has(permission)))];
+  return normalizedAssignablePermissions(permissions);
 }
 
 function safeJson(value, fallback) {
@@ -7355,7 +7388,10 @@ function adminPermissionForRequest(method, path) {
   if (path.includes("/promotions")) return "promotions.manage";
   if (path.includes("/collections")) return "categories.manage";
   if (path.includes("/header-spotlights")) return "header_spotlights.manage";
-  if (path.includes("/header-ads") || path.includes("/shoplab-ads") || path.includes("/shoplab-ad-assignments")) return "header_ads.manage";
+  if (path.includes("/shoplab-ads/analytics")) return "shoplab_ads.analytics";
+  if (path.includes("/shoplab-ad-assignments")) return method==="GET" ? "shoplab_ads.view" : "shoplab_ads.placements";
+  if (path.includes("/shoplab-ads")) return method==="GET" ? "shoplab_ads.view" : "shoplab_ads.manage";
+  if (path.includes("/header-ads")) return "header_ads.manage";
   if (path.includes("/banners")) return "banners.manage";
   if (path.includes("/typography") || path.includes("/social-links")) return "themes.manage";
   if (path.includes("/themes")) return "themes.manage";
