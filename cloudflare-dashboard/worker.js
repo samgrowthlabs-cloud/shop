@@ -10,7 +10,7 @@ const BUILT_IN_ORIGINS = [
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-08-28-script-author-readonly-v6";
+const WORKER_BUILD = "2026-08-28-script-admin-delete-v7";
 const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
 const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
@@ -5802,7 +5802,7 @@ async function adminMediaScripts(req, env, id) {
   const actor=await adminActor(req,env);
   const {results}=await env.DB.prepare(`SELECT id,title,content,notes,status,author_id authorId,author_name authorName,updated_by_id updatedById,updated_by_name updatedByName,created_at createdAt,updated_at updatedAt FROM admin_media_scripts ORDER BY datetime(updated_at) DESC`).all();
   const annotationRows=(await env.DB.prepare(`SELECT id,script_id scriptId,start_offset start,end_offset end,note,kind FROM admin_media_script_annotations ORDER BY start_offset`).all()).results||[],annotationsByScript=annotationRows.reduce((map,item)=>{(map[item.scriptId]??=[]).push(item);return map},{});
-  const items=(results||[]).map(item=>({...item,annotations:annotationsByScript[item.id]||[],canEdit:mediaScriptIsOwner(actor)||item.authorId===actor.id,canDelete:mediaScriptIsOwner(actor)||item.authorId===actor.id}));
+  const items=(results||[]).map(item=>({...item,annotations:annotationsByScript[item.id]||[],canEdit:mediaScriptIsOwner(actor)||item.authorId===actor.id,canDelete:mediaScriptCanDelete(actor)}));
   return ok(req,env,{items,canCreate:mediaScriptCanView(actor)},id);
 }
 
@@ -5834,12 +5834,13 @@ async function deleteAdminMediaScript(req, env, scriptId, id) {
   const actor=await adminActor(req,env);
   const current=await env.DB.prepare(`SELECT id,author_id authorId FROM admin_media_scripts WHERE id=?`).bind(String(scriptId).slice(0,100)).first();
   if(!current)return fail(req,env,'SCRIPT_NOT_FOUND','Roteiro não encontrado',404,id);
-  if(!mediaScriptIsOwner(actor)&&current.authorId!==actor.id)return fail(req,env,'FORBIDDEN','Somente o autor ou o proprietário pode excluir este roteiro',403,id);
+  if(!mediaScriptCanDelete(actor))return fail(req,env,'FORBIDDEN','Somente o proprietário ou o vice-admin pode excluir este roteiro permanentemente',403,id);
   await env.DB.batch([env.DB.prepare(`DELETE FROM admin_media_script_annotations WHERE script_id=?`).bind(current.id),env.DB.prepare(`DELETE FROM admin_media_script_comments WHERE script_id=?`).bind(current.id),env.DB.prepare(`DELETE FROM admin_media_scripts WHERE id=?`).bind(current.id)]);
   return ok(req,env,{id:current.id,deleted:true},id);
 }
 const mediaScriptCanView=actor=>actor.permissions.includes("*")||["media_scripts.manage","media_scripts.view","media_scripts.edit","media_scripts.comment"].some(permission=>actor.permissions.includes(permission));
 const mediaScriptIsOwner=actor=>actor?.role==="owner";
+const mediaScriptCanDelete=actor=>actor?.role==="owner"||actor?.role==="vice_admin";
 const mediaScriptCanComment=actor=>actor.permissions.includes("*")||actor.permissions.includes("media_scripts.manage")||actor.permissions.includes("media_scripts.comment");
 async function listAdminMediaScriptComments(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanView(actor))return fail(req,env,"FORBIDDEN","Sem acesso aos roteiros",403,id);const {results}=await env.DB.prepare("SELECT id,author_id authorId,author_name authorName,comment_text commentText,created_at createdAt FROM admin_media_script_comments WHERE script_id=? ORDER BY datetime(created_at)").bind(String(scriptId).slice(0,100)).all();return ok(req,env,{items:(results||[]).map(comment=>({...comment,canDelete:mediaScriptIsOwner(actor)||comment.authorId===actor.id})),canComment:mediaScriptCanComment(actor)},id)}
 async function createAdminMediaScriptComment(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanComment(actor))return fail(req,env,"FORBIDDEN","Sem permissão para comentar",403,id);const body=await req.json(),text=String(body.comment||"").trim().slice(0,4000);if(!text)return fail(req,env,"VALIDATION_ERROR","Escreva um comentário",422,id);const script=await env.DB.prepare("SELECT id FROM admin_media_scripts WHERE id=?").bind(String(scriptId).slice(0,100)).first();if(!script)return fail(req,env,"SCRIPT_NOT_FOUND","Roteiro não encontrado",404,id);const commentId=crypto.randomUUID();await env.DB.prepare("INSERT INTO admin_media_script_comments(id,script_id,author_id,author_name,comment_text) VALUES(?,?,?,?,?)").bind(commentId,script.id,actor.id,actor.name,text).run();return ok(req,env,{id:commentId},id)}
