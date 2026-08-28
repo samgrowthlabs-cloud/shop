@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS admin_media_scripts (
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   notes TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','ready')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','ready','used')),
   author_id TEXT NOT NULL,
   author_name TEXT NOT NULL,
   updated_by_id TEXT NOT NULL,
@@ -32,3 +32,16 @@ CREATE TABLE IF NOT EXISTS admin_media_script_annotations (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_media_script_annotations_script ON admin_media_script_annotations(script_id, start_offset);
+CREATE TABLE IF NOT EXISTS admin_media_script_versions (
+ id TEXT PRIMARY KEY, script_id TEXT NOT NULL REFERENCES admin_media_scripts(id) ON DELETE CASCADE,
+ version_number INTEGER NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, notes TEXT NOT NULL, status TEXT NOT NULL,
+ annotations_json TEXT NOT NULL DEFAULT '[]', actor_id TEXT NOT NULL, actor_name TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(script_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_media_script_versions_script ON admin_media_script_versions(script_id, version_number DESC);
+CREATE TABLE IF NOT EXISTS admin_media_script_trash (
+ script_id TEXT PRIMARY KEY REFERENCES admin_media_scripts(id) ON DELETE CASCADE,
+ deleted_by_id TEXT NOT NULL, deleted_by_name TEXT NOT NULL,
+ deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, purge_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_media_script_trash_purge ON admin_media_script_trash(purge_at);
