@@ -10,7 +10,7 @@ const BUILT_IN_ORIGINS = [
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-08-09-collaborator-ad-access-v1";
+const WORKER_BUILD = "2026-08-28-script-author-readonly-v6";
 const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
 const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
@@ -33,6 +33,13 @@ const ADMIN_PERMISSION_DEFINITIONS = [
   ["banners.manage", "Marketing", "Gerenciar banners principais", true],
   ["header_spotlights.manage", "Marketing", "Gerenciar destaques do cabeçalho", true],
   ["header_ads.manage", "Marketing", "Anúncios abaixo do menu", "Criar e administrar as faixas publicitárias abaixo do menu", true],
+  ["media_scripts.manage", "Roteiros", "Acessar Roteiros da SHOPLAB", "Criar e administrar os próprios roteiros", true],
+  ["media_scripts.view", "Roteiros", "Ver Roteiros da SHOPLAB", "Abrir e ler todos os roteiros da equipe em modo somente leitura", true],
+  ["media_scripts.edit", "Roteiros", "Edição global desativada", "Por segurança, somente o autor ou o proprietário edita um roteiro", false],
+  ["media_scripts.comment", "Roteiros", "Comentar nos roteiros", "Participar das conversas e revisões dentro dos roteiros", true],
+  ["media_conversion.use", "Mídia", "Usar conversor de mídia", "Converter vídeos, áudios e imagens diretamente no navegador", true],
+  ["media_recording.use", "Mídia", "Usar gravador de áudio", "Gravar, ouvir e exportar áudio diretamente no navegador", true],
+  ["media_mixer.use", "Mídia", "Usar mixer de áudio", "Mixar faixas, equalizar e exportar áudio no navegador", true],
   ["shoplab_ads.view", "SHOPLAB Ads", "Visualizar anúncios", "Abrir a biblioteca e visualizar os anúncios cadastrados", true],
   ["shoplab_ads.manage", "SHOPLAB Ads", "Criar e editar anúncios", "Criar, editar, ativar, pausar e excluir anúncios", true],
   ["shoplab_ads.placements", "SHOPLAB Ads", "Organizar posições", "Distribuir anúncios nas posições reais do site", true],
@@ -45,6 +52,7 @@ const ADMIN_PERMISSION_DEFINITIONS = [
   ["users.premium", "Usuários", "Conceder ou retirar prêmios SHOPLAB+", true],
   ["users.rewards", "Usuários", "Gerenciar recompensas e indicações", true],
   ["collaborators.manage", "Equipe e segurança", "Criar cargos e administrar colaboradores", false],
+  ["shared_files.manage", "Equipe e segurança", "Enviar e baixar arquivos compartilhados", true],
 ];
 const ADMIN_PERMISSIONS = Object.fromEntries(ADMIN_PERMISSION_DEFINITIONS.map(([value, , label]) => [value, label]));
 const ADMIN_ASSIGNABLE_PERMISSIONS = new Set(ADMIN_PERMISSION_DEFINITIONS.filter(([, , , descriptionOrAssignable, optionalAssignable]) => typeof optionalAssignable === "boolean" ? optionalAssignable : descriptionOrAssignable).map(([value]) => value));
@@ -416,7 +424,7 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(sendPremiumPassExpiryReminders(env));
+    ctx.waitUntil(Promise.all([sendPremiumPassExpiryReminders(env), purgeExpiredSharedFiles(env)]));
   },
 };
 
@@ -634,7 +642,8 @@ async function route(request, env, ctx, requestId) {
     if (!actor)
       return fail(request, env, "UNAUTHORIZED", "Sessão administrativa inválida", 401, requestId);
     const allowedByFeatureDependency=request.method==="GET" && path==="/api/v1/admin/products" && actor.permissions.includes("promotions.manage");
-    if (permission && !actor.permissions.includes("*") && !actor.permissions.includes(permission) && !allowedByFeatureDependency)
+    const allowedByMediaScripts=path.startsWith("/api/v1/admin/media-scripts") && ["media_scripts.manage","media_scripts.view","media_scripts.edit","media_scripts.comment"].some(item=>actor.permissions.includes(item));
+    if (permission && !actor.permissions.includes("*") && !actor.permissions.includes(permission) && !allowedByFeatureDependency && !allowedByMediaScripts)
       return fail(request, env, "FORBIDDEN", "Seu cargo não permite realizar esta ação", 403, requestId);
   }
   if (request.method === "GET" && path === "/api/v1/admin/collaborators")
@@ -653,6 +662,28 @@ async function route(request, env, ctx, requestId) {
     return updateAdminCollaborator(request, env, path.split("/").pop(), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/collaborators\/[^/]+$/.test(path))
     return deleteAdminCollaborator(request, env, path.split("/").pop(), requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/shared-files")
+    return adminSharedFiles(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/shared-files")
+    return createAdminSharedFile(request, env, requestId);
+  if (request.method === "GET" && /^\/api\/v1\/admin\/shared-files\/[^/]+\/download$/.test(path))
+    return downloadAdminSharedFile(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/shared-files\/[^/]+$/.test(path))
+    return deleteAdminSharedFile(request, env, path.split("/").pop(), requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/media-scripts")
+    return adminMediaScripts(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/media-scripts")
+    return saveAdminMediaScript(request, env, null, requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/media-scripts\/[^/]+$/.test(path))
+    return saveAdminMediaScript(request, env, path.split("/").pop(), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/media-scripts\/[^/]+$/.test(path))
+    return deleteAdminMediaScript(request, env, path.split("/").pop(), requestId);
+  if (request.method === "GET" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/comments$/.test(path))
+    return listAdminMediaScriptComments(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "POST" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/comments$/.test(path))
+    return createAdminMediaScriptComment(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "DELETE" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/comments\/[^/]+$/.test(path))
+    return deleteAdminMediaScriptComment(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/dashboard")
     return adminDashboard(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/logs")
@@ -5753,6 +5784,165 @@ async function adminDashboard(req, env, id) {
   );
 }
 
+async function ensureAdminMediaScriptsSchema(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_media_scripts (
+    id TEXT PRIMARY KEY,title TEXT NOT NULL,content TEXT NOT NULL,notes TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'draft',
+    author_id TEXT NOT NULL,author_name TEXT NOT NULL,updated_by_id TEXT NOT NULL,updated_by_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_media_scripts_updated ON admin_media_scripts(updated_at,title)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_media_script_comments (id TEXT PRIMARY KEY,script_id TEXT NOT NULL REFERENCES admin_media_scripts(id) ON DELETE CASCADE,author_id TEXT NOT NULL,author_name TEXT NOT NULL,comment_text TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_media_script_annotations (id TEXT PRIMARY KEY,script_id TEXT NOT NULL REFERENCES admin_media_scripts(id) ON DELETE CASCADE,start_offset INTEGER NOT NULL,end_offset INTEGER NOT NULL,note TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'custom',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_media_script_annotations_script ON admin_media_script_annotations(script_id,start_offset)`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_media_script_comments_script ON admin_media_script_comments(script_id,created_at)`).run();
+}
+
+async function adminMediaScripts(req, env, id) {
+  await ensureAdminMediaScriptsSchema(env);
+  const actor=await adminActor(req,env);
+  const {results}=await env.DB.prepare(`SELECT id,title,content,notes,status,author_id authorId,author_name authorName,updated_by_id updatedById,updated_by_name updatedByName,created_at createdAt,updated_at updatedAt FROM admin_media_scripts ORDER BY datetime(updated_at) DESC`).all();
+  const annotationRows=(await env.DB.prepare(`SELECT id,script_id scriptId,start_offset start,end_offset end,note,kind FROM admin_media_script_annotations ORDER BY start_offset`).all()).results||[],annotationsByScript=annotationRows.reduce((map,item)=>{(map[item.scriptId]??=[]).push(item);return map},{});
+  const items=(results||[]).map(item=>({...item,annotations:annotationsByScript[item.id]||[],canEdit:mediaScriptIsOwner(actor)||item.authorId===actor.id,canDelete:mediaScriptIsOwner(actor)||item.authorId===actor.id}));
+  return ok(req,env,{items,canCreate:mediaScriptCanView(actor)},id);
+}
+
+async function replaceAdminMediaScriptAnnotations(env,scriptId,annotations){const statements=[env.DB.prepare(`DELETE FROM admin_media_script_annotations WHERE script_id=?`).bind(scriptId),...annotations.map(item=>env.DB.prepare(`INSERT INTO admin_media_script_annotations(id,script_id,start_offset,end_offset,note,kind) VALUES(?,?,?,?,?,?)`).bind(item.id,scriptId,item.start,item.end,item.note,item.kind))];await env.DB.batch(statements)}
+
+async function saveAdminMediaScript(req, env, scriptId, id) {
+  await ensureAdminMediaScriptsSchema(env);
+  const actor=await adminActor(req,env),body=await req.json();
+  if(!scriptId&&!mediaScriptCanView(actor))return fail(req,env,'FORBIDDEN','Sem acesso para criar roteiros',403,id);
+  const title=String(body.title||'').trim().slice(0,160),content=String(body.content||'').trim().slice(0,50000),notes=String(body.notes||'').trim().slice(0,4000),status=['draft','ready','used'].includes(body.status)?body.status:'draft';
+  const annotations=(Array.isArray(body.annotations)?body.annotations:[]).slice(0,200).map(item=>({id:String(item.id||crypto.randomUUID()).slice(0,80),start:Math.max(0,Math.min(content.length,Number(item.start)||0)),end:Math.max(0,Math.min(content.length,Number(item.end)||0)),note:String(item.note||'').trim().slice(0,500),kind:['energy','pause','emphasis','tone','custom'].includes(item.kind)?item.kind:'custom'})).filter(item=>item.note&&item.end>item.start);
+  if(title.length<3||content.length<10)return fail(req,env,'VALIDATION_ERROR','Informe um título e um roteiro com pelo menos 10 caracteres',422,id);
+  if(scriptId){
+    const current=await env.DB.prepare(`SELECT id,author_id authorId FROM admin_media_scripts WHERE id=?`).bind(String(scriptId).slice(0,100)).first();
+    if(!current)return fail(req,env,'SCRIPT_NOT_FOUND','Roteiro não encontrado',404,id);
+    if(!mediaScriptIsOwner(actor)&&current.authorId!==actor.id)return fail(req,env,'FORBIDDEN','Este roteiro está disponível somente para leitura porque pertence a outro autor',403,id);
+    await env.DB.prepare(`UPDATE admin_media_scripts SET title=?,content=?,notes=?,status=?,updated_by_id=?,updated_by_name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(title,content,notes,status,actor.id,actor.name,current.id).run();
+    await replaceAdminMediaScriptAnnotations(env,current.id,annotations);
+    return ok(req,env,{id:current.id,updated:true},id);
+  }
+  const newId=crypto.randomUUID();
+  await env.DB.prepare(`INSERT INTO admin_media_scripts(id,title,content,notes,status,author_id,author_name,updated_by_id,updated_by_name) VALUES(?,?,?,?,?,?,?,?,?)`).bind(newId,title,content,notes,status,actor.id,actor.name,actor.id,actor.name).run();
+  await replaceAdminMediaScriptAnnotations(env,newId,annotations);
+  return ok(req,env,{id:newId,created:true},id);
+}
+
+async function deleteAdminMediaScript(req, env, scriptId, id) {
+  await ensureAdminMediaScriptsSchema(env);
+  const actor=await adminActor(req,env);
+  const current=await env.DB.prepare(`SELECT id,author_id authorId FROM admin_media_scripts WHERE id=?`).bind(String(scriptId).slice(0,100)).first();
+  if(!current)return fail(req,env,'SCRIPT_NOT_FOUND','Roteiro não encontrado',404,id);
+  if(!mediaScriptIsOwner(actor)&&current.authorId!==actor.id)return fail(req,env,'FORBIDDEN','Somente o autor ou o proprietário pode excluir este roteiro',403,id);
+  await env.DB.batch([env.DB.prepare(`DELETE FROM admin_media_script_annotations WHERE script_id=?`).bind(current.id),env.DB.prepare(`DELETE FROM admin_media_script_comments WHERE script_id=?`).bind(current.id),env.DB.prepare(`DELETE FROM admin_media_scripts WHERE id=?`).bind(current.id)]);
+  return ok(req,env,{id:current.id,deleted:true},id);
+}
+const mediaScriptCanView=actor=>actor.permissions.includes("*")||["media_scripts.manage","media_scripts.view","media_scripts.edit","media_scripts.comment"].some(permission=>actor.permissions.includes(permission));
+const mediaScriptIsOwner=actor=>actor?.role==="owner";
+const mediaScriptCanComment=actor=>actor.permissions.includes("*")||actor.permissions.includes("media_scripts.manage")||actor.permissions.includes("media_scripts.comment");
+async function listAdminMediaScriptComments(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanView(actor))return fail(req,env,"FORBIDDEN","Sem acesso aos roteiros",403,id);const {results}=await env.DB.prepare("SELECT id,author_id authorId,author_name authorName,comment_text commentText,created_at createdAt FROM admin_media_script_comments WHERE script_id=? ORDER BY datetime(created_at)").bind(String(scriptId).slice(0,100)).all();return ok(req,env,{items:(results||[]).map(comment=>({...comment,canDelete:mediaScriptIsOwner(actor)||comment.authorId===actor.id})),canComment:mediaScriptCanComment(actor)},id)}
+async function createAdminMediaScriptComment(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanComment(actor))return fail(req,env,"FORBIDDEN","Sem permissão para comentar",403,id);const body=await req.json(),text=String(body.comment||"").trim().slice(0,4000);if(!text)return fail(req,env,"VALIDATION_ERROR","Escreva um comentário",422,id);const script=await env.DB.prepare("SELECT id FROM admin_media_scripts WHERE id=?").bind(String(scriptId).slice(0,100)).first();if(!script)return fail(req,env,"SCRIPT_NOT_FOUND","Roteiro não encontrado",404,id);const commentId=crypto.randomUUID();await env.DB.prepare("INSERT INTO admin_media_script_comments(id,script_id,author_id,author_name,comment_text) VALUES(?,?,?,?,?)").bind(commentId,script.id,actor.id,actor.name,text).run();return ok(req,env,{id:commentId},id)}
+async function deleteAdminMediaScriptComment(req,env,commentId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env),comment=await env.DB.prepare("SELECT id,author_id authorId FROM admin_media_script_comments WHERE id=?").bind(String(commentId).slice(0,100)).first();if(!comment)return fail(req,env,"COMMENT_NOT_FOUND","Comentário não encontrado",404,id);if(!mediaScriptIsOwner(actor)&&comment.authorId!==actor.id)return fail(req,env,"FORBIDDEN","Sem permissão para excluir este comentário",403,id);await env.DB.prepare("DELETE FROM admin_media_script_comments WHERE id=?").bind(comment.id).run();return ok(req,env,{id:comment.id},id)}
+const ADMIN_SHARED_FILE_MAX_BYTES = 50 * 1024 * 1024;
+const ADMIN_SHARED_FILE_RETENTION_DAYS = 7;
+
+async function ensureAdminSharedFilesSchema(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_shared_files (
+    id TEXT PRIMARY KEY,title TEXT NOT NULL,comment TEXT NOT NULL DEFAULT '',original_name TEXT NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'application/octet-stream',size_bytes INTEGER NOT NULL,storage_key TEXT NOT NULL UNIQUE,
+    sender_id TEXT NOT NULL,sender_name TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_shared_files_expiry ON admin_shared_files(expires_at,created_at)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_shared_file_downloads (
+    file_id TEXT NOT NULL REFERENCES admin_shared_files(id) ON DELETE CASCADE,actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,
+    downloaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(file_id,actor_id)
+  )`).run();
+}
+
+async function purgeExpiredSharedFiles(env) {
+  if (!env.DB || !env.MEDIA) return;
+  await ensureAdminSharedFilesSchema(env);
+  const { results } = await env.DB.prepare(`SELECT id,storage_key storageKey FROM admin_shared_files WHERE datetime(expires_at)<=CURRENT_TIMESTAMP LIMIT 500`).all();
+  const expired = results || [];
+  if (!expired.length) return;
+  await env.MEDIA.delete(expired.map(item => item.storageKey));
+  await env.DB.batch(expired.map(item => env.DB.prepare(`DELETE FROM admin_shared_files WHERE id=?`).bind(item.id)));
+}
+
+async function adminSharedFiles(req, env, id) {
+  if (!env.MEDIA) return fail(req,env,"R2_NOT_CONFIGURED","O armazenamento R2 não foi configurado",503,id);
+  await ensureAdminSharedFilesSchema(env);
+  await purgeExpiredSharedFiles(env);
+  const actor = await adminActor(req,env);
+  const [fileQuery,downloadQuery] = await env.DB.batch([
+    env.DB.prepare(`SELECT id,title,comment,original_name originalName,content_type contentType,size_bytes sizeBytes,sender_id senderId,sender_name senderName,expires_at expiresAt,created_at createdAt FROM admin_shared_files WHERE datetime(expires_at)>CURRENT_TIMESTAMP ORDER BY datetime(created_at) DESC`),
+    env.DB.prepare(`SELECT file_id fileId,actor_id actorId,actor_name actorName,downloaded_at downloadedAt FROM admin_shared_file_downloads ORDER BY datetime(downloaded_at) DESC`)
+  ]);
+  const downloads = downloadQuery.results || [];
+  const items = (fileQuery.results || []).map(file => ({
+    ...file,
+    downloaded: downloads.some(row => row.fileId === file.id && row.actorId === actor.id),
+    downloads: downloads.filter(row => row.fileId === file.id),
+    canDelete: actor.permissions.includes("*") || file.senderId === actor.id
+  }));
+  return ok(req,env,{items,maxBytes:ADMIN_SHARED_FILE_MAX_BYTES,retentionDays:ADMIN_SHARED_FILE_RETENTION_DAYS},id);
+}
+
+async function createAdminSharedFile(req, env, id) {
+  if (!env.MEDIA) return fail(req,env,"R2_NOT_CONFIGURED","O armazenamento R2 não foi configurado",503,id);
+  await ensureAdminSharedFilesSchema(env);
+  const actor = await adminActor(req,env), form = await req.formData();
+  const title = String(form.get("title") || "").trim().slice(0,140);
+  const comment = String(form.get("comment") || "").trim().slice(0,2000);
+  const file = form.get("file");
+  if (!title) return fail(req,env,"VALIDATION_ERROR","Informe um título",422,id);
+  if (!(file instanceof File) || !file.size || file.size > ADMIN_SHARED_FILE_MAX_BYTES)
+    return fail(req,env,"INVALID_FILE","Envie um arquivo de até 50 MB",422,id);
+  const fileId=crypto.randomUUID();
+  const extension=(file.name.split(".").pop()||"bin").toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,12)||"bin";
+  const storageKey=`admin-shared/${fileId}.${extension}`;
+  const expiresAt=new Date(Date.now()+ADMIN_SHARED_FILE_RETENTION_DAYS*86400000).toISOString();
+  try {
+    await env.MEDIA.put(storageKey,file.stream(),{httpMetadata:{contentType:file.type||"application/octet-stream",cacheControl:"private, no-store"},customMetadata:{originalName:file.name.slice(0,180),expiresAt}});
+    await env.DB.prepare(`INSERT INTO admin_shared_files(id,title,comment,original_name,content_type,size_bytes,storage_key,sender_id,sender_name,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)`).bind(fileId,title,comment,file.name.slice(0,180),file.type||"application/octet-stream",file.size,storageKey,actor.id,actor.name,expiresAt).run();
+  } catch(error) {
+    await env.MEDIA.delete(storageKey).catch(()=>{});
+    throw error;
+  }
+  return ok(req,env,{id:fileId,expiresAt},id);
+}
+
+function safeDownloadName(value) {
+  return String(value||"arquivo").replace(/[\r\n"\\/]/g,"_").slice(0,180) || "arquivo";
+}
+
+async function downloadAdminSharedFile(req, env, fileId, id) {
+  if (!env.MEDIA) return fail(req,env,"R2_NOT_CONFIGURED","O armazenamento R2 não foi configurado",503,id);
+  await ensureAdminSharedFilesSchema(env);
+  const file=await env.DB.prepare(`SELECT id,original_name originalName,content_type contentType,storage_key storageKey,expires_at expiresAt FROM admin_shared_files WHERE id=?`).bind(String(fileId).slice(0,100)).first();
+  if (!file || new Date(file.expiresAt).getTime()<=Date.now()) {
+    await purgeExpiredSharedFiles(env);
+    return fail(req,env,"FILE_NOT_FOUND","Arquivo expirado ou não encontrado",404,id);
+  }
+  const object=await env.MEDIA.get(file.storageKey);
+  if (!object?.body) return fail(req,env,"FILE_NOT_FOUND","Arquivo não encontrado no armazenamento",404,id);
+  const actor=await adminActor(req,env);
+  await env.DB.prepare(`INSERT INTO admin_shared_file_downloads(file_id,actor_id,actor_name,downloaded_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(file_id,actor_id) DO UPDATE SET actor_name=excluded.actor_name,downloaded_at=CURRENT_TIMESTAMP`).bind(file.id,actor.id,actor.name).run();
+  const headers=new Headers({"content-type":file.contentType||"application/octet-stream","content-length":String(object.size),"content-disposition":`attachment; filename="${safeDownloadName(file.originalName)}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,"cache-control":"private, no-store","x-content-type-options":"nosniff"});
+  return cors(req,env,new Response(object.body,{headers}));
+}
+
+async function deleteAdminSharedFile(req, env, fileId, id) {
+  await ensureAdminSharedFilesSchema(env);
+  const actor=await adminActor(req,env);
+  const file=await env.DB.prepare(`SELECT id,storage_key storageKey,sender_id senderId FROM admin_shared_files WHERE id=?`).bind(String(fileId).slice(0,100)).first();
+  if (!file) return fail(req,env,"FILE_NOT_FOUND","Arquivo não encontrado",404,id);
+  if (!actor.permissions.includes("*") && file.senderId!==actor.id) return fail(req,env,"FORBIDDEN","Somente quem enviou ou o proprietário pode excluir",403,id);
+  if (env.MEDIA) await env.MEDIA.delete(file.storageKey);
+  await env.DB.prepare(`DELETE FROM admin_shared_files WHERE id=?`).bind(file.id).run();
+  return ok(req,env,{id:file.id,deleted:true},id);
+}
 async function adminLogs(req, env, url, id) {
   await ensureAdminAuditSchema(env);
   const actor = await adminActor(req, env);
@@ -7364,6 +7554,8 @@ async function requireAdmin(req, env) {
 
 function adminPermissionForRequest(method, path) {
   if (path.startsWith("/api/v1/admin/collaborators") || path.startsWith("/api/v1/admin/roles")) return "collaborators.manage";
+  if (path.startsWith("/api/v1/admin/shared-files")) return "shared_files.manage";
+  if (path.startsWith("/api/v1/admin/media-scripts")) return "media_scripts.view";
   if (path.includes("referral-rewards") || path.includes("gift-card-types") || path.includes("/rewards")) return "users.rewards";
   if (/\/users\/[^/]+\/access$/.test(path)) return "users.access";
   if (/\/users\/[^/]+\/premium-access$/.test(path)) return "users.premium";

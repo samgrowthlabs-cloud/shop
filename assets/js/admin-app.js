@@ -16,6 +16,11 @@ const routes={
   premium:{label:'SHOPLAB+',group:'growth',module:'main',target:'premium',permission:'premium.manage'},
   ia:{label:'Inteligência artificial',group:'growth',module:'v2',target:'ai-settings',permission:'ai.manage'},
   equipe:{label:'Pessoas e cargos',group:'team',module:'v2',target:'collaborators',permission:'collaborators.manage'},
+  arquivos:{label:'Arquivos compartilhados',group:'team',module:'v2',target:'shared-files',permission:'shared_files.manage'},
+  midia:{label:'Roteiros',group:'team',module:'v2',target:'media-scripts',permission:'media_scripts.view'},
+  conversor:{label:'Conversão',group:'team',module:'converter',target:'media-converter',permission:'media_conversion.use'},
+  gravador:{label:'Gravador',group:'team',module:'recorder',target:'audio-recorder',permission:'media_recording.use'},
+  mixer:{label:'Mixer',group:'team',module:'mixer',target:'audio-mixer',permission:'media_mixer.use'},
   aparencia:{label:'Identidade visual',group:'appearance',module:'v2',target:'themes',permission:'themes.manage'},
   'produto-formulario':{label:'Editor de produto',group:'catalog',module:'v2',target:'product-form',permission:'products.edit',secondary:true}
 };
@@ -36,7 +41,7 @@ const groups=[
   {id:'team',label:'Equipe e acessos',icon:icons.team},
   {id:'appearance',label:'Aparência',icon:icons.appearance}
 ];
-const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','temas.html':'aparencia'};
+const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','temas.html':'aparencia'};
 let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();
 window.fetch=(input,options={})=>{const url=typeof input==='string'?input:input?.url||'',request=url.includes('/api/v1/admin/')&&!options.signal?{...options,signal:routeRequests.signal}:options;return nativeFetch(input,request).catch(error=>error?.name==='AbortError'?new Promise(()=>{}):Promise.reject(error))};
@@ -45,7 +50,7 @@ window.setInterval=(callback,delay,...args)=>{const id=nativeSetInterval(callbac
 window.clearTimeout=id=>{routeTimers.delete(id);nativeClearTimeout(id)};
 window.clearInterval=id=>{routeTimers.delete(id);nativeClearInterval(id)};
 function cancelPreviousRoute(){routeRequests.abort();routeRequests=new AbortController();for(const id of routeTimers){nativeClearTimeout(id);nativeClearInterval(id)}routeTimers.clear()}
-const can=permission=>session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission);
+const can=permission=>session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission)||(permission==='media_scripts.view'&&['media_scripts.manage','media_scripts.edit','media_scripts.comment'].some(item=>session?.actor?.permissions?.includes(item)));
 const allowed=key=>routes[key]&&!deniedRoutes.has(key)&&can(routes[key].permission);
 const routeFromUrl=()=>new URL(location.href).searchParams.get('tab')||'painel';
 const routeUrl=(key,source)=>{const url=new URL('index.html',location.href),origin=new URL(source||location.href,location.href);url.searchParams.set('tab',key);if(key==='produto-formulario'&&origin.searchParams.get('id'))url.searchParams.set('id',origin.searchParams.get('id'));return url};
@@ -115,7 +120,7 @@ async function navigate(requested,{push=true,source}={}){
   document.querySelector('#content').innerHTML='<div class="admin-loading">Carregando dados…</div>';
   try{
     document.querySelector('.admin-main')?.classList.remove('ads-editor');document.querySelector('.ads-view-tabs')?.remove();
-    const controller=routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='ads'?window.ShoplabAdsAdmin:window.ShoplabAdminV2;
+    const controller=routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:window.ShoplabAdminV2;
     await controller.run(routes[route].target,session);
     renderNavigation(route);
   }catch(error){
@@ -142,7 +147,7 @@ addEventListener('unhandledrejection',event=>{if(event.reason?.name==='AbortErro
 async function start(){
   session=await api('/api/v1/admin/auth/session');routeRequests=new AbortController();
   installShell();
-  await Promise.all([import('./admin.js?v=20260827-shoplab-ads-rbac-2'),import('./admin-v2.js?v=20260827-shoplab-ads-rbac-2'),import('./shoplab-ads.js?v=20260827-shoplab-ads-rbac-2')]);
+  await Promise.all([import('./admin.js?v=20260828-script-author-readonly-6'),import('./admin-v2.js?v=20260828-script-author-readonly-6'),import('./media-converter.js?v=20260828-script-author-readonly-6'),import('./audio-recorder.js?v=20260828-script-author-readonly-6'),import('./audio-mixer.js?v=20260828-script-author-readonly-6'),import('./shoplab-ads.js?v=20260827-shoplab-ads-rbac-2')]);
   await navigate(routeFromUrl(),{push:false});
 }
 start().catch(error=>{document.body.innerHTML=`<main class="login-page"><section class="login-box"><h1>Não foi possível abrir o admin</h1><p>${error.message}</p><a class="btn primary" href="login.html">Entrar novamente</a></section></main>`});
