@@ -1,0 +1,12 @@
+.git/
+.github/
+.wrangler/
+tmp/
+node_modules/
+cloudflare-dashboard/
+docs/
+supabase-email-templates/
+*.sql
+*.md
+wrangler.jsonc
+assets/vendor/ffmpeg/core/ffmpeg-core.wasm
