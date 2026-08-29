@@ -883,3 +883,63 @@ body[data-admin-page="audio-recorder"] #treatment-preview:disabled{border-color:
 .ads-position.has-selected>span{background:#fff;color:#9b3030}
 .ads-position.is-over{border-color:#087c70!important;background:#c9f0e6!important;transform:translateY(-1px)}
 .ads-ad.selected{outline:2px solid #087c70;outline-offset:2px}
+
+/* Cor do cargo aplicada ao painel do colaborador. */
+html[data-admin-role-color] .admin-app-shell .admin-area-tab.active{
+  border-color:color-mix(in srgb,var(--admin-role-color) 34%,#dce4e1)!important;
+  background:color-mix(in srgb,var(--admin-role-color) 11%,#fff)!important;
+  color:color-mix(in srgb,var(--admin-role-color) 82%,#111)!important;
+}
+html[data-admin-role-color] .admin-app-shell .admin-area-tab.active>span,
+html[data-admin-role-color] .admin-page-tabs button.active::after,
+html[data-admin-role-color].admin-is-navigating::before,
+html[data-admin-role-color] .btn.primary{
+  background:var(--admin-role-color)!important;
+}
+html[data-admin-role-color] .admin-page-tabs button.active,
+html[data-admin-role-color] .admin-heading .eyebrow,
+html[data-admin-role-color] .admin-site-link{
+  color:var(--admin-role-color)!important;
+}
+html[data-admin-role-color] .admin-actor{
+  border:1px solid color-mix(in srgb,var(--admin-role-color) 30%,transparent)!important;
+  background:color-mix(in srgb,var(--admin-role-color) 12%,#fff)!important;
+}
+html[data-admin-role-color] .admin-actor small{color:color-mix(in srgb,var(--admin-role-color) 78%,#263d38)!important}
+html[data-admin-role-color] .admin-page-tabs button:focus-visible,
+html[data-admin-role-color] .admin-area-tab:focus-visible{outline-color:var(--admin-role-color)!important}
+html[data-admin-theme="dark"][data-admin-role-color] .admin-app-shell .admin-area-tab.active,
+html[data-admin-theme="dark"][data-admin-role-color] .admin-actor{
+  background:color-mix(in srgb,var(--admin-role-color) 18%,#101715)!important;
+}
+/* Area de Midia acompanha integralmente a cor do cargo. */
+html[data-admin-role-color] body[data-admin-page="media-scripts"] .scripts-hero{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--admin-role-color) 38%,#071715) 0%,color-mix(in srgb,var(--admin-role-color) 72%,#102e29) 62%,var(--admin-role-color) 100%)!important;
+}
+html[data-admin-role-color] body[data-admin-page="media-scripts"] .scripts-kicker{
+  color:color-mix(in srgb,var(--admin-role-color) 24%,#fff)!important;
+}
+html[data-admin-role-color] body[data-admin-page="media-scripts"] .scripts-hero p{
+  color:color-mix(in srgb,var(--admin-role-color) 16%,#fff)!important;
+}
+html[data-admin-role-color] body[data-admin-page="media-scripts"] .scripts-new{
+  border-color:var(--admin-role-color)!important;
+  background:var(--admin-role-color)!important;
+  color:#fff!important;
+}
+html[data-admin-role-color] body[data-admin-page="media-scripts"] :is(.scripts-empty-icon,.script-writing-meta>div span){
+  background:color-mix(in srgb,var(--admin-role-color) 10%,#fff)!important;
+}
+html[data-admin-role-color] body[data-admin-page="media-scripts"] :is(.scripts-empty-icon svg,.scripts-empty>span){
+  stroke:var(--admin-role-color)!important;
+  color:var(--admin-role-color)!important;
+}
+html[data-admin-role-color] body[data-admin-page="media-scripts"] :is(.script-tool-icon:hover,.script-tool-icon.active,.script-editor-toolbar button:hover){
+  border-color:color-mix(in srgb,var(--admin-role-color) 55%,#d5e1de)!important;
+  background:color-mix(in srgb,var(--admin-role-color) 10%,#fff)!important;
+  color:color-mix(in srgb,var(--admin-role-color) 82%,#111)!important;
+}
+html[data-admin-role-color] body[data-admin-page="media-scripts"] .script-writing-field #media-script-content:focus{
+  border-color:var(--admin-role-color)!important;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--admin-role-color) 14%,transparent)!important;
+}

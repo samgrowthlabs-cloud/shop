@@ -8886,3 +8886,25 @@ body[data-page="home"] .home-price-drop-card .home-price-drop-discount{
   body[data-page="home"] .home-price-drop-card .home-price-drop-discount{min-width:34px!important;padding:4px 5px!important;font-size:clamp(8px,5cqi,10px)!important}
   position:relative!important;
 }
+/* Mantem todos os percentuais com o mesmo visual dos cards de oferta. */
+body:not([data-admin-page]) .product-card .price>.discount-badge,
+body:not([data-admin-page]) .promotion-products .price>.discount-badge{
+  min-width:42px!important;
+  padding:5px 8px!important;
+  border:0!important;
+  border-radius:3px!important;
+  background:rgba(0,143,125,.45)!important;
+  color:#02352f!important;
+  font-size:14px!important;
+  font-weight:400!important;
+  line-height:1!important;
+  box-shadow:none!important;
+}
+@media(max-width:760px){
+  body:not([data-admin-page]) .product-card .price>.discount-badge,
+  body:not([data-admin-page]) .promotion-products .price>.discount-badge{
+    min-width:34px!important;
+    padding:4px 5px!important;
+    font-size:10px!important;
+  }
+}

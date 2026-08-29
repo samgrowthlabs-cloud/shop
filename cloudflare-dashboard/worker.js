@@ -188,14 +188,13 @@ export default {
     env = { ...env, DB: databaseFor(env) };
     try {
       const url = new URL(request.url);
-      const shouldAudit = url.pathname.startsWith("/api/v1/admin/") && (request.method !== "GET" || url.pathname === "/api/v1/admin/auth/session");
+      const shouldAudit = url.pathname.startsWith("/api/v1/admin/");
       const auditRequest = shouldAudit ? request.clone() : null;
       const auditActor = shouldAudit && !url.pathname.endsWith("/auth/login") ? await adminActor(request, env).catch(() => null) : null;
       const response = await route(request, env, ctx, requestId);
-      // Administrative mutations must be present in the audit trail as soon as
-      // the UI receives its success response. Running this in the background
-      // made freshly saved changes appear to have no collaborator log.
-      if (auditRequest && response.ok && url.pathname !== "/api/v1/admin/auth/session")
+      // Persist every authenticated Admin request before returning so navigation,
+      // reads, mutations and denied actions all appear in the collaborator history.
+      if (auditRequest)
         await recordAdminAudit(auditRequest, response.clone(), env, requestId, auditActor);
       return response;
     } catch (error) {
@@ -3147,7 +3146,7 @@ async function login(req, env, id) {
     try {
       collaborator = await env.DB.prepare(
         `SELECT c.id,c.name,c.email,c.role,c.role_id roleId,c.permissions_json permissionsJson,c.password_salt passwordSalt,c.password_hash passwordHash,
-          r.name customRoleName,r.permissions_json rolePermissionsJson,r.is_active roleIsActive
+          r.name customRoleName,r.color roleColor,r.permissions_json rolePermissionsJson,r.is_active roleIsActive
          FROM admin_collaborators c LEFT JOIN admin_roles r ON r.id=c.role_id WHERE c.email=? AND c.is_active=1`,
       ).bind(email).first();
       validCredentials = Boolean(collaborator) && (!collaborator.roleId || Boolean(collaborator.roleIsActive)) && await verifyAdminPassword(String(body.password), collaborator.passwordSalt, collaborator.passwordHash);
@@ -5035,9 +5034,10 @@ async function serveMedia(req, env, key, ctx) {
     if (cached) return cached;
   }
 
+  const rangeHeader = req.headers.get("range");
   const object = await env.MEDIA.get(key, wantsTransform ? {} : {
     onlyIf: req.headers,
-    range: req.headers,
+    ...(rangeHeader ? { range: req.headers } : {}),
   });
   if (!object) return new Response("Not found", { status: 404 });
   const headers = new Headers();
@@ -5077,7 +5077,7 @@ async function serveMedia(req, env, key, ctx) {
   headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
   headers.set("accept-ranges", "bytes");
   if (width) headers.set("x-shoplab-image-width", String(width));
-  if (object.range) {
+  if (rangeHeader && object.range) {
     const offset = object.range.offset;
     const length = object.range.length ?? object.size - offset;
     headers.set("content-length", String(length));
@@ -5607,19 +5607,26 @@ function adminAuditTarget(method, path, body, responseData) {
   const suffix = parts.slice(adminIndex + 3).join("/");
   const actionAreas = { products: "product", categories: "category", brands: "brand", partners: "partner", collaborators: "collaborator", roles: "role", users: "user", promotions: "promotion", banners: "banner", themes: "theme", "ai-settings": "ai_settings", "premium-settings": "premium_settings" };
   const actionArea = actionAreas[area] || area.replaceAll("-", "_");
-  let action = `${method.toLowerCase()}_${actionArea}`;
-  if (path.includes("/auth/login")) action = "admin_login";
+  let action = method === "GET" ? `${actionArea}_viewed` : `${method.toLowerCase()}_${actionArea}`;
+  if (path.includes("/auth/session")) action = "admin_panel_opened";
+  else if (path.includes("/auth/login")) action = "admin_login";
   else if (path.includes("/auth/logout")) action = "admin_logout";
   else if (path.includes("/auth/password")) action = "admin_password_changed";
   else if (method === "POST") action = `${actionArea}_created`;
   else if (method === "DELETE") action = `${actionArea}_deleted`;
   else if (method === "PUT") action = `${actionArea}_updated`;
+  if (path === "/api/v1/admin/dashboard") action = "dashboard_viewed";
+  if (path === "/api/v1/admin/logs") action = "audit_log_viewed";
   if (suffix === "price" || suffix === "sync-price") action = suffix === "price" ? "product_price_updated" : "product_price_synced";
   if (suffix === "media" || area === "media") action = method === "DELETE" ? "product_media_deleted" : "product_media_updated";
   if (suffix === "offers") action = "product_offers_updated";
   if (suffix === "access") action = "user_access_updated";
   if (suffix === "premium-access") action = method === "DELETE" ? "user_premium_revoked" : "user_premium_granted";
-  if (suffix.includes("rewards")) action = method === "DELETE" ? "user_reward_removed" : "user_reward_created";
+  if (suffix.includes("rewards")) action = method === "GET" ? "user_rewards_viewed" : method === "DELETE" ? "user_reward_removed" : "user_reward_created";
+  if (area === "shared-files" && method === "GET" && suffix === "download") action = "shared_file_downloaded";
+  if (area === "media-scripts" && suffix.includes("comments")) action = method === "GET" ? "media_script_comments_viewed" : method === "DELETE" ? "media_script_comment_deleted" : "media_script_comment_created";
+  if (area === "media-scripts" && suffix.includes("versions")) action = suffix.endsWith("restore") ? "media_script_version_restored" : "media_script_versions_viewed";
+  if (area === "media-scripts" && suffix.includes("trash")) action = method === "GET" ? "media_script_trash_viewed" : suffix.endsWith("restore") ? "media_script_restored" : "media_script_permanently_deleted";
   const resourceTypes = { products: "product", categories: "category", brands: "brand", partners: "partner", collaborators: "collaborator", roles: "role", users: "user", promotions: "promotion", banners: "banner", themes: "theme", media: "product_media" };
   const resourceType = resourceTypes[area] || area.replaceAll("-", "_");
   const resourceLabel = body?.name || body?.title || body?.email || body?.slug || body?.query || null;
@@ -7520,6 +7527,7 @@ function collaboratorAdminActor(row) {
     role: row.role,
     roleId: row.roleId || null,
     roleLabel: row.customRoleName || ADMIN_ROLE_LABELS[row.role] || row.role,
+    roleColor: /^#[0-9a-f]{6}$/i.test(String(row.roleColor || "")) ? row.roleColor : null,
     permissions: collaboratorPermissions(row),
   };
 }
@@ -7531,7 +7539,7 @@ async function adminActor(req, env) {
   try {
     const row = await env.DB.prepare(
       `SELECT s.id sessionId,s.collaborator_id collaboratorId,c.id collaboratorActorId,c.id collaboratorFound,c.name,c.email,c.role,c.role_id roleId,c.permissions_json permissionsJson,c.is_active isActive,
-        r.name customRoleName,r.permissions_json rolePermissionsJson,r.is_active roleIsActive
+        r.name customRoleName,r.color roleColor,r.permissions_json rolePermissionsJson,r.is_active roleIsActive
        FROM admin_sessions s LEFT JOIN admin_collaborators c ON c.id=s.collaborator_id LEFT JOIN admin_roles r ON r.id=c.role_id
        WHERE s.token_hash=? AND s.expires_at>CURRENT_TIMESTAMP`,
     ).bind(tokenHash).first();
