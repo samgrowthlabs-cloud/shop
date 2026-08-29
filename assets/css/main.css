@@ -887,7 +887,7 @@ html,body,#app{max-width:100%;overflow-x:clip}
   .header-row .search,body[data-page="home"] .header-row .search{grid-column:1!important;grid-row:2!important;width:100%!important;margin:8px 0 0!important}
   .search input,body[data-page="home"] .search input{height:46px!important;padding:9px 46px 9px 14px!important;border-radius:9px!important;font-size:14px!important;line-height:1.2!important}
   .search button,body[data-page="home"] .search button{top:3px!important;right:3px!important;width:40px!important;height:40px!important;border-radius:7px!important;font-size:15px!important}
-  .desktop-nav-links a{font-size:11px!important;line-height:1.2!important}
+  .desktop-nav-links a{font-size:13px!important;line-height:1.2!important}
 }
 
 @media(max-width:760px){
@@ -1165,7 +1165,7 @@ body[data-page="home"] .product-card .old{
   margin:0!important;
   overflow:hidden;
   color:#697975;
-  font-size:11px!important;
+  font-size:13px!important;
   font-weight:550!important;
   line-height:1.15;
   letter-spacing:0;
@@ -1189,7 +1189,7 @@ body[data-page="home"] .product-card .old{
   body[data-page="home"] .product-rail .public-rating.is-empty>.rating-stars{font-size:12px!important}
   body[data-page="home"] .product-rail .public-rating.is-empty>small{font-size:10px!important}
   body[data-page="home"] .product-rail .price{min-height:43px!important;padding-top:8px!important;font-size:18px!important}
-  body[data-page="home"] .product-rail .old{margin-top:4px!important;font-size:10px!important}
+  body[data-page="home"] .product-rail .old{margin-top:4px!important;font-size:12px!important}
 }
 @media(max-width:380px){
   body[data-page="home"] .product-rail .public-rating>small{max-width:49px}
@@ -8906,5 +8906,27 @@ body:not([data-admin-page]) .promotion-products .price>.discount-badge{
     min-width:34px!important;
     padding:4px 5px!important;
     font-size:10px!important;
+  }
+}
+
+/* Preco anterior do Em alta no mesmo tamanho dos demais carrosseis. */
+html body[data-page="home"] .product-rail .product-card .price > .old{
+  min-height:18px!important;
+  margin:0 0 4px!important;
+  font-size:15px!important;
+  line-height:1.2!important;
+}
+@media(max-width:760px){
+  html body[data-page="home"] .product-rail .product-card .price > .old{
+    min-height:16px!important;
+    margin-bottom:3px!important;
+    font-size:13px!important;
+  }
+}
+/* Estrelas dos cards um pouco maiores no celular. */
+@media(max-width:760px){
+  html body:not([data-admin-page]) .product-card .public-rating .rating-star-svg{
+    width:18px!important;
+    height:18px!important;
   }
 }
