@@ -1,5 +1,6 @@
 import {FFmpeg} from '../vendor/ffmpeg/ffmpeg/index.js';
 import {fetchFile} from '../vendor/ffmpeg/util/index.js';
+import {SHOPLAB_CONFIG as C} from './config.js';
 
 const $=(selector,root=document)=>root.querySelector(selector);
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -34,7 +35,7 @@ async function loadEngine(setStatus){
   setStatus('Carregando o motor de conversão pela primeira vez…');
   ffmpeg=new FFmpeg();
   ffmpeg.on('progress',({progress})=>{const value=Math.max(0,Math.min(1,Number(progress)||0));$('#converter-progress span').style.width=`${Math.round(value*100)}%`;$('#converter-progress-label').textContent=`Convertendo · ${Math.round(value*100)}%`});
-  await ffmpeg.load({coreURL:new URL('../vendor/ffmpeg/core/ffmpeg-core.js',import.meta.url).href,wasmURL:new URL('../vendor/ffmpeg/core/ffmpeg-core.wasm',import.meta.url).href});
+  await ffmpeg.load({coreURL:new URL('../vendor/ffmpeg/core/ffmpeg-core.js',import.meta.url).href,wasmURL:C.API_BASE_URL+'/media/'+encodeURIComponent('system/ffmpeg/ffmpeg-core.wasm')});
   loaded=true;
 }
 async function convertImage(file,preset,quality){
