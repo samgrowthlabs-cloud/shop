@@ -147,7 +147,7 @@ addEventListener('unhandledrejection',event=>{if(event.reason?.name==='AbortErro
 async function start(){
   session=await api('/api/v1/admin/auth/session');routeRequests=new AbortController();
   installShell();
-  await Promise.all([import('./admin.js?v=20260828-library-operations-20'),import('./admin-v2.js?v=20260828-library-operations-20'),import('./media-converter.js?v=20260828-library-operations-20'),import('./audio-recorder.js?v=20260828-library-operations-20'),import('./audio-mixer.js?v=20260828-library-operations-20'),import('./shoplab-ads.js?v=20260827-shoplab-ads-rbac-2')]);
+  await Promise.all([import('./admin.js?v=20260829-r2-ffmpeg-21'),import('./admin-v2.js?v=20260829-r2-ffmpeg-21'),import('./media-converter.js?v=20260829-r2-ffmpeg-21'),import('./audio-recorder.js?v=20260829-r2-ffmpeg-21'),import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),import('./shoplab-ads.js?v=20260827-shoplab-ads-rbac-2')]);
   await navigate(routeFromUrl(),{push:false});
 }
 start().catch(error=>{document.body.innerHTML=`<main class="login-page"><section class="login-box"><h1>Não foi possível abrir o admin</h1><p>${error.message}</p><a class="btn primary" href="login.html">Entrar novamente</a></section></main>`});
