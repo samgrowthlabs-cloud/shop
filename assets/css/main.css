@@ -8930,3 +8930,34 @@ html body[data-page="home"] .product-rail .product-card .price > .old{
     height:18px!important;
   }
 }
+/* Centraliza a imagem principal e alternativa ao tocar no celular. */
+@media(max-width:760px){
+  html body:not([data-admin-page]) .product-card:is(:hover,:active,:focus-within){
+    transform:none!important;
+  }
+  html body:not([data-admin-page]) .product-card .product-media{
+    display:grid!important;
+    place-items:center!important;
+  }
+  html body:not([data-admin-page]) .product-card.has-alternate-image .product-media{
+    overflow:hidden!important;
+  }
+  html body:not([data-admin-page]) .product-card.has-alternate-image .product-media :is(.product-image-primary,.product-image-alternate){
+    position:absolute!important;
+    inset:0!important;
+    display:block!important;
+    width:100%!important;
+    height:100%!important;
+    max-width:100%!important;
+    max-height:100%!important;
+    margin:auto!important;
+    padding:inherit!important;
+    object-fit:contain!important;
+    object-position:50% 50%!important;
+    transform:none!important;
+    transform-origin:50% 50%!important;
+  }
+  html body:not([data-admin-page]) .product-card.has-alternate-image.show-alternate-image .product-media .product-image-alternate{
+    transform:scale(1.65)!important;
+  }
+}

@@ -1,0 +1,17 @@
+/* Tipografia exclusiva do painel: leve, aberta e sem aspecto condensado. */
+body[data-admin-page]{--admin-font:'Segoe UI Variable Text','Segoe UI',Inter,Roboto,Arial,sans-serif;font-family:var(--admin-font);font-weight:400;font-stretch:normal;letter-spacing:0;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body[data-admin-page] :is(button,input,select,textarea){font-family:var(--admin-font);font-weight:400;letter-spacing:0}
+body[data-admin-page] :is(h1,h2,h3,h4,h5,h6){font-family:var(--admin-font);font-weight:600;letter-spacing:-.015em;line-height:1.2}
+body[data-admin-page] :is(b,strong){font-weight:600}
+body[data-admin-page] :is(.btn,.icon-btn,.tabs button,.admin-page-tabs button,.admin-area-tab){font-weight:550;letter-spacing:0}
+body[data-admin-page] :is(label,.form-field>label,.media-fields label,legend){font-weight:500;letter-spacing:0}
+body[data-admin-page] :is(.eyebrow,.scripts-kicker,.converter-kicker,.recording-library-head span,.audio-treatment-head>div>span,.recorder-prompter>header span,.nav-group>span){font-weight:600;letter-spacing:.08em}
+body[data-admin-page] :is(.status,.script-status,.badge,.cover-badge){font-weight:600;letter-spacing:0}
+body[data-admin-page] .sidebar :is(a,.admin-site-link){font-weight:450;letter-spacing:0}
+body[data-admin-page] .sidebar .logo{font-weight:700;letter-spacing:-.02em}
+body[data-admin-page] .admin-actor b{font-weight:600}
+body[data-admin-page] :is(.admin-top h1,.scripts-hero h2,.recorder-page-hero h2){font-weight:600;letter-spacing:-.02em}
+body[data-admin-page] :is(.script-card h3,.recording-library-head h3,.audio-treatment-head h3){font-weight:550;letter-spacing:-.01em}
+body[data-admin-page] :is(th,.specification-field-row label>span){font-weight:550;letter-spacing:.035em}
+body[data-admin-page] .recorder-prompter-setup label{font-weight:500}
+body[data-admin-page] #recorder-prompter-text{font-weight:500}

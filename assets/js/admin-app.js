@@ -43,6 +43,9 @@ const groups=[
 ];
 const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','temas.html':'aparencia'};
 let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
+const moduleImports={main:()=>import('./admin.js?v=20260829-audit-all-1'),v2:()=>import('./admin-v2.js?v=20260829-r2-ffmpeg-21'),ads:()=>import('./shoplab-ads.js?v=20260827-shoplab-ads-rbac-2'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260829-r2-ffmpeg-21'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21')};
+const loadedModules=new Map();
+const ensureModule=name=>{if(!loadedModules.has(name))loadedModules.set(name,moduleImports[name]().catch(error=>{loadedModules.delete(name);throw error}));return loadedModules.get(name)};
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();
 window.fetch=(input,options={})=>{const url=typeof input==='string'?input:input?.url||'',request=url.includes('/api/v1/admin/')&&!options.signal?{...options,signal:routeRequests.signal}:options;return nativeFetch(input,request).catch(error=>error?.name==='AbortError'?new Promise(()=>{}):Promise.reject(error))};
 window.setTimeout=(callback,delay,...args)=>{const id=nativeSetTimeout((...values)=>{routeTimers.delete(id);callback(...values)},delay,...args);routeTimers.add(id);return id};
@@ -50,7 +53,7 @@ window.setInterval=(callback,delay,...args)=>{const id=nativeSetInterval(callbac
 window.clearTimeout=id=>{routeTimers.delete(id);nativeClearTimeout(id)};
 window.clearInterval=id=>{routeTimers.delete(id);nativeClearInterval(id)};
 function cancelPreviousRoute(){routeRequests.abort();routeRequests=new AbortController();for(const id of routeTimers){nativeClearTimeout(id);nativeClearInterval(id)}routeTimers.clear()}
-const can=permission=>session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission)||(permission==='media_scripts.view'&&['media_scripts.manage','media_scripts.edit','media_scripts.comment'].some(item=>session?.actor?.permissions?.includes(item)));
+const can=permission=>permission==='authenticated'&&Boolean(session?.actor)||session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission)||(permission==='media_scripts.view'&&['media_scripts.manage','media_scripts.edit','media_scripts.comment'].some(item=>session?.actor?.permissions?.includes(item)));
 const allowed=key=>routes[key]&&!deniedRoutes.has(key)&&can(routes[key].permission);
 const routeFromUrl=()=>new URL(location.href).searchParams.get('tab')||'painel';
 const routeUrl=(key,source)=>{const url=new URL('index.html',location.href),origin=new URL(source||location.href,location.href);url.searchParams.set('tab',key);if(key==='produto-formulario'&&origin.searchParams.get('id'))url.searchParams.set('id',origin.searchParams.get('id'));return url};
@@ -120,6 +123,7 @@ async function navigate(requested,{push=true,source}={}){
   document.querySelector('#content').innerHTML='<div class="admin-loading">Carregando dados…</div>';
   try{
     document.querySelector('.admin-main')?.classList.remove('ads-editor');document.querySelector('.ads-view-tabs')?.remove();
+    await ensureModule(routes[route].module);
     const controller=routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:window.ShoplabAdminV2;
     await controller.run(routes[route].target,session);
     renderNavigation(route);
@@ -140,17 +144,19 @@ async function navigate(requested,{push=true,source}={}){
 window.ShoplabAdminApp={navigate:(route,options={})=>navigate(route,options),refresh:()=>navigate(currentRoute,{push:false}),restoreChrome:()=>renderNavigation(currentRoute)};
 
 document.addEventListener('click',event=>{const control=event.target.closest('[data-admin-route],.admin-main a[href]');if(!control)return;const href=control.getAttribute('href')||'',file=href.split('?')[0].split('/').pop(),route=control.dataset.adminRoute||legacy[file];if(!route)return;event.preventDefault();navigate(route,{source:href})});
+document.addEventListener('pointerover',event=>{const control=event.target.closest('[data-admin-route]'),route=control?.dataset.adminRoute,moduleName=routes[route]?.module;if(moduleName)ensureModule(moduleName).catch(()=>{})},{passive:true});
 document.addEventListener('keydown',event=>{const tab=event.target.closest('[role="tab"][data-admin-route]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const tabs=[...tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]:not(:disabled)')];let index=tabs.indexOf(tab);if(event.key==='Home')index=0;else if(event.key==='End')index=tabs.length-1;else index=(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;event.preventDefault();tabs[index]?.focus()});
 addEventListener('popstate',()=>navigate(routeFromUrl(),{push:false}));
 addEventListener('unhandledrejection',event=>{if(event.reason?.name==='AbortError')event.preventDefault()});
 
 async function start(){
+  installShell();
   session=await api('/api/v1/admin/auth/session');routeRequests=new AbortController();
   const roleColor=/^#[0-9a-f]{6}$/i.test(String(session?.actor?.roleColor||''))?session.actor.roleColor:'';
   document.documentElement.toggleAttribute('data-admin-role-color',Boolean(roleColor));
   if(roleColor)document.documentElement.style.setProperty('--admin-role-color',roleColor);
-  installShell();
-  await Promise.all([import('./admin.js?v=20260829-audit-all-1'),import('./admin-v2.js?v=20260829-r2-ffmpeg-21'),import('./media-converter.js?v=20260829-r2-ffmpeg-21'),import('./audio-recorder.js?v=20260829-r2-ffmpeg-21'),import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),import('./shoplab-ads.js?v=20260827-shoplab-ads-rbac-2')]);
   await navigate(routeFromUrl(),{push:false});
+  const warmCatalog=()=>{if(routes[currentRoute]?.module!=='v2')ensureModule('v2').catch(()=>{})};
+  if('requestIdleCallback' in window)requestIdleCallback(warmCatalog,{timeout:1800});else setTimeout(warmCatalog,700);
 }
 start().catch(error=>{document.body.innerHTML=`<main class="login-page"><section class="login-box"><h1>Não foi possível abrir o admin</h1><p>${error.message}</p><a class="btn primary" href="login.html">Entrar novamente</a></section></main>`});

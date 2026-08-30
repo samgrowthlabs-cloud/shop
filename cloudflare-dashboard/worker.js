@@ -10,7 +10,7 @@ const BUILT_IN_ORIGINS = [
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-08-28-audio-recorder-tab-v5";
+const WORKER_BUILD = "2026-08-30-team-chat-removed-v1";
 const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
 const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
@@ -503,6 +503,8 @@ async function dynamicSitemap(env) {
 }
 
 async function route(request, env, ctx, requestId) {
+  if (new URL(request.url).pathname.startsWith("/api/v1/admin/team-chat"))
+    return fail(request, env, "NOT_FOUND", "Recurso não encontrado", 404, requestId);
   const url = new URL(request.url),
     path = url.pathname.replace(/\/+$/, "") || "/";
   if (request.method === "OPTIONS")
@@ -665,6 +667,22 @@ async function route(request, env, ctx, requestId) {
     return adminSharedFiles(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/shared-files")
     return createAdminSharedFile(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/team-chat/socket") {
+    const chatActor = await adminActor(request, env);
+    if (chatActor === null) return fail(request, env, "UNAUTHORIZED", "Sessao administrativa invalida", 401, requestId);
+    if (!env.TEAM_CHAT) return fail(request, env, "TEAM_CHAT_REALTIME_UNAVAILABLE", "Realtime ainda n�o configurado", 503, requestId);
+    return env.TEAM_CHAT.getByName("team").fetch(request);
+  }
+  if (request.method === "GET" && path === "/api/v1/admin/team-chat")
+    return adminTeamChat(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/team-chat")
+    return createAdminTeamChatMessage(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/team-chat/lock")
+    return updateAdminTeamChatLock(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/team-chat/limit")
+    return updateAdminTeamChatLimit(request, env, requestId);
+  if (request.method === "DELETE" && path.startsWith("/api/v1/admin/team-chat/"))
+    return deleteAdminTeamChatMessage(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && /^\/api\/v1\/admin\/shared-files\/[^/]+\/download$/.test(path))
     return downloadAdminSharedFile(request, env, path.split("/").at(-2), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/shared-files\/[^/]+$/.test(path))
@@ -6254,6 +6272,20 @@ async function updateAdminProductPrice(req, env, productId, id) {
   ]);
   return ok(req, env, { id: productId, currentPriceCents, previousPriceCents, updated: true }, id);
 }
+
+async function ensureTeamChatSchema(env){await env.DB.batch([env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_team_chat_messages(id TEXT PRIMARY KEY,author_id TEXT NOT NULL,author_name TEXT NOT NULL,message_text TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_team_chat_created ON admin_team_chat_messages(created_at DESC)`),env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_team_chat_settings(id TEXT PRIMARY KEY CHECK(id='team'),locked_until TEXT,daily_message_limit INTEGER NOT NULL DEFAULT 50,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),env.DB.prepare(`INSERT OR IGNORE INTO admin_team_chat_settings(id) VALUES('team')`)]);try{await env.DB.prepare(`ALTER TABLE admin_team_chat_settings ADD COLUMN daily_message_limit INTEGER NOT NULL DEFAULT 50`).run()}catch(error){if(!/duplicate column name/i.test(String(error?.message||error)))throw error}}
+const teamChatCanWrite=actor=>Boolean(actor&&(actor.role==='owner'||actor.permissions?.includes('*')||actor.permissions?.includes('team_chat.write')));
+const teamChatCanDeleteAny=actor=>Boolean(actor&&(actor.role==='owner'||actor.permissions?.includes('*')));
+const teamChatIsOwner=actor=>Boolean(actor&&(actor.id==='owner'||actor.role==='owner'||actor.roleLabel==='Proprietário'||actor.permissions?.includes('*')));
+async function teamChatLock(env){const row=await env.DB.prepare(`SELECT locked_until lockedUntil FROM admin_team_chat_settings WHERE id='team'`).first();return row?.lockedUntil&&Date.parse(row.lockedUntil)>Date.now()?row.lockedUntil:null}
+async function teamChatDailyLimit(env){const row=await env.DB.prepare(`SELECT daily_message_limit dailyMessageLimit FROM admin_team_chat_settings WHERE id='team'`).first();return Math.max(1,Math.min(500,Number(row?.dailyMessageLimit||50)))}
+async function teamChatDailyCount(env,actorId){const row=await env.DB.prepare(`SELECT COUNT(*) total FROM admin_team_chat_messages WHERE author_id=? AND date(datetime(created_at,'-3 hours'))=date(datetime('now','-3 hours'))`).bind(actorId).first();return Number(row?.total||0)}
+async function purgeExpiredTeamChatMessages(env){await ensureTeamChatSchema(env);await env.DB.prepare(`DELETE FROM admin_team_chat_messages WHERE datetime(created_at) < datetime('now','-7 days')`).run()}
+async function adminTeamChat(req,env,id){const actor=await adminActor(req,env);if(!actor)return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureTeamChatSchema(env);await purgeExpiredTeamChatMessages(env);const [messages,people,lockedUntil,dailyMessageCount,dailyMessageLimit]=await Promise.all([env.DB.prepare(`SELECT id,author_id authorId,author_name authorName,message_text messageText,created_at createdAt FROM admin_team_chat_messages ORDER BY created_at DESC LIMIT 100`).all(),env.DB.prepare(`SELECT name FROM admin_collaborators WHERE is_active=1 ORDER BY name`).all(),teamChatLock(env),teamChatDailyCount(env,actor.id),teamChatDailyLimit(env)]);const canDeleteAny=teamChatCanDeleteAny(actor),isOwner=teamChatIsOwner(actor);return ok(req,env,{items:(messages.results||[]).reverse().map(message=>({...message,canDelete:canDeleteAny||message.authorId===actor.id})),people:(people.results||[]).map(item=>item.name),canWrite:teamChatCanWrite(actor)&&!lockedUntil&&dailyMessageCount<dailyMessageLimit,actorId:actor.id,actorName:actor.name,canDeleteAny,isOwner,lockedUntil,dailyMessageCount,dailyMessageLimit},id)}
+async function createAdminTeamChatMessage(req,env,id){const actor=await adminActor(req,env);if(!actor)return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);if(!teamChatCanWrite(actor))return fail(req,env,'FORBIDDEN','Seu cargo não permite escrever no chat',403,id);await ensureTeamChatSchema(env);if(await teamChatLock(env))return fail(req,env,'CHAT_LOCKED','O chat está temporariamente silenciado',403,id);const dailyLimit=await teamChatDailyLimit(env);if(await teamChatDailyCount(env,actor.id)>=dailyLimit)return fail(req,env,'DAILY_MESSAGE_LIMIT',`Você atingiu o limite de ${dailyLimit} mensagens de hoje`,429,id);const body=await req.json(),rawText=String(body.message||'').trim();if(!rawText)return fail(req,env,'VALIDATION_ERROR','Escreva uma mensagem',422,id);if(rawText.length>2000)return fail(req,env,'MESSAGE_TOO_LONG','A mensagem pode ter no máximo 2.000 caracteres',422,id);const text=rawText,requestedId=String(body.clientMessageId||''),message={id:/^[0-9a-f-]{36}$/i.test(requestedId)?requestedId:crypto.randomUUID(),authorId:actor.id,authorName:actor.name,authorRole:actor.role,messageText:text,createdAt:new Date().toISOString()};await env.DB.prepare(`INSERT INTO admin_team_chat_messages(id,author_id,author_name,message_text,created_at) VALUES(?,?,?,?,?)`).bind(message.id,message.authorId,message.authorName,message.messageText,message.createdAt).run();await broadcastTeamChat(env,{type:"message",message});return ok(req,env,message,id)}
+async function updateAdminTeamChatLock(req,env,id){const actor=await adminActor(req,env);if(!actor)return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);if(!teamChatIsOwner(actor))return fail(req,env,'FORBIDDEN','Somente o proprietário pode silenciar o chat',403,id);await ensureTeamChatSchema(env);const body=await readJson(req,2000),minutes=Number(body.minutes),allowed=[0,15,30,60,240,480,1440];if(!allowed.includes(minutes))return fail(req,env,'VALIDATION_ERROR','Período inválido',422,id);const lockedUntil=minutes?new Date(Date.now()+minutes*60000).toISOString():null;await env.DB.prepare(`UPDATE admin_team_chat_settings SET locked_until=?,updated_at=CURRENT_TIMESTAMP WHERE id='team'`).bind(lockedUntil).run();await broadcastTeamChat(env,{type:"lock",lockedUntil});return ok(req,env,{lockedUntil},id)}
+async function updateAdminTeamChatLimit(req,env,id){const actor=await adminActor(req,env);if(!actor)return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);if(!teamChatIsOwner(actor))return fail(req,env,'FORBIDDEN','Somente o proprietário pode alterar o limite',403,id);await ensureTeamChatSchema(env);const body=await readJson(req,2000),dailyMessageLimit=Number(body.dailyMessageLimit);if(!Number.isInteger(dailyMessageLimit)||dailyMessageLimit<1||dailyMessageLimit>500)return fail(req,env,'VALIDATION_ERROR','Escolha um limite entre 1 e 500 mensagens',422,id);await env.DB.prepare(`UPDATE admin_team_chat_settings SET daily_message_limit=?,updated_at=CURRENT_TIMESTAMP WHERE id='team'`).bind(dailyMessageLimit).run();await broadcastTeamChat(env,{type:"limit",dailyMessageLimit});return ok(req,env,{dailyMessageLimit},id)}
+async function deleteAdminTeamChatMessage(req,env,messageId,id){const actor=await adminActor(req,env);if(!actor)return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureTeamChatSchema(env);const message=await env.DB.prepare(`SELECT id,author_id authorId FROM admin_team_chat_messages WHERE id=?`).bind(String(messageId).slice(0,100)).first();if(!message)return fail(req,env,'MESSAGE_NOT_FOUND','Mensagem não encontrada',404,id);if(message.authorId!==actor.id&&!teamChatCanDeleteAny(actor))return fail(req,env,'FORBIDDEN','Você só pode apagar suas próprias mensagens',403,id);await env.DB.prepare(`DELETE FROM admin_team_chat_messages WHERE id=?`).bind(message.id).run();await broadcastTeamChat(env,{type:"deleted",messageId:message.id});return ok(req,env,{id:message.id,deleted:true},id)}
 
 async function adminProducts(req, env, url, id) {
   if (!(await requireAdmin(req, env)))
