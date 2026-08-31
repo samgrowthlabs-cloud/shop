@@ -208,3 +208,43 @@ Depois de filtrar status e páginas permitidas, o sistema faz uma seleção pond
 - `assets/css/admin.css`: layout do gerenciador e dos previews.
 - `cloudflare-dashboard/worker.js`: armazenamento, API, seleção ponderada e analytics.
 
+
+## Evolução inteligente
+
+O sistema atual também oferece:
+
+- período automático com início, término e opção sem data final;
+- estados derivados: rascunho, agendada, ativa, encerrada e pausada;
+- limites globais por início, pesquisa, categoria e produto;
+- segmentação contextual por categorias e produtos relacionados;
+- placements identificados por evento, junto de posição, página e dispositivo;
+- deduplicação por sessão sem fingerprinting;
+- impressões, cliques, CTR e suas versões únicas;
+- analytics por placement, página, dispositivo, campanha e criativo;
+- relevância calculada antes da distribuição ponderada;
+- multiplicador conservador de performance entre 0,90 e 1,15 após 200 impressões;
+- exploração de aproximadamente 15% para campanhas novas e elegíveis.
+
+### Defaults compatíveis
+
+```text
+starts_at: null
+ends_at: null
+no_end_date: true
+category_slugs: []
+related_product_slugs: []
+performance_multiplier: 1 antes de 200 impressões
+limite Home: 2
+limite Pesquisa: 1
+limite Categoria: 2
+limite Produto: 1
+```
+
+### Endpoints adicionais
+
+```text
+GET /api/v1/admin/shoplab-ads/settings
+PUT /api/v1/admin/shoplab-ads/settings
+```
+
+O endpoint público existente recebe opcionalmente `page`, `device`, `category`, `product` e `q`. O endpoint de eventos existente passou a aceitar `placementId`, `positionIndex` e `pageUrl`.
