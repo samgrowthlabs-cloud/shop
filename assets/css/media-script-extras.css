@@ -82,6 +82,24 @@ kbd{display:inline-flex;align-items:center;min-height:18px;padding:0 5px;border:
 .recorder-prompter-option>span:after{content:'';position:absolute;top:3px;left:3px;width:9px;height:9px;border-radius:50%;background:#a7b5b2;transition:.2s}
 .recorder-prompter-option input:checked+span{background:#087f70}
 .recorder-prompter-option input:checked+span:after{left:15px;background:#fff}
+.recorder-voice-option{border-color:rgba(56,217,183,.25);color:#bfeee5!important}
+.recorder-voice-option b{font-size:10px}
+.recorder-voice-option.is-disabled{cursor:not-allowed;filter:grayscale(1);opacity:.45}
+.recorder-voice-option.vosk-local:after{content:'LOCAL';padding:2px 4px;border-radius:4px;background:rgba(255,255,255,.08);color:#86c9bc;font-size:7px;letter-spacing:.08em}
+.recorder-prompter.is-loading-voice .voice-listening-dot{animation-duration:.55s}
+.recorder-prompter.is-loading-voice #record-with-prompter{cursor:wait;opacity:.72}
+.recorder-prompter.voice-mode .fixed-scroll-option,.recorder-prompter.voice-mode .recorder-prompter-setup>label:nth-child(2){opacity:.38;pointer-events:none}
+.recorder-prompter-word{border-radius:.14em;transition:opacity .52s cubic-bezier(.22,.61,.36,1),color .52s cubic-bezier(.22,.61,.36,1),background-color .52s cubic-bezier(.22,.61,.36,1),box-shadow .52s cubic-bezier(.22,.61,.36,1)}
+.recorder-prompter.voice-mode .recorder-prompter-word{opacity:.52}
+.recorder-prompter.voice-mode .recorder-prompter-word.is-read{color:#8da09c;opacity:.32}
+.recorder-prompter.voice-mode .recorder-prompter-word.is-current{background:rgba(39,202,173,.16);color:#effffb;box-shadow:0 0 0 .1em rgba(39,202,173,.16),0 0 18px rgba(36,189,162,.1);opacity:1}
+.recorder-prompter-pause{min-height:30px!important;padding:5px 11px!important;border:1px solid rgba(75,216,190,.28)!important;border-radius:8px!important;background:rgba(21,121,104,.18)!important;color:#cafff5!important;font:inherit;font-weight:800!important;transition:background-color .25s ease,color .25s ease,opacity .25s ease}
+.recorder-prompter-pause:hover:not(:disabled){background:rgba(30,171,146,.28)!important}
+.recorder-prompter-pause.is-paused{border-color:rgba(255,197,91,.32)!important;background:rgba(142,94,18,.2)!important;color:#ffe3a8!important}
+.recorder-prompter-pause:disabled{cursor:not-allowed!important;opacity:.38}
+.voice-listening-dot{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:#39d8b8;box-shadow:0 0 0 4px rgba(57,216,184,.11);animation:voice-listening 1.35s ease-in-out infinite}
+@keyframes voice-listening{50%{box-shadow:0 0 0 7px rgba(57,216,184,0);opacity:.7}}
+@media(prefers-reduced-motion:reduce){.voice-listening-dot{animation:none}.recorder-prompter-word,.recorder-prompter-progress i{transition:none}}
 .recorder-prompter-progress{height:3px;background:#11201d}
 .recorder-prompter-progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,#0b8e7c,#49dec1);box-shadow:0 0 14px rgba(73,222,193,.45);transition:width .12s linear}
 .recorder-prompter-stage{scrollbar-width:thin;scrollbar-color:#29413c transparent;background:radial-gradient(ellipse at 50% 45%,#0c1c18 0,#030706 65%)}
