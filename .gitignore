@@ -6,3 +6,6 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# Local downloads, browser profiles and generated test artifacts
+tmp/
