@@ -233,6 +233,18 @@ async function run() {
     pcmNode = null,
     pcmChunks = [],
     pcmReady = false;
+  window.ShoplabAudioBridge = window.ShoplabAudioBridge || {};
+  window.ShoplabAudioBridge.getRecordedFile = () => recordedFile;
+  window.ShoplabAudioBridge.useProcessedFile = (file) => {
+    recordedFile = file;
+    if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+    recordingUrl = URL.createObjectURL(file);
+    $("#recorded-audio").src = recordingUrl;
+    $("#treatment-before").src = recordingUrl;
+    $("#recording-size").textContent = (file.size / 1048576).toFixed(2) + " MB";
+    drawPlayerWave(file).catch(() => {});
+    $("#treatment-status").textContent = "Arquivo atualizado e pronto para ouvir.";
+  };
   const treatmentFilters = () => {
     if ($("#treatment-preset").value === "raw") return "";
     const filters = [],
