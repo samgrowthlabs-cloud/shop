@@ -1,250 +1,145 @@
 # ShopLab Ads
 
-O **ShopLab Ads** é o sistema de anúncios patrocinados da SHOPLAB. Ele insere cards de publicidade dentro das mesmas grades em que os produtos aparecem, mantendo a experiência visual do catálogo.
+O **ShopLab Ads** é o sistema de cards patrocinados da SHOPLAB. Este documento descreve o comportamento implementado atualmente em `cloudflare-dashboard/worker.js` e `assets/js/shoplab-ads-public.js`.
 
-Os anúncios podem aparecer na página inicial, em produtos e pesquisas, nas categorias e na página de um produto. Todo card é identificado como **Patrocinado** e usa a marca **SLAds / ShopLab Ads**.
+> Alguns campos já existem no painel ou no banco para evoluções futuras. Eles estão identificados no fim e não devem ser confundidos com sinais usados pelo algoritmo atual.
 
-## Como o card funciona
+## Fluxo completo
 
-O card patrocinado possui:
+1. O administrador cria a campanha, envia a mídia e define o destino.
+2. A campanha fica em `draft`, `active` ou `paused`.
+3. A página envia à API o contexto: página, dispositivo, categoria, produto, busca e anúncios vistos na sessão.
+4. O Worker filtra campanhas elegíveis, resolve os placements manuais e preenche os espaços livres com campanhas ponderadas.
+5. O navegador reordena a resposta usando interesses salvos localmente.
+6. O front-end limita a quantidade, escolhe a posição no feed e renderiza os cards.
+7. Uma impressão é registrada com pelo menos 50% do card visível; o clique, ao abrir o destino.
 
-- identificação visível de conteúdo patrocinado;
-- imagem ou vídeo horizontal em proporção **9:6 (3:2)**;
-- título público;
-- preço atual e preço antigo opcionais;
-- botão de ação;
-- cores configuráveis para botão e preços;
-- link para um produto da SHOPLAB ou para uma URL externa.
+## Elegibilidade
 
-O preview exibido no painel administrativo reproduz o mesmo card que o usuário verá no site.
+A campanha precisa estar `active`, dentro de `starts_at`/`ends_at` e pertencer ao modo `manual` ou `weighted` consultado. No manual, também precisa estar associada ao dispositivo, página e eventual categoria. No ponderado, precisa superar o corte de peso da página.
 
-### Imagem e vídeo
+O servidor reconhece `home`, `products`, `category` e `product`; qualquer outro valor vira `home`. Portanto, a pesquisa, que envia `search`, é tratada no servidor como `home`. `tablet` também é tratado como `desktop`.
 
-A mídia deve ser horizontal, preferencialmente em proporção 3:2. Imagens e vídeos são recortados para preencher o espaço do card.
+## Distribuição manual
 
-Vídeos são reproduzidos automaticamente, sem áudio, em loop e apenas quando o navegador permite. É recomendado usar MP4 ou WebM otimizado para web.
+Uma campanha `manual` participa somente dos placements associados. O servidor calcula afinidade pelas pesquisas dos últimos 60 dias do usuário autenticado:
 
-## Criando uma campanha
+```text
+afinidade = soma das ocorrências das palavras-chave
+            no histórico recente de pesquisas
+```
 
-No painel administrativo, acesse **Marketing > ShopLab Ads > Campanhas** e selecione **Criar novo anúncio**.
+Os candidatos são ordenados por afinidade decrescente; empates recebem ordem aleatória. A mesma campanha não vence dois placements manuais na resposta e cada placement recebe no máximo uma campanha. Para visitantes anônimos, todos começam com afinidade zero.
 
-Preencha:
+## Distribuição ponderada
 
-1. **Nome do anúncio:** identificação interna da campanha.
-2. **Tipo de mídia:** imagem ou vídeo.
-3. **Palavras-chave:** termos usados para relacionar o anúncio às pesquisas.
-4. **Título público:** texto mostrado no card.
-5. **Texto e cor do botão:** chamada para a ação.
-6. **Preço antigo e atual:** valores exibidos no card, quando informados.
-7. **Mídia 9:6:** arquivo visual da campanha.
-8. **Produto da SHOPLAB:** vínculo opcional com um produto cadastrado.
-9. **URL de destino:** página aberta quando o usuário clica.
-10. **Distribuição:** peso, destaque, força na busca e páginas permitidas.
-11. **Status:** mantenha como rascunho durante a preparação e ative quando estiver pronto.
+O peso de `weighted`, entre 1 e 100, tem duas funções. Primeiro, define onde a campanha concorre:
 
-## Produto vinculado
+| Contexto no servidor | Peso mínimo |
+|---|---:|
+| Início (`home`) | 1 |
+| Produtos (`products`) | 26 |
+| Categoria (`category`) | 51 |
+| Produto (`product`) | 76 |
 
-Um anúncio pode usar um produto já cadastrado na SHOPLAB. Quando existe um produto vinculado, o sistema pode aproveitar automaticamente:
+Logo, o peso não é apenas chance: hoje ele também é corte de elegibilidade.
 
-- nome do produto;
-- imagem principal, quando o anúncio não possui mídia própria;
-- preço atual;
-- preço antigo;
-- link da página do produto.
+Para cada placement automático livre, o Worker gera uma chave por campanha:
 
-Os valores e textos preenchidos diretamente no anúncio têm prioridade visual quando estiverem configurados.
+```text
+peso efetivo = max(1, peso) × (1 + 2 × afinidade)
+chave aleatória = -ln(U) / peso efetivo
+```
 
-## Distribuição automática
+`U` é uniforme entre 0 e 1. Vence a menor chave. Essa amostragem exponencial ponderada faz pesos efetivos maiores vencerem mais vezes sem eliminar completamente os menores.
 
-Os anúncios ativos são escolhidos automaticamente e inseridos entre os produtos. A escolha não segue uma ordem fixa: cada campanha participa de uma seleção ponderada.
+O máximo de vitórias automáticas da campanha na resposta é:
 
-### Peso de exibição
+```text
+limite automático = teto(peso / 25)
+```
 
-O peso varia de **1 a 100**. Quanto maior o peso, maior a chance de o anúncio ser escolhido e mais cedo ele tende a aparecer no feed.
+Pesos 1–25 permitem uma vitória; 26–50, duas; 51–75, três; 76–100, quatro. O limite vem de `distribution_weight`, não de `max_per_page`. Placements ocupados manualmente não entram no sorteio.
 
-O peso representa probabilidade, não uma garantia exata. Um anúncio com peso 80 tende a aparecer mais vezes que um anúncio com peso 20, mas a distribuição ainda possui variação para evitar repetição rígida.
+## Personalização no navegador
 
-### Campanha em destaque
+Após a seleção do servidor, o navegador reordena candidatos por interesses locais, sem fingerprinting. Os sinais perdem força exponencialmente com constante de 30 dias.
 
-A opção **Campanha em destaque** aplica prioridade adicional à campanha. Atualmente, anúncios destacados recebem um multiplicador de **1,6** na seleção geral.
+- visita a categoria: +3;
+- visita a produto: +4;
+- pesquisa atual: +2;
+- clique em produto: +2;
+- clique em categoria: +1,5;
+- históricos locais auxiliares de categorias e produtos vistos.
 
-Use destaque para campanhas importantes, lançamentos e ações com prazo curto. Evite destacar todos os anúncios, pois isso reduz a diferença entre eles.
+```text
+categoria correspondente: sinal × 12
+produto correspondente:   sinal × 15
+palavra da busca:          sinal × 5
+```
 
-### Máximo por página
+Essa etapa só muda a ordem do que o servidor já escolheu. Os últimos 20 anúncios vistos são enviados em `seen`, mas o endpoint atual ainda não usa esse parâmetro.
 
-Define quantas vezes a mesma campanha pode aparecer em uma única página. O sistema aceita de 1 a 4 aparições, respeitando também o peso configurado.
+## Quantidade e posição
 
-Para uma experiência equilibrada, o recomendado é:
+O front-end mostra até 2 cards no início, até 1 em produto/categoria/pesquisa, até 2 em promoções e até 2 nos demais contextos.
 
-- **1 aparição:** campanha comum;
-- **2 aparições:** campanha relevante ou com peso alto;
-- **3 ou 4 aparições:** somente ações especiais.
+Na pesquisa, o navegador procura `searchMatch`, mas o endpoint não devolve essa marca; na prática, usa o primeiro candidato recebido.
 
-### Páginas permitidas
+A posição é definida pelo front-end, não pelo peso: pesquisa usa slots 2, 4 e 7; categoria entra após pelo menos 4 itens; início, entre os primeiros 3 a 6 itens da seção; promoções, nos slots 2 e 8. O intervalo orgânico usa `minimumOrganicItems` se vier da API. Como o endpoint não o envia, valem 8 no mobile e 6 nas demais larguras.
 
-Cada campanha pode ser habilitada para:
+## Card, mídia e produto vinculado
 
-- início;
-- produtos e busca;
-- categorias;
-- página do produto.
+O card mostra **Patrocinado / ShopLab Ads**, título, imagem ou vídeo, preços e CTA. A mídia usa 3:2 (9:6) com `cover`. Vídeos rodam sem áudio, em loop, e pausam fora da área visível.
 
-O anúncio só participa da seleção quando a página atual está entre os destinos permitidos.
+Com produto vinculado, o destino vira a página do produto e os preços atuais substituem os textos cadastrados quando existem. Ainda é necessária mídia própria: o endpoint não usa automaticamente a imagem do produto.
 
-## Funcionamento na pesquisa
-
-Quando uma pessoa pesquisa, o ShopLab Ads compara a consulta com:
-
-- título público;
-- nome interno do anúncio;
-- palavras-chave;
-- nome do produto vinculado.
-
-Anúncios relacionados recebem prioridade sobre campanhas sem relação com a pesquisa. Entre os anúncios relacionados, entram no cálculo:
-
-- peso de exibição;
-- campanha em destaque;
-- quantidade e qualidade das correspondências;
-- força na busca.
-
-### Força na busca
-
-A força varia de **1 a 10** e amplifica a relevância encontrada no título e nas palavras-chave.
-
-Exemplo: um anúncio com as palavras-chave `notebook gamer, RTX, placa de vídeo` recebe prioridade quando alguém pesquisa termos próximos. Quanto maior a força na busca, maior o impacto dessa correspondência na seleção.
-
-Em uma pesquisa real, apenas o melhor anúncio relacionado é inserido entre os resultados, evitando excesso de publicidade.
-
-## Posição dentro das grades
-
-Na página inicial, o card aparece naturalmente entre os cards de produto.
-
-Nas páginas de produtos, pesquisa e categoria, o anúncio usa duas colunas para preservar o formato horizontal 9:6. Ele preenche toda a área reservada sem sobrepor os produtos.
-
-A posição varia de acordo com o peso. Campanhas de peso maior tendem a entrar mais cedo e com maior frequência.
-
-## Fechamento temporário
-
-Quando a opção de fechamento está habilitada, o usuário pode ocultar o anúncio. O campo **Voltar depois de quantos minutos?** define quanto tempo o card ficará escondido naquele navegador.
-
-O limite configurável é de 10.080 minutos, equivalente a sete dias.
+Fechar o card oculta a campanha nesse navegador por 1 a 10.080 minutos, conforme `dismiss_minutes`.
 
 ## Analytics
 
-A aba **Analytics** funciona separadamente da listagem de campanhas e apresenta:
+O navegador cria uma sessão aleatória em `sessionStorage` e envia no máximo um evento local por combinação de sessão, campanha, placement e tipo.
 
-- impressões;
-- cliques;
-- taxa de cliques (CTR);
-- desempenho por anúncio;
-- resultados no período de 7, 30 ou 90 dias.
+- **Impressão:** pelo menos 50% do card visível.
+- **Clique:** acionamento do link.
+- **CTR:** `(cliques / impressões) × 100`.
+- **Métricas únicas:** sessões distintas.
 
-Uma impressão é registrada quando pelo menos 50% do card fica visível. O clique é registrado quando o usuário abre a oferta.
+Os eventos incluem campanha, dispositivo, página, placement, índice, URL e sessão. O preview administrativo não registra eventos.
 
-O CTR é calculado assim:
+## Campos ainda fora do algoritmo público
 
-```text
-CTR = (cliques / impressões) × 100
-```
+Existem no schema e/ou painel, mas o endpoint público ativo não os usa para filtrar ou pontuar:
 
-## Configurações recomendadas
+- `featured` (destaque);
+- `search_boost` (força na busca);
+- `max_per_page`;
+- `target_pages`;
+- `no_end_date`;
+- `category_slugs` e `related_product_slugs` no filtro do servidor;
+- multiplicador de performance por CTR;
+- exploração fixa de 15%;
+- limites globais configuráveis por página.
 
-### Campanha comum
-
-```text
-Peso: 25
-Destaque: não
-Força na busca: 3
-Máximo por página: 1
-```
-
-### Campanha prioritária
-
-```text
-Peso: 70
-Destaque: sim
-Força na busca: 5
-Máximo por página: 2
-```
-
-### Campanha focada em pesquisa
-
-```text
-Peso: 40
-Destaque: opcional
-Força na busca: 8
-Máximo por página: 1
-Palavras-chave: específicas e diretamente relacionadas ao produto
-```
-
-## Boas práticas
-
-- Use títulos curtos e objetivos.
-- Cadastre palavras-chave realmente relacionadas à oferta.
-- Evite repetir a mesma palavra em várias formas sem necessidade.
-- Use vídeo curto, leve e sem depender de áudio.
-- Confirme se preço, botão e link levam para a mesma oferta anunciada.
-- Mantenha o máximo por página baixo para não poluir o catálogo.
-- Compare peso, impressões, cliques e CTR antes de aumentar a exposição.
-- Pause campanhas encerradas ou com destino indisponível.
-
-## Resumo do algoritmo
-
-De forma simplificada, a prioridade de uma campanha considera:
-
-```text
-prioridade efetiva = peso
-                    × bônus de destaque
-                    × relevância da pesquisa
-                    × força na busca
-```
-
-Depois de filtrar status e páginas permitidas, o sistema faz uma seleção ponderada. Isso permite que campanhas menores continuem concorrendo, enquanto campanhas mais relevantes ou com maior peso aparecem com mais frequência.
+Portanto, não existe hoje a fórmula `peso × destaque × relevância × força`. A fórmula efetiva é a de **peso efetivo** acima. A segmentação contextual só pode afetar a reordenação local se vier na resposta, mas o endpoint atual não seleciona esses campos.
 
 ## Arquivos principais
 
-- `assets/js/shoplab-ads.js`: painel administrativo, edição e preview.
-- `assets/js/shoplab-ads-public.js`: renderização pública, vídeo, inserção no feed e eventos.
-- `assets/css/admin.css`: layout do gerenciador e dos previews.
-- `cloudflare-dashboard/worker.js`: armazenamento, API, seleção ponderada e analytics.
+- `assets/js/shoplab-ads.js`: formulário administrativo e preview.
+- `assets/js/shoplab-ads-public.js`: contexto, personalização, renderização, posição e eventos.
+- `cloudflare-dashboard/worker.js`: elegibilidade, placements, sorteio e analytics.
+- `cloudflare-dashboard/shoplab-ads-*.sql`: evolução do schema.
 
-
-## Evolução inteligente
-
-O sistema atual também oferece:
-
-- período automático com início, término e opção sem data final;
-- estados derivados: rascunho, agendada, ativa, encerrada e pausada;
-- limites globais por início, pesquisa, categoria e produto;
-- segmentação contextual por categorias e produtos relacionados;
-- placements identificados por evento, junto de posição, página e dispositivo;
-- deduplicação por sessão sem fingerprinting;
-- impressões, cliques, CTR e suas versões únicas;
-- analytics por placement, página, dispositivo, campanha e criativo;
-- relevância calculada antes da distribuição ponderada;
-- multiplicador conservador de performance entre 0,90 e 1,15 após 200 impressões;
-- exploração de aproximadamente 15% para campanhas novas e elegíveis.
-
-### Defaults compatíveis
+## Resumo técnico
 
 ```text
-starts_at: null
-ends_at: null
-no_end_date: true
-category_slugs: []
-related_product_slugs: []
-performance_multiplier: 1 antes de 200 impressões
-limite Home: 2
-limite Pesquisa: 1
-limite Categoria: 2
-limite Produto: 1
+campanhas ativas e dentro da data
+  → vencedores dos placements manuais
+  → placements livres
+  → corte mínimo de peso conforme a página
+  → sorteio por [peso × (1 + 2 × afinidade)]
+  → limite teto(peso / 25)
+  → reordenação local por interesses
+  → limite e posição definidos pelo front-end
+  → impressão a 50% de visibilidade e clique
 ```
-
-### Endpoints adicionais
-
-```text
-GET /api/v1/admin/shoplab-ads/settings
-PUT /api/v1/admin/shoplab-ads/settings
-```
-
-O endpoint público existente recebe opcionalmente `page`, `device`, `category`, `product` e `q`. O endpoint de eventos existente passou a aceitar `placementId`, `positionIndex` e `pageUrl`.

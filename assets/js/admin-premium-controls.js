@@ -6,13 +6,14 @@ const cents=value=>Math.round(Number(String(value||'').replace(',','.'))*100);
 const api=async(path,options={})=>{const response=await fetch(`${C.API_BASE_URL}${path}`,{...options,credentials:'include',headers:{'Content-Type':'application/json',...options.headers}});const json=await response.json();if(!response.ok||!json.success)throw new Error(json.error?.message||`Erro ${response.status}`);return json.data};
 const number=(form,name)=>Math.max(0,Number(form.elements[name]?.value||0));
 
-async function install(){
+export async function install(){
   let form;
   for(let attempt=0;attempt<80&&!form;attempt+=1){form=$('#premium-form');if(!form)await new Promise(resolve=>setTimeout(resolve,50))}
   if(!form)return;
+  if(document.getElementById('shoplab-commercial-controls'))return;
   const data=await api('/api/v1/admin/premium-settings'),settings=data.settings||{},plan=data.effectivePlan||{};
   let packages=Array.isArray(plan.packages)?plan.packages:[];
-  const controls=document.createElement('section');controls.className='full shoplab-commercial-controls';
+  const controls=document.createElement('section');controls.id='shoplab-commercial-controls';controls.className='full shoplab-commercial-controls';
   controls.innerHTML=`
     <div class="admin-card shoplab-status-card">
       <div class="section-head"><div><span class="eyebrow">PUBLICAÇÃO</span><h2>Disponibilidade do SHOPLAB+</h2><p class="muted">Desligue tudo enquanto os pagamentos ainda estão em teste.</p></div><span class="status ${plan.enabled?'published':'draft'}" id="shoplab-status">${plan.enabled?'Ativo':'Em breve'}</span></div>
@@ -53,4 +54,4 @@ async function install(){
 }
 
 function numberValue(value,fallback){const parsed=Number(value);return Number.isFinite(parsed)?Math.max(0,parsed):fallback}
-install().catch(error=>{const message=$('#message');if(message){message.textContent=error.message;message.className='admin-message show error'}});
+if(document.body.dataset.adminApp!=='true')install().catch(error=>{const message=$('#message');if(message){message.textContent=error.message;message.className='admin-message show error'}});

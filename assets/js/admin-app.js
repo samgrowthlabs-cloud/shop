@@ -43,7 +43,7 @@ const groups=[
 ];
 const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','temas.html':'aparencia'};
 let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
-const moduleImports={main:()=>import('./admin.js?v=20260829-audit-all-1'),v2:()=>import('./admin-v2.js?v=20260829-r2-ffmpeg-21'),ads:()=>import('./shoplab-ads.js?v=20260831-ads-native-frequency-15'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21')};
+const moduleImports={main:()=>import('./admin.js?v=20260903-collaborator-audit-4'),v2:()=>import('./admin-v2.js?v=20260903-admin-pwa-fix-1'),ads:()=>import('./shoplab-ads.js?v=20260831-ads-native-frequency-15'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21')};
 const loadedModules=new Map();
 const ensureModule=name=>{if(!loadedModules.has(name))loadedModules.set(name,moduleImports[name]().catch(error=>{loadedModules.delete(name);throw error}));return loadedModules.get(name)};
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();
@@ -126,6 +126,7 @@ async function navigate(requested,{push=true,source}={}){
     await ensureModule(routes[route].module);
     const controller=routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:window.ShoplabAdminV2;
     await controller.run(routes[route].target,session);
+    await api('/api/v1/admin/auth/session?section='+encodeURIComponent(routes[route].label)).catch(error=>console.warn('Falha ao registrar atividade administrativa',error));
     renderNavigation(route);
   }catch(error){
     if(error?.name==='AbortError')return;

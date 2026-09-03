@@ -715,6 +715,8 @@ async function route(request, env, ctx, requestId) {
     return createAdminMediaScriptComment(request, env, path.split("/").at(-2), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/comments\/[^/]+$/.test(path))
     return deleteAdminMediaScriptComment(request, env, path.split("/").pop(), requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/activity")
+    return ok(request, env, { recorded: true }, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/dashboard")
     return adminDashboard(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/logs")
@@ -3126,9 +3128,10 @@ async function recordEvent(req, env, ctx, id) {
   if (!inputEvents.length||inputEvents.some(event=>!allowed.has(String(event?.type||"").slice(0,60))))
     return fail(req, env, "VALIDATION_ERROR", "Evento inválido", 422, id);
   const user=req.headers.has("authorization")?await authenticatedUser(req):null;
+  const anonymousVisitorId=user?null:await sha256(String(env.ANALYTICS_SALT||env.SUPABASE_JWT_SECRET||'shoplab-analytics')+'|'+new Date().toISOString().slice(0,7)+'|'+String(req.headers.get('CF-Connecting-IP')||'unknown')+'|'+String(req.headers.get('user-agent')||'').slice(0,200));
   const statements=inputEvents.map(event=>env.DB.prepare(
     `INSERT INTO events(id,event_type,product_slug,offer_id,query_text,metadata_json,user_id) VALUES(?,?,?,?,?,?,?)`,
-  ).bind(crypto.randomUUID(),String(event.type).slice(0,60),text(event.slug,160),text(event.offerId,100),text(event.query,200),JSON.stringify(event.metadata||{}).slice(0,2000),user?.id||null));
+  ).bind(crypto.randomUUID(),String(event.type).slice(0,60),text(event.slug,160),text(event.offerId,100),text(event.query,200),JSON.stringify({...event.metadata,...(anonymousVisitorId?{visitorId:anonymousVisitorId}:{})}).slice(0,2000),user?.id||null));
   const viewed=[...new Set(inputEvents.filter(event=>event.type==="product_view"&&event.slug).map(event=>String(event.slug).slice(0,160)))];
   for(const slug of viewed)
     statements.push(
@@ -3902,7 +3905,7 @@ async function premiumSearchRank(env, ctx, query, intent, products, personalCont
   }
 }
 
-async function searchIntentWithinBudget(intentTask, ctx, budgetMs = 350) {
+async function searchIntentWithinBudget(intentTask, ctx, budgetMs = 2200) {
   const result = await Promise.race([
     intentTask,
     new Promise((resolve) => setTimeout(() => resolve(null), budgetMs)),
@@ -3916,6 +3919,46 @@ async function searchIntentWithinBudget(intentTask, ctx, budgetMs = 350) {
   return result;
 }
 
+function localSearchIntent(originalQuery) {
+  const query = String(originalQuery || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/r\$|\brs\b/g, " ").replace(/[^a-z0-9\s.,]/g, " ")
+    .replace(/\s+/g, " ").trim()
+    .replace(/\b(ate|menos de|no maximo|maximo)\s*(\d)/g, "$1 $2")
+    .replace(/\b(acima de|mais de|a partir de|minimo)\s*(\d)/g, "$1 $2");
+  const number = (value) => {
+    const parsed = Number(String(value || "").replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+  let minPrice = null, maxPrice = null;
+  const between = query.match(/\bentre\s+(\d[\d.,]*)\s+(?:e|a)\s+(\d[\d.,]*)/);
+  if (between) {
+    minPrice = number(between[1]); maxPrice = number(between[2]);
+    if (minPrice != null && maxPrice != null && minPrice > maxPrice)
+      [minPrice, maxPrice] = [maxPrice, minPrice];
+  } else {
+    maxPrice = number(query.match(/\b(?:ate|menos de|no maximo|maximo)\s*(\d[\d.,]*)/)?.[1]);
+    minPrice = number(query.match(/\b(?:acima de|mais de|a partir de|minimo)\s*(\d[\d.,]*)/)?.[1]);
+  }
+  const searchTerms = query
+    .replace(/\bentre\s+\d[\d.,]*\s+(?:e|a)\s+\d[\d.,]*/g, " ")
+    .replace(/\b(?:ate|menos de|no maximo|maximo|acima de|mais de|a partir de|minimo)\s*\d[\d.,]*/g, " ")
+    .replace(/\b\d[\d.,]*\s*(?:reais|real)\b/g, " ")
+    .replace(/\b(?:mais barato|menor preco|barato primeiro|mais caro|maior preco|maior desconto|mais desconto)\b/g, " ")
+    .replace(/\b(?:por|de|com|quero|procuro|busco|reais|real)\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+  return { searchTerms: searchTerms || normalizeSearch(originalQuery), minPrice, maxPrice,
+    sort: /\b(?:mais barato|menor preco|barato primeiro)\b/.test(query) ? "price-asc"
+      : /\b(?:mais caro|maior preco)\b/.test(query) ? "price-desc"
+      : /\b(?:maior desconto|mais desconto)\b/.test(query) ? "discount" : null };
+}
+
+function mergeSearchIntent(local, ai) {
+  if (!ai) return { ...local, category: null, brand: null, explanation: "Produto e filtros identificados." };
+  return { ...ai, searchTerms: ai.searchTerms || local.searchTerms,
+    minPrice: local.minPrice ?? ai.minPrice, maxPrice: local.maxPrice ?? ai.maxPrice,
+    sort: local.sort || ai.sort };
+}
 async function searchV2(req, env, url, ctx, id) {
   const originalQuery = (url.searchParams.get("q") || "").trim().slice(0, 100);
   const normalizedQuery = normalizeSearch(originalQuery);
@@ -3928,8 +3971,10 @@ async function searchV2(req, env, url, ctx, id) {
   const searchUser = req.headers.has("authorization") ? await activeUser(req, env) : null;
   const premium = searchUser ? await premiumSubscriptionData(env, searchUser.id) : null;
   const premiumEnabled = Boolean(premium?.premium);
+  const localIntent = localSearchIntent(originalQuery);
   const aiIntentTask = cachedSearchIntent(env, originalQuery, ctx);
-  const intent = await searchIntentWithinBudget(aiIntentTask, ctx);
+  const aiIntent = await searchIntentWithinBudget(aiIntentTask, ctx);
+  const intent = mergeSearchIntent(localIntent, aiIntent);
   const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
   const ftsQuery = intent
     ? buildIntentFtsQuery(correctedQuery)
@@ -4002,9 +4047,13 @@ async function searchV2(req, env, url, ctx, id) {
     ).all();
     const queryTerms = correctedQuery.split(" ").filter(Boolean);
     results = (fallback.results || [])
+      .filter((product) => !category || normalizeSearch(product.category).replace(/\s+/g, "-") === category)
+      .filter((product) => !brand || normalizeSearch(product.brand) === brand)
+      .filter((product) => minPriceCents == null || Number(product.price || 0) >= minPriceCents)
+      .filter((product) => maxPriceCents == null || Number(product.price || 0) <= maxPriceCents)
       .map((product) => {
         const words = normalizeSearch(
-          [product.name, product.brand, product.category]
+          [product.name, product.brand, product.category, product.shortDescription, product.specificationsJson]
             .filter(Boolean)
             .join(" "),
         ).split(" ");
@@ -5320,14 +5369,23 @@ async function deletePromotion(req, env, promotionId, id) {
 async function adminUsers(req,env,url,id){
   if(!(await requireAdmin(req,env)))return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
   const q=String(url.searchParams.get("q")||"").trim().slice(0,100),limit=clamp(url.searchParams.get("limit"),1,50,20),offset=clamp(url.searchParams.get("offset"),0,100000,0),like=`%${q}%`;
-  const {results}=await env.DB.prepare(`SELECT up.user_id userId,up.email,up.display_name displayName,up.status,up.blocked_until blockedUntil,COALESCE((SELECT MAX(us.last_seen_at) FROM user_sessions us WHERE us.user_id=up.user_id),up.last_seen_at) lastSeenAt,up.created_at createdAt,
-    COALESCE((SELECT SUM(active_seconds) FROM user_sessions us WHERE us.user_id=up.user_id),0) activeSeconds,
-    (SELECT COUNT(*) FROM share_links sl WHERE sl.user_id=up.user_id) sharedProducts,
-    COALESCE((SELECT SUM(click_count) FROM share_links sl WHERE sl.user_id=up.user_id),0) shareClicks,
-    (SELECT COUNT(*) FROM referrals r WHERE r.referrer_user_id=up.user_id AND r.status='qualified') qualifiedInvites
-    FROM user_profiles up WHERE (?='' OR up.display_name LIKE ? OR up.email LIKE ?) ORDER BY datetime(up.last_seen_at) DESC,datetime(up.created_at) DESC LIMIT ? OFFSET ?`).bind(q,like,like,limit+1,offset).all();
-  const rows=results||[],hasMore=rows.length>limit;
-  return ok(req,env,{items:rows.slice(0,limit),hasMore,nextOffset:offset+limit},id);
+  const sort=["newest","oldest","activity"].includes(url.searchParams.get("sort"))?url.searchParams.get("sort"):"newest";
+  const period=["7d","30d"].includes(url.searchParams.get("period"))?url.searchParams.get("period"):"all";
+  const since=period==="7d"?"-7 days":period==="30d"?"-30 days":null;
+  const where=`(?='' OR up.display_name LIKE ? OR up.email LIKE ?)${since?" AND datetime(up.created_at)>=datetime('now',?)":""}`;
+  const order=sort==="oldest"?"datetime(up.created_at) ASC":sort==="activity"?"datetime(lastSeenAt) DESC,datetime(up.created_at) DESC":"datetime(up.created_at) DESC";
+  const bindings=[q,like,like,...(since?[since]:[])];
+  const [itemsResult,countResult]=await env.DB.batch([
+    env.DB.prepare(`SELECT up.user_id userId,up.email,up.display_name displayName,up.status,up.blocked_until blockedUntil,COALESCE((SELECT MAX(us.last_seen_at) FROM user_sessions us WHERE us.user_id=up.user_id),up.last_seen_at) lastSeenAt,up.created_at createdAt,
+      COALESCE((SELECT SUM(active_seconds) FROM user_sessions us WHERE us.user_id=up.user_id),0) activeSeconds,
+      (SELECT COUNT(*) FROM share_links sl WHERE sl.user_id=up.user_id) sharedProducts,
+      COALESCE((SELECT SUM(click_count) FROM share_links sl WHERE sl.user_id=up.user_id),0) shareClicks,
+      (SELECT COUNT(*) FROM referrals r WHERE r.referrer_user_id=up.user_id AND r.status='qualified') qualifiedInvites
+      FROM user_profiles up WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...bindings,limit+1,offset),
+    env.DB.prepare(`SELECT COUNT(*) total FROM user_profiles up WHERE ${where}`).bind(...bindings),
+  ]);
+  const rows=itemsResult.results||[],hasMore=rows.length>limit,total=Number(countResult.results?.[0]?.total||0);
+  return ok(req,env,{items:rows.slice(0,limit),hasMore,nextOffset:offset+limit,total,loaded:Math.min(total,offset+limit)},id);
 }
 
 async function deleteAdminUser(req,env,userId,id){
@@ -5622,16 +5680,26 @@ async function redeemManualUserReward(req,env,rewardId,id){
   return ok(req,env,{id:reward.id,status:"redeemed",redeemedAt},id);
 }
 
+let adminAuditSchemaReady = false;
 async function ensureAdminAuditSchema(env) {
+  if (adminAuditSchemaReady) return;
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_audit_logs (
     id TEXT PRIMARY KEY,actor_id TEXT,actor_name TEXT NOT NULL DEFAULT 'Administrador',actor_email TEXT NOT NULL DEFAULT '',actor_role TEXT NOT NULL DEFAULT 'owner',
     action TEXT NOT NULL,method TEXT NOT NULL,path TEXT NOT NULL,resource_type TEXT,resource_id TEXT,resource_label TEXT,
     details_json TEXT NOT NULL DEFAULT '{}',request_id TEXT,ip_hash TEXT,user_agent TEXT NOT NULL DEFAULT '',status_code INTEGER NOT NULL DEFAULT 200,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`).run();
-  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(created_at DESC)`).run();
+  const info=await env.DB.prepare(`PRAGMA table_info(admin_audit_logs)`).all();
+  const present=new Set((info.results||[]).map(column=>column.name));
+  const required={actor_id:"TEXT",actor_name:"TEXT NOT NULL DEFAULT 'Administrador'",actor_email:"TEXT NOT NULL DEFAULT ''",actor_role:"TEXT NOT NULL DEFAULT 'owner'",action:"TEXT NOT NULL DEFAULT 'admin_action'",method:"TEXT NOT NULL DEFAULT 'GET'",path:"TEXT NOT NULL DEFAULT ''",resource_type:"TEXT",resource_id:"TEXT",resource_label:"TEXT",details_json:"TEXT NOT NULL DEFAULT '{}'",request_id:"TEXT",ip_hash:"TEXT",user_agent:"TEXT NOT NULL DEFAULT ''",status_code:"INTEGER NOT NULL DEFAULT 200",created_at:"TEXT"};
+  for(const [column,definition] of Object.entries(required))if(!present.has(column))await env.DB.prepare(`ALTER TABLE admin_audit_logs ADD COLUMN ${column} ${definition}`).run();
+  await env.DB.batch([
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(created_at DESC)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_audit_actor_created ON admin_audit_logs(actor_id,created_at DESC)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_audit_action_created ON admin_audit_logs(action,created_at DESC)`),
+  ]);
+  adminAuditSchemaReady = true;
 }
-
 function adminAuditTarget(method, path, body, responseData) {
   const parts = path.split("/").filter(Boolean), adminIndex = parts.indexOf("admin"), area = parts[adminIndex + 1] || "admin";
   const candidateId = parts[adminIndex + 2] || null;
@@ -5640,7 +5708,7 @@ function adminAuditTarget(method, path, body, responseData) {
   const actionAreas = { products: "product", categories: "category", brands: "brand", partners: "partner", collaborators: "collaborator", roles: "role", users: "user", promotions: "promotion", banners: "banner", themes: "theme", "ai-settings": "ai_settings", "premium-settings": "premium_settings" };
   const actionArea = actionAreas[area] || area.replaceAll("-", "_");
   let action = method === "GET" ? `${actionArea}_viewed` : `${method.toLowerCase()}_${actionArea}`;
-  if (path.includes("/auth/session")) action = "admin_panel_opened";
+  if (path.includes("/auth/session")) action = body?.section ? "admin_section_opened" : "admin_panel_opened";
   else if (path.includes("/auth/login")) action = "admin_login";
   else if (path.includes("/auth/logout")) action = "admin_logout";
   else if (path.includes("/auth/password")) action = "admin_password_changed";
@@ -5655,13 +5723,16 @@ function adminAuditTarget(method, path, body, responseData) {
   if (suffix === "access") action = "user_access_updated";
   if (suffix === "premium-access") action = method === "DELETE" ? "user_premium_revoked" : "user_premium_granted";
   if (suffix.includes("rewards")) action = method === "GET" ? "user_rewards_viewed" : method === "DELETE" ? "user_reward_removed" : "user_reward_created";
-  if (area === "shared-files" && method === "GET" && suffix === "download") action = "shared_file_downloaded";
+  if (area === "shared-files") action = suffix === "download" ? "shared_file_downloaded" : method === "POST" ? "shared_file_uploaded" : method === "DELETE" ? "shared_file_deleted" : "shared_files_viewed";
+  if (area === "media-scripts" && !suffix) action = method === "POST" ? "media_script_created" : method === "PUT" ? "media_script_updated" : method === "DELETE" ? "media_script_deleted" : "media_scripts_viewed";
+  if (area === "team-chat") action = method === "POST" ? "team_chat_message_sent" : method === "DELETE" ? "team_chat_message_deleted" : path.endsWith("/lock") ? "team_chat_lock_updated" : "team_chat_viewed";
+  if (area === "activity") action = "admin_section_opened";
   if (area === "media-scripts" && suffix.includes("comments")) action = method === "GET" ? "media_script_comments_viewed" : method === "DELETE" ? "media_script_comment_deleted" : "media_script_comment_created";
   if (area === "media-scripts" && suffix.includes("versions")) action = suffix.endsWith("restore") ? "media_script_version_restored" : "media_script_versions_viewed";
   if (area === "media-scripts" && suffix.includes("trash")) action = method === "GET" ? "media_script_trash_viewed" : suffix.endsWith("restore") ? "media_script_restored" : "media_script_permanently_deleted";
   const resourceTypes = { products: "product", categories: "category", brands: "brand", partners: "partner", collaborators: "collaborator", roles: "role", users: "user", promotions: "promotion", banners: "banner", themes: "theme", media: "product_media" };
   const resourceType = resourceTypes[area] || area.replaceAll("-", "_");
-  const resourceLabel = body?.name || body?.title || body?.email || body?.slug || body?.query || null;
+  const resourceLabel = body?.name || body?.title || body?.email || body?.slug || body?.query || body?.section || responseData?.title || responseData?.originalName || null;
   return { action, resourceType, resourceId: id, resourceLabel };
 }
 
@@ -5670,20 +5741,22 @@ async function recordAdminAudit(req, response, env, requestId, knownActor = null
     await ensureAdminAuditSchema(env);
     const url = new URL(req.url), contentType = req.headers.get("content-type") || "";
     let body = {};
+    const adminSection=String(url.searchParams.get("section")||"").trim().slice(0,100);
     if (contentType.includes("application/json") && Number(req.headers.get("content-length") || 0) < 150000) body = await req.json().catch(() => ({}));
+    if(adminSection)body.section=adminSection;
     const responseJson = await response.json().catch(() => ({}));
     let actor = knownActor || await adminActor(req, env);
     if (!actor && url.pathname.endsWith("/auth/login")) actor = responseJson?.data?.actor || null;
     if (!actor && !url.pathname.endsWith("/auth/logout")) return;
     const safeDetails = {};
-    for (const key of ["name", "title", "slug", "email", "status", "action", "currentPriceCents", "previousPriceCents", "role", "roleId", "isActive", "days", "claimExpiresAt"])
+    for (const key of ["name", "title", "slug", "email", "status", "action", "currentPriceCents", "previousPriceCents", "role", "roleId", "isActive", "days", "claimExpiresAt", "section"])
       if (body?.[key] !== undefined) safeDetails[key] = body[key];
     const target = adminAuditTarget(req.method, url.pathname, body, responseJson?.data);
     if (!target.resourceLabel && target.action === "admin_password_changed")
       target.resourceLabel = actor?.email || "Própria conta";
     const ip = req.headers.get("CF-Connecting-IP") || "unknown";
-    await env.DB.prepare(`INSERT INTO admin_audit_logs(id,actor_id,actor_name,actor_email,actor_role,action,method,path,resource_type,resource_id,resource_label,details_json,request_id,ip_hash,user_agent,status_code)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(), actor?.id || null, actor?.name || "Administrador", actor?.email || "", actor?.roleLabel || actor?.role || "Admin", target.action, req.method, url.pathname, target.resourceType, target.resourceId, target.resourceLabel, JSON.stringify(safeDetails), requestId, await sha256(ip), String(req.headers.get("user-agent") || "").slice(0, 300), response.status).run();
+    await env.DB.prepare(`INSERT INTO admin_audit_logs(id,actor_id,actor_name,actor_email,actor_role,action,method,path,resource_type,resource_id,resource_label,details_json,request_id,ip_hash,user_agent,status_code,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(crypto.randomUUID(), actor?.id || null, actor?.name || "Administrador", actor?.email || "", actor?.roleLabel || actor?.role || "Admin", target.action, req.method, url.pathname, target.resourceType, target.resourceId, target.resourceLabel, JSON.stringify(safeDetails), requestId, await sha256(ip), String(req.headers.get("user-agent") || "").slice(0, 300), response.status).run();
   } catch (error) {
     console.warn(JSON.stringify({ event: "admin_audit_failed", requestId, error: String(error?.message || error) }));
   }
@@ -5772,7 +5845,13 @@ async function adminDashboard(req, env, id) {
       LEFT JOIN partners pa ON l.resource_type='partner' AND pa.id=l.resource_id
       LEFT JOIN admin_roles r ON l.resource_type='role' AND r.id=l.resource_id
       ORDER BY datetime(l.created_at) DESC LIMIT 100`),
-  ]);
+    env.DB.prepare(`SELECT COUNT(*) total FROM (
+      SELECT user_id FROM events WHERE user_id IS NOT NULL AND created_at>=datetime('now','start of month') GROUP BY user_id
+      UNION SELECT user_id FROM user_sessions WHERE started_at>=datetime('now','start of month') GROUP BY user_id
+    )`),
+    env.DB.prepare(`SELECT COUNT(DISTINCT json_extract(metadata_json,'$.visitorId')) total FROM events
+      WHERE user_id IS NULL AND created_at>=datetime('now','start of month')
+        AND json_extract(metadata_json,'$.visitorId') IS NOT NULL`),  ]);
   const total = (index) => Number(results[index].results?.[0]?.total || 0);
   return ok(
     req,
@@ -5818,6 +5897,8 @@ async function adminDashboard(req, env, id) {
       cartsWithProducts: total(37),
       userLogs: canViewLogs ? (results[34].results || []).map((row) => canManageUsers ? row : { ...row, displayName: null, email: null }) : [],
       collaboratorLogs: canViewLogs ? results[38].results || [] : [],
+      loggedUsersMonth: total(39),
+      anonymousUsersMonth: total(40),
     },
     id,
   );
@@ -5949,7 +6030,7 @@ async function createAdminSharedFile(req, env, id) {
     await env.MEDIA.delete(storageKey).catch(()=>{});
     throw error;
   }
-  return ok(req,env,{id:fileId,expiresAt},id);
+  return ok(req,env,{id:fileId,title,originalName:file.name.slice(0,180),expiresAt},id);
 }
 
 function safeDownloadName(value) {
@@ -7349,7 +7430,7 @@ async function ensureShoplabAdsSchema(env){
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ad_assignments(id TEXT PRIMARY KEY,ad_id TEXT NOT NULL,device TEXT NOT NULL,page_kind TEXT NOT NULL,position_key TEXT NOT NULL,category_slug TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(device,page_kind,position_key,category_slug))`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ad_placement_members(id TEXT PRIMARY KEY,ad_id TEXT NOT NULL,device TEXT NOT NULL,page_kind TEXT NOT NULL,position_key TEXT NOT NULL,category_slug TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(ad_id,device,page_kind,position_key,category_slug))`)
   ]);
-  const columns=[['product_slug','TEXT'],['target_keywords',`TEXT NOT NULL DEFAULT ''`],['public_title','TEXT'],['ad_label',`TEXT NOT NULL DEFAULT 'PUBLICIDADE · SHOPLAB ADS'`],['show_header','INTEGER NOT NULL DEFAULT 1'],['dismissible','INTEGER NOT NULL DEFAULT 1'],['dismiss_minutes','INTEGER NOT NULL DEFAULT 30'],['cta_text',"TEXT NOT NULL DEFAULT 'Saiba mais'"],['cta_color',"TEXT NOT NULL DEFAULT '#075fce'"],['old_price_text',"TEXT NOT NULL DEFAULT ''"],['current_price_text',"TEXT NOT NULL DEFAULT ''"],['old_price_color',"TEXT NOT NULL DEFAULT '#71807c'"],['current_price_color',"TEXT NOT NULL DEFAULT '#087c70'"],['distribution_mode',"TEXT NOT NULL DEFAULT 'manual'"],['distribution_weight','INTEGER NOT NULL DEFAULT 25']];
+  const columns=[['product_slug','TEXT'],['target_keywords',`TEXT NOT NULL DEFAULT ''`],['public_title','TEXT'],['ad_label',`TEXT NOT NULL DEFAULT 'PUBLICIDADE · SHOPLAB ADS'`],['show_header','INTEGER NOT NULL DEFAULT 1'],['dismissible','INTEGER NOT NULL DEFAULT 1'],['dismiss_minutes','INTEGER NOT NULL DEFAULT 30'],['cta_text',"TEXT NOT NULL DEFAULT 'Saiba mais'"],['cta_color',"TEXT NOT NULL DEFAULT '#075fce'"],['old_price_text',"TEXT NOT NULL DEFAULT ''"],['current_price_text',"TEXT NOT NULL DEFAULT ''"],['old_price_color',"TEXT NOT NULL DEFAULT '#71807c'"],['current_price_color',"TEXT NOT NULL DEFAULT '#087c70'"],['distribution_mode',"TEXT NOT NULL DEFAULT 'manual'"],['distribution_weight','INTEGER NOT NULL DEFAULT 25'],['featured','INTEGER NOT NULL DEFAULT 0'],['search_boost','INTEGER NOT NULL DEFAULT 3'],['max_per_page','INTEGER NOT NULL DEFAULT 1'],['target_pages',"TEXT NOT NULL DEFAULT 'home,products,category,product'"],['no_end_date','INTEGER NOT NULL DEFAULT 1'],['category_slugs',"TEXT NOT NULL DEFAULT ''"],['related_product_slugs',"TEXT NOT NULL DEFAULT ''"]];
   for(const [column,definition] of columns){try{await env.DB.prepare(`ALTER TABLE shoplab_ads ADD COLUMN ${column} ${definition}`).run()}catch(error){if(!new RegExp(`duplicate column name:.*${column}`,'i').test(String(error?.message||error)))throw error}}
   await env.DB.prepare(`UPDATE shoplab_ads SET ad_label=replace(replace(ad_label,char(65,68,83,69,78,83,69),'ADS'),char(65,100,83,101,110,115,101),'Ads') WHERE instr(ad_label,char(65,68,83,69,78,83,69))>0 OR instr(ad_label,char(65,100,83,101,110,115,101))>0`).run();
   const placementMemberCount=await env.DB.prepare(`SELECT COUNT(*) total FROM shoplab_ad_placement_members`).first();
@@ -7357,8 +7438,12 @@ async function ensureShoplabAdsSchema(env){
 }
 function shoplabAdKeywords(form){return String(form.get('targetKeywords')||'').toLocaleLowerCase('pt-BR').split(/[,\n]/).map(normalizeSearch).filter(term=>term.length>=2).filter((term,index,items)=>items.indexOf(term)===index).slice(0,20).join(',')}
 function shoplabAdPresentation(form,name){ return{publicTitle:String(form.get('publicTitle')||name).trim().slice(0,140),adLabel:String(form.get('adLabel')||'PUBLICIDADE · SHOPLAB ADS').trim().slice(0,80),showHeader:form.get('showHeader')==='0'?0:1,dismissible:form.get('dismissible')==='0'?0:1,dismissMinutes:clamp(form.get('dismissMinutes'),1,10080,30),ctaText:String(form.get('ctaText')||'Saiba mais').trim().slice(0,40),ctaColor:/^#[0-9a-f]{6}$/i.test(String(form.get('ctaColor')||''))?String(form.get('ctaColor')):'#075fce',oldPriceText:String(form.get('oldPriceText')||'').trim().slice(0,32),currentPriceText:String(form.get('currentPriceText')||'').trim().slice(0,32),oldPriceColor:/^#[0-9a-f]{6}$/i.test(String(form.get('oldPriceColor')||''))?String(form.get('oldPriceColor')):'#71807c',currentPriceColor:/^#[0-9a-f]{6}$/i.test(String(form.get('currentPriceColor')||''))?String(form.get('currentPriceColor')):'#087c70'}}
-async function adminShoplabAds(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const {results}=await env.DB.prepare(`SELECT id,name,description,product_slug productSlug,target_keywords targetKeywords,public_title publicTitle,ad_label adLabel,show_header showHeader,dismissible,dismiss_minutes dismissMinutes,cta_text ctaText,cta_color ctaColor,old_price_text oldPriceText,current_price_text currentPriceText,old_price_color oldPriceColor,current_price_color currentPriceColor,media_type mediaType,storage_key storageKey,link_url linkUrl,status,priority,distribution_mode distributionMode,distribution_weight distributionWeight,starts_at startsAt,ends_at endsAt FROM shoplab_ads ORDER BY priority DESC,created_at DESC`).all();return ok(req,env,results||[],id)}
-async function recordShoplabAdEvent(req,env,id){
+async function adminShoplabAds(req,env,id){
+  if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);
+  await ensureShoplabAdsSchema(env);
+  const {results}=await env.DB.prepare(`SELECT a.id,a.name,a.description,a.product_slug productSlug,a.target_keywords targetKeywords,a.public_title publicTitle,a.ad_label adLabel,a.show_header showHeader,a.dismissible,a.dismiss_minutes dismissMinutes,a.cta_text ctaText,a.cta_color ctaColor,a.old_price_text oldPriceText,a.current_price_text currentPriceText,a.old_price_color oldPriceColor,a.current_price_color currentPriceColor,a.media_type mediaType,a.storage_key storageKey,a.link_url linkUrl,a.status,a.priority,a.distribution_mode distributionMode,a.distribution_weight distributionWeight,a.featured,a.search_boost searchBoost,a.max_per_page maxPerPage,a.target_pages targetPages,a.starts_at startsAt,a.ends_at endsAt,a.no_end_date noEndDate,a.category_slugs categorySlugs,a.related_product_slugs relatedProductSlugs,COALESCE(o.current_price_cents,p.base_price_cents) linkedCurrentPrice,COALESCE(o.previous_price_cents,p.compare_at_price_cents) linkedOldPrice,CASE WHEN a.status='draft' THEN 'draft' WHEN a.status='paused' THEN 'paused' WHEN a.starts_at IS NOT NULL AND datetime(a.starts_at)>CURRENT_TIMESTAMP THEN 'scheduled' WHEN a.no_end_date=0 AND a.ends_at IS NOT NULL AND datetime(a.ends_at)<CURRENT_TIMESTAMP THEN 'ended' ELSE 'active' END derivedStatus FROM shoplab_ads a LEFT JOIN products p ON p.slug=a.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 ORDER BY a.priority DESC,a.created_at DESC`).all();
+  return ok(req,env,results||[],id)
+}async function recordShoplabAdEvent(req,env,id){
   await ensureShoplabAdsSchema(env);const body=await readJson(req,4000),eventId=String(body.eventId||'').slice(0,100),adId=String(body.adId||'').slice(0,100),eventType=String(body.eventType||''),device=body.device==='mobile'?'mobile':'desktop',pageKind=['home','products','category','product'].includes(body.pageKind)?body.pageKind:'home',positionKey=String(body.positionKey||'').slice(0,80),sessionId=String(body.sessionId||'').slice(0,100);
   if(!eventId||!adId||!['impression','click'].includes(eventType))return fail(req,env,'VALIDATION_ERROR','Evento de anúncio inválido',422,id);
   const exists=await env.DB.prepare(`SELECT id FROM shoplab_ads WHERE id=?`).bind(adId).first();if(!exists)return fail(req,env,'AD_NOT_FOUND','Anúncio não encontrado',404,id);
@@ -7388,8 +7473,8 @@ async function adminShoplabAdsAnalytics(req,env,id){
   ]);
   const decorate=row=>{const impressions=Number(row.impressions)||0,clicks=Number(row.clicks)||0,uniqueImpressions=Number(row.uniqueImpressions)||0,uniqueClicks=Number(row.uniqueClicks)||0;return{...row,impressions,clicks,uniqueImpressions,uniqueClicks,ctr:impressions?clicks/impressions*100:0,uniqueCtr:uniqueImpressions?uniqueClicks/uniqueImpressions*100:0}};
   return ok(req,env,{schemaVersion:2,days,filters,totals:decorate(totalsResult||{}),previousTotals:decorate(previousTotalsResult||{}),daily:(dailyResult.results||[]).map(decorate),previousDaily:(previousDailyResult.results||[]).map(decorate),ads:(adsResult.results||[]).map(decorate),devices:(devicesResult.results||[]).map(decorate),pages:(pagesResult.results||[]).map(decorate),placements:(placementsResult.results||[]).map(decorate),campaigns:campaignsResult.results||[]},id)
-}async function createShoplabAd(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);if(!env.MEDIA)return fail(req,env,'R2_NOT_CONFIGURED','Mídia não configurada',503,id);const form=await req.formData(),name=String(form.get('name')||'').trim().slice(0,140),link=validDestination(form.get('linkUrl')),status=['draft','active','paused'].includes(form.get('status'))?form.get('status'):'draft',file=form.get('file'),presentation=shoplabAdPresentation(form,name),targetKeywords=shoplabAdKeywords(form);if(!name||!link)return fail(req,env,'VALIDATION_ERROR','Informe nome e destino válidos',422,id);const adId=crypto.randomUUID();let storageKey=null;try{if(file instanceof File&&file.size)storageKey=await storeHeaderAdMedia(env,file,adId)}catch(error){return fail(req,env,'INVALID_FILE',error.message,422,id)}const mediaType=file instanceof File&&file.type.startsWith('video/')?'video':'image';await env.DB.prepare(`INSERT INTO shoplab_ads(id,name,description,product_slug,target_keywords,public_title,ad_label,show_header,dismissible,dismiss_minutes,cta_text,cta_color,old_price_text,current_price_text,old_price_color,current_price_color,media_type,storage_key,link_url,status,priority,distribution_mode,distribution_weight) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(adId,name,String(form.get('description')||'').slice(0,240),String(form.get('productSlug')||'').trim().slice(0,140)||null,targetKeywords,presentation.publicTitle,presentation.adLabel,presentation.showHeader,presentation.dismissible,presentation.dismissMinutes,presentation.ctaText,presentation.ctaColor,presentation.oldPriceText,presentation.currentPriceText,presentation.oldPriceColor,presentation.currentPriceColor,mediaType,storageKey,link,status,clamp(form.get('priority'),1,1000,1),form.get('distributionMode')==='weighted'?'weighted':'manual',clamp(form.get('distributionWeight'),1,100,25)).run();return ok(req,env,{id:adId,storageKey},id)}
-async function updateShoplabAd(req,env,adId,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const current=await env.DB.prepare(`SELECT storage_key storageKey,media_type mediaType FROM shoplab_ads WHERE id=?`).bind(adId).first();if(!current)return fail(req,env,'AD_NOT_FOUND','Anúncio não encontrado',404,id);const form=await req.formData(),name=String(form.get('name')||'').trim().slice(0,140),link=validDestination(form.get('linkUrl')),status=['draft','active','paused'].includes(form.get('status'))?form.get('status'):'draft',file=form.get('file'),presentation=shoplabAdPresentation(form,name),targetKeywords=shoplabAdKeywords(form);if(!name||!link)return fail(req,env,'VALIDATION_ERROR','Informe nome e destino válidos',422,id);let storageKey=current.storageKey,mediaType=current.mediaType;try{if(file instanceof File&&file.size){if(!env.MEDIA)return fail(req,env,'R2_NOT_CONFIGURED','Mídia não configurada',503,id);storageKey=await storeHeaderAdMedia(env,file,adId);mediaType=file.type.startsWith('video/')?'video':'image'}}catch(error){return fail(req,env,'INVALID_FILE',error.message,422,id)}await env.DB.prepare(`UPDATE shoplab_ads SET name=?,description=?,product_slug=?,target_keywords=?,public_title=?,ad_label=?,show_header=?,dismissible=?,dismiss_minutes=?,cta_text=?,cta_color=?,old_price_text=?,current_price_text=?,old_price_color=?,current_price_color=?,media_type=?,storage_key=?,link_url=?,status=?,priority=?,distribution_mode=?,distribution_weight=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(name,String(form.get('description')||'').slice(0,240),String(form.get('productSlug')||'').trim().slice(0,140)||null,targetKeywords,presentation.publicTitle,presentation.adLabel,presentation.showHeader,presentation.dismissible,presentation.dismissMinutes,presentation.ctaText,presentation.ctaColor,presentation.oldPriceText,presentation.currentPriceText,presentation.oldPriceColor,presentation.currentPriceColor,mediaType,storageKey,link,status,clamp(form.get('priority'),1,1000,1),form.get('distributionMode')==='weighted'?'weighted':'manual',clamp(form.get('distributionWeight'),1,100,25),adId).run();if(file instanceof File&&file.size&&current.storageKey&&current.storageKey!==storageKey&&env.MEDIA)await env.MEDIA.delete(current.storageKey);return ok(req,env,{id:adId,storageKey,status},id)}
+}async function createShoplabAd(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);if(!env.MEDIA)return fail(req,env,'R2_NOT_CONFIGURED','Mídia não configurada',503,id);const form=await req.formData(),name=String(form.get('name')||'').trim().slice(0,140),link=validDestination(form.get('linkUrl')),status=['draft','active','paused'].includes(form.get('status'))?form.get('status'):'draft',file=form.get('file'),presentation=shoplabAdPresentation(form,name),targetKeywords=shoplabAdKeywords(form);if(!name||!link)return fail(req,env,'VALIDATION_ERROR','Informe nome e destino válidos',422,id);const adId=crypto.randomUUID();let storageKey=null;try{if(file instanceof File&&file.size)storageKey=await storeHeaderAdMedia(env,file,adId)}catch(error){return fail(req,env,'INVALID_FILE',error.message,422,id)}const mediaType=file instanceof File&&file.type.startsWith('video/')?'video':'image';await env.DB.prepare(`INSERT INTO shoplab_ads(id,name,description,product_slug,target_keywords,public_title,ad_label,show_header,dismissible,dismiss_minutes,cta_text,cta_color,old_price_text,current_price_text,old_price_color,current_price_color,media_type,storage_key,link_url,status,priority,distribution_mode,distribution_weight) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(adId,name,String(form.get('description')||'').slice(0,240),String(form.get('productSlug')||'').trim().slice(0,140)||null,targetKeywords,presentation.publicTitle,presentation.adLabel,presentation.showHeader,presentation.dismissible,presentation.dismissMinutes,presentation.ctaText,presentation.ctaColor,presentation.oldPriceText,presentation.currentPriceText,presentation.oldPriceColor,presentation.currentPriceColor,mediaType,storageKey,link,status,clamp(form.get('priority'),1,1000,1),form.get('distributionMode')==='weighted'?'weighted':'manual',clamp(form.get('distributionWeight'),1,100,25)).run();await env.DB.prepare(`UPDATE shoplab_ads SET featured=?,search_boost=?,max_per_page=?,target_pages=? WHERE id=?`).bind(form.get('featured')==='1'?1:0,clamp(form.get('searchBoost'),1,10,3),clamp(form.get('maxPerPage'),1,4,1),String(form.get('targetPages')||'home,products,category,product'),adId).run();return ok(req,env,{id:adId,storageKey},id)}
+async function updateShoplabAd(req,env,adId,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const current=await env.DB.prepare(`SELECT storage_key storageKey,media_type mediaType FROM shoplab_ads WHERE id=?`).bind(adId).first();if(!current)return fail(req,env,'AD_NOT_FOUND','Anúncio não encontrado',404,id);const form=await req.formData(),name=String(form.get('name')||'').trim().slice(0,140),link=validDestination(form.get('linkUrl')),status=['draft','active','paused'].includes(form.get('status'))?form.get('status'):'draft',file=form.get('file'),presentation=shoplabAdPresentation(form,name),targetKeywords=shoplabAdKeywords(form);if(!name||!link)return fail(req,env,'VALIDATION_ERROR','Informe nome e destino válidos',422,id);let storageKey=current.storageKey,mediaType=current.mediaType;try{if(file instanceof File&&file.size){if(!env.MEDIA)return fail(req,env,'R2_NOT_CONFIGURED','Mídia não configurada',503,id);storageKey=await storeHeaderAdMedia(env,file,adId);mediaType=file.type.startsWith('video/')?'video':'image'}}catch(error){return fail(req,env,'INVALID_FILE',error.message,422,id)}await env.DB.prepare(`UPDATE shoplab_ads SET name=?,description=?,product_slug=?,target_keywords=?,public_title=?,ad_label=?,show_header=?,dismissible=?,dismiss_minutes=?,cta_text=?,cta_color=?,old_price_text=?,current_price_text=?,old_price_color=?,current_price_color=?,media_type=?,storage_key=?,link_url=?,status=?,priority=?,distribution_mode=?,distribution_weight=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(name,String(form.get('description')||'').slice(0,240),String(form.get('productSlug')||'').trim().slice(0,140)||null,targetKeywords,presentation.publicTitle,presentation.adLabel,presentation.showHeader,presentation.dismissible,presentation.dismissMinutes,presentation.ctaText,presentation.ctaColor,presentation.oldPriceText,presentation.currentPriceText,presentation.oldPriceColor,presentation.currentPriceColor,mediaType,storageKey,link,status,clamp(form.get('priority'),1,1000,1),form.get('distributionMode')==='weighted'?'weighted':'manual',clamp(form.get('distributionWeight'),1,100,25),adId).run();await env.DB.prepare(`UPDATE shoplab_ads SET featured=?,search_boost=?,max_per_page=?,target_pages=? WHERE id=?`).bind(form.get('featured')==='1'?1:0,clamp(form.get('searchBoost'),1,10,3),clamp(form.get('maxPerPage'),1,4,1),String(form.get('targetPages')||'home,products,category,product'),adId).run();if(file instanceof File&&file.size&&current.storageKey&&current.storageKey!==storageKey&&env.MEDIA)await env.MEDIA.delete(current.storageKey);return ok(req,env,{id:adId,storageKey,status},id)}
 async function deleteShoplabAd(req,env,adId,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const ad=await env.DB.prepare(`SELECT storage_key storageKey FROM shoplab_ads WHERE id=?`).bind(adId).first();if(!ad)return fail(req,env,'AD_NOT_FOUND','Anúncio não encontrado',404,id);await env.DB.batch([env.DB.prepare(`DELETE FROM shoplab_ad_placement_members WHERE ad_id=?`).bind(adId),env.DB.prepare(`DELETE FROM shoplab_ad_events WHERE ad_id=?`).bind(adId),env.DB.prepare(`DELETE FROM shoplab_ad_assignments WHERE ad_id=?`).bind(adId),env.DB.prepare(`DELETE FROM shoplab_ads WHERE id=?`).bind(adId)]);if(ad.storageKey&&env.MEDIA)await env.MEDIA.delete(ad.storageKey);return ok(req,env,{deleted:true},id)}
 async function legacyAdminShoplabAdAssignments(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const {results}=await env.DB.prepare(`SELECT id,ad_id adId,device,page_kind pageKind,position_key positionKey,category_slug categorySlug FROM shoplab_ad_assignments`).all();return ok(req,env,results||[],id)}
 async function legacySaveShoplabAdAssignments(req,env,id){if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);await ensureShoplabAdsSchema(env);const body=await readJson(req,120000),items=Array.isArray(body.items)?body.items.slice(0,200):[],devices=new Set(['desktop','mobile']),pages=new Set(['home','products','category','product']);await env.DB.prepare(`DELETE FROM shoplab_ad_assignments`).run();let saved=0;for(const item of items){if(!devices.has(item.device)||!pages.has(item.pageKind)||!item.adId||!item.positionKey)continue;const adId=String(item.adId);await env.DB.batch([env.DB.prepare(`INSERT INTO shoplab_ad_assignments(id,ad_id,device,page_kind,position_key,category_slug) VALUES(?,?,?,?,?,?)`).bind(crypto.randomUUID(),adId,item.device,item.pageKind,String(item.positionKey).slice(0,80),String(item.categorySlug||'').slice(0,100)),env.DB.prepare(`UPDATE shoplab_ads SET status='active',updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(adId)]);saved++}return ok(req,env,{saved},id)}
@@ -7618,6 +7703,7 @@ async function requireAdmin(req, env) {
 
 function adminPermissionForRequest(method, path) {
   if (path === "/api/v1/admin/team-chat" && method === "POST") return "team_chat.write";
+  if (path === "/api/v1/admin/activity") return null;
   if (path === "/api/v1/admin/team-chat" || path === "/api/v1/admin/team-chat/socket" || path === "/api/v1/admin/team-chat/lock" || (method === "DELETE" && path.startsWith("/api/v1/admin/team-chat/"))) return null;
   if (path.startsWith("/api/v1/admin/collaborators") || path.startsWith("/api/v1/admin/roles")) return "collaborators.manage";
   if (path.startsWith("/api/v1/admin/shared-files")) return "shared_files.manage";
