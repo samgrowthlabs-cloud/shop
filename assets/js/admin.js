@@ -100,7 +100,7 @@ async function dashboard(){
     ['Buscas',d.searches7d,`${d.searchesWithoutResults7d} sem resultado em 7 dias`],['Novos usuários',d.newUsers7d,'Cadastros nos últimos 7 dias'],
     ['Assinaturas pagas',d.paidSubscriptions,'SHOPLAB+ ativas'],['Plus presenteado',d.activePremiumPasses,'Acessos premiados ativos'],
     ['Presentes pendentes',d.pendingPremiumGrants,'Ainda não resgatados'],['Análises com IA',d.aiGenerationsMonth,'Geradas neste mês'],
-    ['Produtos publicados',d.published,`${d.products} produtos cadastrados`],['Ofertas ativas',d.activeOffers,`${d.offerClicks} cliques acumulados`],
+    ['Produtos cadastrados',d.products,`${d.published} publicados · ${d.drafts} rascunhos`],['Produtos publicados',d.published,'Visíveis no site'],['Ofertas ativas',d.activeOffers,`${d.offerClicks} cliques acumulados`],
     ['Listas ativas',d.cartsWithProducts,`${d.cartItems} produtos salvos`],['Avaliações novas',d.ratings7d,'Nos últimos 7 dias'],
   ];
   const maxActivity=Math.max(1,...d.activity14d.map(x=>Number(x.total||0)));

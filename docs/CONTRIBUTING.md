@@ -37,6 +37,10 @@
 - Preserve validação de MIME, tamanho e remoção de arquivo substituído.
 - Para fonte externa/comprada, confirme licença webfont antes de enviar.
 
+## Conta operacional da Cloudflare
+
+A conta usada para administrar e publicar os recursos deste projeto na Cloudflare é `bidjorysamuel@gmail.com`. Nunca registre senha, token, chave de API ou código de recuperação no repositório.
+
 ## Verificação mínima
 
 ```powershell

@@ -141,6 +141,7 @@ O login administrativo é separado: sessão opaca em D1, cookie seguro e permiss
 - Stripe: assinatura e passe SHOPLAB+, com webhook validado pelo Worker.
 - Mercado Pago: checkout/webhooks e integrações relacionadas.
 - Resend: envio de e-mails de recompensas/Premium quando configurado.
+- A integração com o Resend é administrada pela conta `bidjorysamuel@gmail.com`.
 - Mercado Livre: importação e atualização manual de informações/preços quando configurado.
 
 ## Bindings, variáveis e secrets do Worker

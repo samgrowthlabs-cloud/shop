@@ -699,6 +699,8 @@ async function route(request, env, ctx, requestId) {
     return deleteAdminTeamChatMessage(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && /^\/api\/v1\/admin\/shared-files\/[^/]+\/download$/.test(path))
     return downloadAdminSharedFile(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "GET" && /^\/api\/v1\/admin\/shared-files\/[^/]+\/preview$/.test(path))
+    return previewAdminSharedFile(request, env, path.split("/").at(-2), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/shared-files\/[^/]+$/.test(path))
     return deleteAdminSharedFile(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/media-scripts")
@@ -860,6 +862,8 @@ async function route(request, env, ctx, requestId) {
     return deleteHeaderSpotlight(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/shoplab-ads") return adminShoplabAds(request, env, requestId);
   if (request.method === 'GET' && path === '/api/v1/admin/shoplab-ads/analytics') return adminShoplabAdsAnalytics(request, env, requestId);
+  if (request.method === 'GET' && path === '/api/v1/admin/shoplab-ads/settings') return adminShoplabAdsSettings(request, env, requestId);
+  if (request.method === 'PUT' && path === '/api/v1/admin/shoplab-ads/settings') return updateAdminShoplabAdsSettings(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/shoplab-ads") return createShoplabAd(request, env, requestId);
   if (request.method === "PUT" && /^\/api\/v1\/admin\/shoplab-ads\/[^/]+$/.test(path)) return updateShoplabAd(request, env, path.split("/").pop(), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/shoplab-ads\/[^/]+$/.test(path)) return deleteShoplabAd(request, env, path.split("/").pop(), requestId);
@@ -958,7 +962,7 @@ async function publicHomeData(req, env, ctx, id) {
   };
 
   const configRequest = internalRequest("/api/v1/site-config");
-  const productsRequest = internalRequest("/api/v1/products?limit=50");
+  const productsRequest = internalRequest("/api/v1/products?limit=100");
   const trendingRequest = internalRequest("/api/v1/products/trending?limit=16");
   const promotionsRequest = internalRequest("/api/v1/promotions");
   const categoriesRequest = internalRequest("/api/v1/categories");
@@ -1252,7 +1256,7 @@ async function shareProductPage(req, env, slug) {
 }
 
 async function listProducts(req, env, url, id) {
-  const limit = clamp(url.searchParams.get("limit"), 1, 50, 24),
+  const limit = clamp(url.searchParams.get("limit"), 1, 100, 24),
     offset = clamp(url.searchParams.get("offset"), 0, 100000, 0),
     category = url.searchParams.get("category"),
     store = url.searchParams.get("store");
@@ -1274,7 +1278,7 @@ async function listProducts(req, env, url, id) {
 }
 
 async function listProductsV2(req, env, url, id) {
-  const limit = clamp(url.searchParams.get("limit"), 1, 50, 24),
+  const limit = clamp(url.searchParams.get("limit"), 1, 100, 24),
     offset = clamp(url.searchParams.get("offset"), 0, 100000, 0),
     category = url.searchParams.get("category");
   let where = `p.status='published'`;
@@ -6053,6 +6057,20 @@ async function downloadAdminSharedFile(req, env, fileId, id) {
   return cors(req,env,new Response(object.body,{headers}));
 }
 
+async function previewAdminSharedFile(req, env, fileId, id) {
+  if (!env.MEDIA) return fail(req,env,"R2_NOT_CONFIGURED","O armazenamento R2 não foi configurado",503,id);
+  await ensureAdminSharedFilesSchema(env);
+  const file=await env.DB.prepare(`SELECT id,original_name originalName,content_type contentType,storage_key storageKey,expires_at expiresAt FROM admin_shared_files WHERE id=?`).bind(String(fileId).slice(0,100)).first();
+  if (!file || new Date(file.expiresAt).getTime()<=Date.now()) {
+    await purgeExpiredSharedFiles(env);
+    return fail(req,env,"FILE_NOT_FOUND","Arquivo expirado ou não encontrado",404,id);
+  }
+  if (!String(file.contentType||"").startsWith("audio/")) return fail(req,env,"PREVIEW_NOT_AVAILABLE","A prévia está disponível apenas para arquivos de áudio",415,id);
+  const object=await env.MEDIA.get(file.storageKey);
+  if (!object?.body) return fail(req,env,"FILE_NOT_FOUND","Arquivo não encontrado no armazenamento",404,id);
+  const headers=new Headers({"content-type":file.contentType,"content-length":String(object.size),"content-disposition":`inline; filename="${safeDownloadName(file.originalName)}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,"cache-control":"private, no-store","x-content-type-options":"nosniff"});
+  return cors(req,env,new Response(object.body,{headers}));
+}
 async function deleteAdminSharedFile(req, env, fileId, id) {
   await ensureAdminSharedFilesSchema(env);
   const actor=await adminActor(req,env);
@@ -7428,7 +7446,8 @@ async function ensureShoplabAdsSchema(env){
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ad_events(id TEXT PRIMARY KEY,ad_id TEXT NOT NULL,event_type TEXT NOT NULL,device TEXT NOT NULL,page_kind TEXT NOT NULL,position_key TEXT NOT NULL,session_id TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_shoplab_ad_events_analytics ON shoplab_ad_events(created_at,event_type,ad_id)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ad_assignments(id TEXT PRIMARY KEY,ad_id TEXT NOT NULL,device TEXT NOT NULL,page_kind TEXT NOT NULL,position_key TEXT NOT NULL,category_slug TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(device,page_kind,position_key,category_slug))`),
-    env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ad_placement_members(id TEXT PRIMARY KEY,ad_id TEXT NOT NULL,device TEXT NOT NULL,page_kind TEXT NOT NULL,position_key TEXT NOT NULL,category_slug TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(ad_id,device,page_kind,position_key,category_slug))`)
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ad_placement_members(id TEXT PRIMARY KEY,ad_id TEXT NOT NULL,device TEXT NOT NULL,page_kind TEXT NOT NULL,position_key TEXT NOT NULL,category_slug TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(ad_id,device,page_kind,position_key,category_slug))`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS shoplab_ads_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
   ]);
   const columns=[['product_slug','TEXT'],['target_keywords',`TEXT NOT NULL DEFAULT ''`],['public_title','TEXT'],['ad_label',`TEXT NOT NULL DEFAULT 'PUBLICIDADE · SHOPLAB ADS'`],['show_header','INTEGER NOT NULL DEFAULT 1'],['dismissible','INTEGER NOT NULL DEFAULT 1'],['dismiss_minutes','INTEGER NOT NULL DEFAULT 30'],['cta_text',"TEXT NOT NULL DEFAULT 'Saiba mais'"],['cta_color',"TEXT NOT NULL DEFAULT '#075fce'"],['old_price_text',"TEXT NOT NULL DEFAULT ''"],['current_price_text',"TEXT NOT NULL DEFAULT ''"],['old_price_color',"TEXT NOT NULL DEFAULT '#71807c'"],['current_price_color',"TEXT NOT NULL DEFAULT '#087c70'"],['distribution_mode',"TEXT NOT NULL DEFAULT 'manual'"],['distribution_weight','INTEGER NOT NULL DEFAULT 25'],['featured','INTEGER NOT NULL DEFAULT 0'],['search_boost','INTEGER NOT NULL DEFAULT 3'],['max_per_page','INTEGER NOT NULL DEFAULT 1'],['target_pages',"TEXT NOT NULL DEFAULT 'home,products,category,product'"],['no_end_date','INTEGER NOT NULL DEFAULT 1'],['category_slugs',"TEXT NOT NULL DEFAULT ''"],['related_product_slugs',"TEXT NOT NULL DEFAULT ''"]];
   for(const [column,definition] of columns){try{await env.DB.prepare(`ALTER TABLE shoplab_ads ADD COLUMN ${column} ${definition}`).run()}catch(error){if(!new RegExp(`duplicate column name:.*${column}`,'i').test(String(error?.message||error)))throw error}}
@@ -7436,7 +7455,9 @@ async function ensureShoplabAdsSchema(env){
   const placementMemberCount=await env.DB.prepare(`SELECT COUNT(*) total FROM shoplab_ad_placement_members`).first();
   if(!Number(placementMemberCount?.total))await env.DB.prepare(`INSERT OR IGNORE INTO shoplab_ad_placement_members(id,ad_id,device,page_kind,position_key,category_slug) SELECT lower(hex(randomblob(16))),a.id,x.device,x.page_kind,x.position_key,x.category_slug FROM shoplab_ad_assignments x CROSS JOIN shoplab_ads a WHERE a.status='active'`).run();
 }
-function shoplabAdKeywords(form){return String(form.get('targetKeywords')||'').toLocaleLowerCase('pt-BR').split(/[,\n]/).map(normalizeSearch).filter(term=>term.length>=2).filter((term,index,items)=>items.indexOf(term)===index).slice(0,20).join(',')}
+async function shoplabAdsSettings(env){await ensureShoplabAdsSchema(env);const row=await env.DB.prepare(`SELECT value FROM shoplab_ads_settings WHERE key='global_limits'`).first();return {...{home:2,search:1,category:1,product:1,products:2,minimumOrganicDesktop:6,minimumOrganicMobile:8},...parse(row?.value||'{}',{})}}
+async function adminShoplabAdsSettings(req,env,id){return ok(req,env,await shoplabAdsSettings(env),id)}
+async function updateAdminShoplabAdsSettings(req,env,id){const b=await readJson(req,4000),v={home:clamp(b.home,0,10,2),search:clamp(b.search,0,10,1),category:clamp(b.category,0,10,1),product:clamp(b.product,0,10,1),products:clamp(b.products,0,10,2),minimumOrganicDesktop:clamp(b.minimumOrganicDesktop,2,20,6),minimumOrganicMobile:clamp(b.minimumOrganicMobile,2,24,8)};await ensureShoplabAdsSchema(env);await env.DB.prepare(`INSERT INTO shoplab_ads_settings(key,value,updated_at) VALUES('global_limits',?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP`).bind(JSON.stringify(v)).run();return ok(req,env,v,id)}function shoplabAdKeywords(form){return String(form.get('targetKeywords')||'').toLocaleLowerCase('pt-BR').split(/[,\n]/).map(normalizeSearch).filter(term=>term.length>=2).filter((term,index,items)=>items.indexOf(term)===index).slice(0,20).join(',')}
 function shoplabAdPresentation(form,name){ return{publicTitle:String(form.get('publicTitle')||name).trim().slice(0,140),adLabel:String(form.get('adLabel')||'PUBLICIDADE · SHOPLAB ADS').trim().slice(0,80),showHeader:form.get('showHeader')==='0'?0:1,dismissible:form.get('dismissible')==='0'?0:1,dismissMinutes:clamp(form.get('dismissMinutes'),1,10080,30),ctaText:String(form.get('ctaText')||'Saiba mais').trim().slice(0,40),ctaColor:/^#[0-9a-f]{6}$/i.test(String(form.get('ctaColor')||''))?String(form.get('ctaColor')):'#075fce',oldPriceText:String(form.get('oldPriceText')||'').trim().slice(0,32),currentPriceText:String(form.get('currentPriceText')||'').trim().slice(0,32),oldPriceColor:/^#[0-9a-f]{6}$/i.test(String(form.get('oldPriceColor')||''))?String(form.get('oldPriceColor')):'#71807c',currentPriceColor:/^#[0-9a-f]{6}$/i.test(String(form.get('currentPriceColor')||''))?String(form.get('currentPriceColor')):'#087c70'}}
 async function adminShoplabAds(req,env,id){
   if(!(await requireAdmin(req,env)))return fail(req,env,'UNAUTHORIZED','Não autorizado',401,id);
@@ -7516,8 +7537,9 @@ async function saveShoplabAdAssignments(req,env,id){
   const slots={desktop:{home:['home_categories','home_sections','footer'],products:['top','grid_sidebar','footer'],category:['top','grid_sidebar','footer'],product:['top','product_top','product_middle','footer']},mobile:{home:['products','sections','footer'],products:['menu','products','footer'],category:['menu','products','footer'],product:['menu','product_top','product_middle','product_footer']}}[device][pageKind].filter(position=>!usedPositions.has(position));
   const automatic=(automaticResult.results||[]).map(row=>({...row,_matches:matchesFor(row),_remaining:Math.ceil(Number(row.distributionWeight||25)/25)}));
   for(const positionKey of slots){const eligible=automatic.filter(row=>row._remaining>0);if(!eligible.length)break;const winner=eligible.map(row=>({row,score:-Math.log(Math.max(Number.EPSILON,Math.random()))/(Math.max(1,Number(row.distributionWeight))*(1+row._matches*2))})).sort((a,b)=>a.score-b.score)[0].row;winner._remaining--;winners.push({...winner,positionKey})}
+  const settings=await shoplabAdsSettings(env),limit=Number(settings[pageKind==='products'?'search':pageKind])||0,minimumOrganicItems=device==='mobile'?settings.minimumOrganicMobile:settings.minimumOrganicDesktop;winners.splice(limit);
   const adPrice=value=>value==null?'':'R$ '+(Number(value)/100).toFixed(2).replace('.',',');
-  return ok(req,env,winners.map(({targetKeywords,priority,distributionMode,distributionWeight,_matches,_random,_remaining,...row})=>({...row,linkUrl:row.linkedProductSlug?'produto.html?slug='+encodeURIComponent(row.linkedProductSlug):row.linkUrl,oldPriceText:row.linkedProductSlug&&row.linkedOldPrice?adPrice(row.linkedOldPrice):row.oldPriceText,currentPriceText:row.linkedProductSlug&&row.linkedCurrentPrice?adPrice(row.linkedCurrentPrice):row.currentPriceText,personalized:Boolean(_matches),mediaUrl:row.storageKey?`${origin}/media/${encodeURIComponent(row.storageKey)}`:null,storageKey:undefined})),id)
+  return ok(req,env,winners.map(({targetKeywords,priority,distributionMode,distributionWeight,_matches,_random,_remaining,...row})=>({...row,minimumOrganicItems,linkUrl:row.linkedProductSlug?'produto.html?slug='+encodeURIComponent(row.linkedProductSlug):row.linkUrl,oldPriceText:row.linkedProductSlug&&row.linkedOldPrice?adPrice(row.linkedOldPrice):row.oldPriceText,currentPriceText:row.linkedProductSlug&&row.linkedCurrentPrice?adPrice(row.linkedCurrentPrice):row.currentPriceText,personalized:Boolean(_matches),mediaUrl:row.storageKey?`${origin}/media/${encodeURIComponent(row.storageKey)}`:null,storageKey:undefined})),id)
 }async function adminHeaderAds(req, env, id) {
   if (!(await requireAdmin(req, env))) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
