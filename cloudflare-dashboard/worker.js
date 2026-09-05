@@ -1,3 +1,124 @@
+const TEAM_CALL_MAX_PARTICIPANTS = 4;
+const MAX_SIGNAL_BYTES = 64 * 1024;
+
+export class TeamCallRoom {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
+  state(socket) {
+    try { return socket.deserializeAttachment() || null; } catch { return null; }
+  }
+
+  participants() {
+    return this.ctx.getWebSockets().map((socket) => this.state(socket)).filter((state) => state?.ready).map(({ participantId, actorId, name, muted, sharing }) => ({
+      participantId, actorId, name, muted: Boolean(muted), sharing: Boolean(sharing),
+    }));
+  }
+
+  send(socket, value) {
+    try { socket.send(JSON.stringify(value)); return true; } catch { return false; }
+  }
+
+  broadcast(value, except = null) {
+    for (const socket of this.ctx.getWebSockets()) if (socket !== except) this.send(socket, value);
+  }
+
+  socketFor(participantId) {
+    return this.ctx.getWebSockets().find((socket) => this.state(socket)?.participantId === participantId);
+  }
+
+  async fetch(request) {
+    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("WebSocket esperado", { status: 426 });
+    const actorId = String(request.headers.get("x-shoplab-call-actor-id") || "").slice(0, 100);
+    const name = String(request.headers.get("x-shoplab-call-actor-name") || "").trim().slice(0, 100);
+    if (!actorId || !name) return new Response("Não autorizado", { status: 401 });
+    const otherSockets = this.ctx.getWebSockets().filter((socket) => {
+      const state = this.state(socket);
+      return state?.ready && state.actorId !== actorId;
+    });
+    for (const socket of this.ctx.getWebSockets()) {
+      const previous = this.state(socket);
+      if (previous?.actorId !== actorId) continue;
+      previous.replaced = true;
+      socket.serializeAttachment(previous);
+      try { socket.close(4001, "Nova conexão aberta"); } catch {}
+    }
+    if (otherSockets.length >= TEAM_CALL_MAX_PARTICIPANTS) return new Response("Sala cheia", { status: 409 });
+
+    const pair = new WebSocketPair(), client = pair[0], server = pair[1];
+    const participant = { participantId: actorId, actorId, name, muted: false, sharing: false, ready: false, joinedAt: Date.now(), windowStartedAt: Date.now(), messagesInWindow: 0 };
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment(participant);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(socket, raw) {
+    if (typeof raw !== "string" || raw.length > MAX_SIGNAL_BYTES) return socket.close(1009, "Mensagem inválida");
+    const state = this.state(socket);
+    if (!state) return socket.close(1008, "Sessão inválida");
+    const now = Date.now();
+    if (now - state.windowStartedAt > 10000) { state.windowStartedAt = now; state.messagesInWindow = 0; }
+    state.messagesInWindow += 1;
+    if (state.messagesInWindow > 160) return socket.close(1008, "Limite de mensagens excedido");
+    socket.serializeAttachment(state);
+    let message;
+    try { message = JSON.parse(raw); } catch { return; }
+    const type = String(message?.type || "");
+
+    if (type === "ready" && !state.ready) {
+      const existingParticipants = this.participants();
+      state.ready = true;
+      socket.serializeAttachment(state);
+      this.send(socket, { type: "welcome", selfId: state.participantId, participants: existingParticipants, maxParticipants: TEAM_CALL_MAX_PARTICIPANTS });
+      this.broadcast({ type: "participant-joined", participant: { participantId: state.participantId, actorId: state.actorId, name: state.name, muted: state.muted, sharing: state.sharing } }, socket);
+      console.log(JSON.stringify({ event: "team_call_join", participantId: state.participantId, actorId: state.actorId, participants: existingParticipants.length + 1 }));
+      return;
+    }
+    if (!state.ready) return;
+
+    if (["offer", "answer", "ice"].includes(type)) {
+      const target = String(message.target || "").slice(0, 100), destination = this.socketFor(target);
+      if (!destination || target === state.participantId) return;
+      const payload = type === "ice" ? message.candidate : message.description;
+      if (!payload || typeof payload !== "object") return;
+      this.send(destination, { type, from: state.participantId, [type === "ice" ? "candidate" : "description"]: payload });
+      return;
+    }
+    if (type === "mute") {
+      state.muted = Boolean(message.muted);
+      socket.serializeAttachment(state);
+      this.broadcast({ type: "participant-updated", participantId: state.participantId, muted: state.muted });
+      return;
+    }
+    if (type === "share-claim") {
+      const current = this.participants().find((item) => item.sharing && item.participantId !== state.participantId);
+      if (current) return void this.send(socket, { type: "share-denied", participantId: current.participantId, name: current.name });
+      state.sharing = true;
+      socket.serializeAttachment(state);
+      this.send(socket, { type: "share-granted" });
+      this.broadcast({ type: "participant-updated", participantId: state.participantId, sharing: true });
+      return;
+    }
+    if (type === "share-stop" && state.sharing) {
+      state.sharing = false;
+      socket.serializeAttachment(state);
+      this.broadcast({ type: "participant-updated", participantId: state.participantId, sharing: false });
+    }
+  }
+
+  disconnected(socket, code = 1006) {
+    const state = this.state(socket);
+    if (!state || state.replaced) return;
+    this.broadcast({ type: "participant-left", participantId: state.participantId }, socket);
+    console.log(JSON.stringify({ event: "team_call_leave", participantId: state.participantId, actorId: state.actorId, code }));
+  }
+
+  async webSocketClose(socket, code) { this.disconnected(socket, code); }
+  async webSocketError(socket) { this.disconnected(socket); try { socket.close(1011, "Falha de conexão"); } catch {} }
+}
+
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "x-content-type-options": "nosniff",
@@ -10,7 +131,7 @@ const BUILT_IN_ORIGINS = [
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-08-30-team-chat-realtime-v1";
+const WORKER_BUILD = "2026-09-05-team-call-v4";
 const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
 const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
@@ -51,14 +172,16 @@ const ADMIN_PERMISSION_DEFINITIONS = [
   ["users.access", "Usuários", "Bloquear ou liberar acesso de usuários", true],
   ["users.premium", "Usuários", "Conceder ou retirar prêmios SHOPLAB+", true],
   ["users.rewards", "Usuários", "Gerenciar recompensas e indicações", true],
+  ["collaborators.create", "Equipe e segurança", "Administrar colaboradores como RH", false],
   ["collaborators.manage", "Equipe e segurança", "Criar cargos e administrar colaboradores", false],
   ["shared_files.manage", "Equipe e segurança", "Enviar e baixar arquivos compartilhados", true],
-  ["team_chat.write", "Equipe e segurança", "Escrever no chat da equipe", "Enviar mensagens e mencionar colaboradores no chat compartilhado", true],
+  ["team_call.use", "Equipe e segurança", "Participar da Call da equipe", "Entrar na sala privada de áudio e compartilhar a tela", true],
 ];
 const ADMIN_PERMISSIONS = Object.fromEntries(ADMIN_PERMISSION_DEFINITIONS.map(([value, , label]) => [value, label]));
 const ADMIN_ASSIGNABLE_PERMISSIONS = new Set(ADMIN_PERMISSION_DEFINITIONS.filter(([, , , descriptionOrAssignable, optionalAssignable]) => typeof optionalAssignable === "boolean" ? optionalAssignable : descriptionOrAssignable).map(([value]) => value));
 const ADMIN_ROLE_PERMISSIONS = {
   vice_admin: [...ADMIN_ASSIGNABLE_PERMISSIONS].filter((permission) => !permission.startsWith("users.")),
+  hr: ["collaborators.create"],
   catalog_editor: ["dashboard.view", "products.view", "products.create", "products.edit", "products.media", "products.import", "products.ai", "categories.manage", "brands.manage", "partners.manage"],
   pricer: ["products.view", "prices.edit"],
   marketing: ["dashboard.view", "products.view", "promotions.manage", "banners.manage", "header_spotlights.manage", "header_ads.manage", "shoplab_ads.view", "shoplab_ads.manage", "shoplab_ads.placements", "shoplab_ads.analytics", "themes.manage"],
@@ -66,6 +189,7 @@ const ADMIN_ROLE_PERMISSIONS = {
 };
 const ADMIN_ROLE_LABELS = {
   owner: "Proprietário",
+  hr: "Recursos Humanos",
   vice_admin: "Vice-admin",
   catalog_editor: "Editor de catálogo",
   pricer: "Precificador",
@@ -207,7 +331,11 @@ export default {
     env = { ...env, DB: databaseFor(env) };
     try {
       const url = new URL(request.url);
-      const shouldAudit = url.pathname.startsWith("/api/v1/admin/");
+      // A 101 WebSocket response owns a live socket and cannot be cloned.
+      // Keep HTTP admin requests in the audit trail, but let WebSocket
+      // endpoints perform their own authentication and connection logging.
+      const isWebSocketUpgrade = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+      const shouldAudit = url.pathname.startsWith("/api/v1/admin/") && !isWebSocketUpgrade;
       const auditRequest = shouldAudit ? request.clone() : null;
       const auditActor = shouldAudit && !url.pathname.endsWith("/auth/login") ? await adminActor(request, env).catch(() => null) : null;
       const response = await route(request, env, ctx, requestId);
@@ -689,6 +817,10 @@ async function route(request, env, ctx, requestId) {
     if (chatActor === null) return fail(request, env, "UNAUTHORIZED", "Sessao administrativa invalida", 401, requestId);
     return env.TEAM_CHAT.getByName("team").fetch(request);
   }
+  if (request.method === "GET" && path === "/api/v1/admin/team-call/config")
+    return adminTeamCallConfig(request, env, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/team-call/socket")
+    return adminTeamCallSocket(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/team-chat")
     return adminTeamChat(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/team-chat")
@@ -6289,7 +6421,7 @@ async function adminCollaborators(req, env, id) {
     roles: [...Object.entries(ADMIN_ROLE_LABELS).filter(([key]) => !["owner", "custom"].includes(key)).map(([value, label]) => ({ value, label, permissions: ADMIN_ROLE_PERMISSIONS[value], builtIn: true })), ...customRoles.map((role) => ({ value: `role:${role.id}`, roleId: role.id, label: role.name, permissions: role.permissions, color: role.color }))],
     customRoles,
     permissions: ADMIN_PERMISSION_DEFINITIONS.map(([value, group, label, descriptionOrAssignable, optionalAssignable]) => { const assignable = typeof optionalAssignable === "boolean" ? optionalAssignable : descriptionOrAssignable; const description = typeof optionalAssignable === "boolean" ? descriptionOrAssignable : label; return { value, group, label, description, assignable, lockedReason: assignable ? null : "Somente o proprietário" }; }),
-    items: (results || []).map((row) => ({ ...row, permissions: collaboratorPermissions(row), roleLabel: row.customRoleName || ADMIN_ROLE_LABELS[row.role] || row.role, isActive: Boolean(row.isActive) })),
+    items: (results || []).map((row) => { const permissions=collaboratorPermissions(row),isHr=row.role==="custom"&&!row.roleId&&permissions.includes("collaborators.create"); return { ...row, role:isHr?"hr":row.role, permissions, roleLabel:isHr?ADMIN_ROLE_LABELS.hr:(row.customRoleName || ADMIN_ROLE_LABELS[row.role] || row.role), isActive:Boolean(row.isActive) }; }),
   }, id);
 }
 
@@ -6308,6 +6440,7 @@ async function createAdminCollaborator(req, env, id) {
   const role = roleId ? "custom" : String(body.role || "");
   const selectedRole = roleId ? await env.DB.prepare(`SELECT permissions_json permissionsJson FROM admin_roles WHERE id=? AND is_active=1`).bind(roleId).first() : null;
   const permissions = roleId ? (selectedRole ? normalizedRolePermissions(safeJson(selectedRole.permissionsJson, [])) : null) : normalizedCollaboratorPermissions(role, body.permissions);
+  const storedRole = role === "hr" ? "custom" : role;
   if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 10 || !permissions)
     return fail(req, env, "VALIDATION_ERROR", "Informe nome, e-mail válido, cargo e uma senha com pelo menos 10 caracteres", 422, id);
   const credentials = await hashAdminPassword(password);
@@ -6316,7 +6449,7 @@ async function createAdminCollaborator(req, env, id) {
     await env.DB.prepare(
       `INSERT INTO admin_collaborators(id,name,email,role,role_id,permissions_json,password_salt,password_hash,is_active)
        VALUES(?,?,?,?,?,?,?,?,?)`,
-    ).bind(collaboratorId, name, email, role, roleId, JSON.stringify(permissions), credentials.passwordSalt, credentials.passwordHash, body.isActive === false ? 0 : 1).run();
+    ).bind(collaboratorId, name, email, storedRole, roleId, JSON.stringify(permissions), credentials.passwordSalt, credentials.passwordHash, body.isActive === false ? 0 : 1).run();
     return ok(req, env, { id: collaboratorId, created: true }, id);
   } catch (error) {
     if (/unique constraint failed:.*admin_collaborators.email/i.test(String(error?.message || error)))
@@ -6327,7 +6460,11 @@ async function createAdminCollaborator(req, env, id) {
 
 async function updateAdminCollaborator(req, env, collaboratorId, id) {
   await ensureAdminCollaboratorSchema(env);
-  const current = await env.DB.prepare(`SELECT id FROM admin_collaborators WHERE id=?`).bind(String(collaboratorId).slice(0, 100)).first();
+  const actor = await adminActor(req, env);
+  const targetId = String(collaboratorId).slice(0, 100);
+  if (actor?.role !== "owner" && actor?.id === targetId)
+    return fail(req, env, "SELF_MODIFICATION_FORBIDDEN", "Você não pode alterar seu próprio acesso", 403, id);
+  const current = await env.DB.prepare(`SELECT id FROM admin_collaborators WHERE id=?`).bind(targetId).first();
   if (!current) return fail(req, env, "COLLABORATOR_NOT_FOUND", "Colaborador não encontrado", 404, id);
   const body = await readJson(req, 12000);
   const name = String(body.name || "").trim().slice(0, 100);
@@ -6337,6 +6474,7 @@ async function updateAdminCollaborator(req, env, collaboratorId, id) {
   const password = String(body.password || "");
   const selectedRole = roleId ? await env.DB.prepare(`SELECT permissions_json permissionsJson FROM admin_roles WHERE id=? AND is_active=1`).bind(roleId).first() : null;
   const permissions = roleId ? (selectedRole ? normalizedRolePermissions(safeJson(selectedRole.permissionsJson, [])) : null) : normalizedCollaboratorPermissions(role, body.permissions);
+  const storedRole = role === "hr" ? "custom" : role;
   if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || (password && password.length < 10) || !permissions)
     return fail(req, env, "VALIDATION_ERROR", "Revise nome, e-mail, cargo e senha", 422, id);
   const statements = [];
@@ -6344,11 +6482,11 @@ async function updateAdminCollaborator(req, env, collaboratorId, id) {
     const credentials = await hashAdminPassword(password);
     statements.push(env.DB.prepare(
       `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,password_salt=?,password_hash=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-    ).bind(name, email, role, roleId, JSON.stringify(permissions), credentials.passwordSalt, credentials.passwordHash, body.isActive === false ? 0 : 1, collaboratorId));
+    ).bind(name, email, storedRole, roleId, JSON.stringify(permissions), credentials.passwordSalt, credentials.passwordHash, body.isActive === false ? 0 : 1, collaboratorId));
   } else {
     statements.push(env.DB.prepare(
       `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-    ).bind(name, email, role, roleId, JSON.stringify(permissions), body.isActive === false ? 0 : 1, collaboratorId));
+    ).bind(name, email, storedRole, roleId, JSON.stringify(permissions), body.isActive === false ? 0 : 1, collaboratorId));
   }
   statements.push(env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id=?`).bind(collaboratorId));
   try {
@@ -6363,9 +6501,13 @@ async function updateAdminCollaborator(req, env, collaboratorId, id) {
 
 async function deleteAdminCollaborator(req, env, collaboratorId, id) {
   await ensureAdminCollaboratorSchema(env);
+  const actor = await adminActor(req, env);
+  const targetId = String(collaboratorId).slice(0, 100);
+  if (actor?.role !== "owner" && actor?.id === targetId)
+    return fail(req, env, "SELF_MODIFICATION_FORBIDDEN", "Você não pode desativar seu próprio acesso", 403, id);
   const result = await env.DB.batch([
-    env.DB.prepare(`UPDATE admin_collaborators SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(String(collaboratorId).slice(0, 100)),
-    env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id=?`).bind(String(collaboratorId).slice(0, 100)),
+    env.DB.prepare(`UPDATE admin_collaborators SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(targetId),
+    env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id=?`).bind(targetId),
   ]);
   if (!result[0].meta.changes) return fail(req, env, "COLLABORATOR_NOT_FOUND", "Colaborador não encontrado", 404, id);
   return ok(req, env, { id: collaboratorId, deactivated: true }, id);
@@ -6386,6 +6528,38 @@ async function updateAdminProductPrice(req, env, productId, id) {
   return ok(req, env, { id: productId, currentPriceCents, previousPriceCents, updated: true }, id);
 }
 
+async function adminTeamCallConfig(req, env, id) {
+  const actor = await adminActor(req, env);
+  if (!actor) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
+  if (!actor.permissions.includes("*") && !actor.permissions.includes("team_call.use")) return fail(req, env, "FORBIDDEN", "Seu cargo não permite entrar na Call da equipe", 403, id);
+  if (!env.TEAM_CALL) return fail(req, env, "TEAM_CALL_NOT_CONFIGURED", "A Call da equipe ainda não foi publicada com o binding TEAM_CALL", 503, id);
+
+  let iceServers = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] }], turnEnabled = false;
+  const turnKeyId = String(env.TURN_KEY_ID || ""), turnToken = String(env.TURN_KEY_API_TOKEN || "");
+  if (turnKeyId && turnToken) {
+    try {
+      const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(turnKeyId)}/credentials/generate-ice-servers`, { method: "POST", headers: { authorization: `Bearer ${turnToken}`, "content-type": "application/json" }, body: JSON.stringify({ ttl: 86400 }) });
+      const payload = await response.json();
+      if (!response.ok || !Array.isArray(payload?.iceServers)) throw new Error(`TURN_CREDENTIALS_FAILED:${response.status}`);
+      iceServers = payload.iceServers;
+      turnEnabled = true;
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "team_call_turn_fallback", error: String(error?.message || error) }));
+    }
+  }
+  return ok(req, env, { iceServers, turnEnabled, maxParticipants: TEAM_CALL_MAX_PARTICIPANTS, actor: { id: actor.id, name: actor.name } }, id);
+}
+
+async function adminTeamCallSocket(req, env, id) {
+  const actor = await adminActor(req, env);
+  if (!actor) return fail(req, env, "UNAUTHORIZED", "Sessão administrativa inválida", 401, id);
+  if (!actor.permissions.includes("*") && !actor.permissions.includes("team_call.use")) return fail(req, env, "FORBIDDEN", "Seu cargo não permite entrar na Call da equipe", 403, id);
+  if (!env.TEAM_CALL) return fail(req, env, "TEAM_CALL_NOT_CONFIGURED", "O Durable Object da Call não foi configurado", 503, id);
+  const headers = new Headers(req.headers);
+  headers.set("x-shoplab-call-actor-id", actor.id);
+  headers.set("x-shoplab-call-actor-name", actor.name);
+  return env.TEAM_CALL.getByName("team").fetch(new Request(req, { headers }));
+}
 async function ensureTeamChatSchema(env){await env.DB.batch([env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_team_chat_messages(id TEXT PRIMARY KEY,author_id TEXT NOT NULL,author_name TEXT NOT NULL,message_text TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_team_chat_created ON admin_team_chat_messages(created_at DESC)`),env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_team_chat_settings(id TEXT PRIMARY KEY CHECK(id='team'),locked_until TEXT,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`),env.DB.prepare(`INSERT OR IGNORE INTO admin_team_chat_settings(id) VALUES('team')`)])}
 const teamChatCanWrite=actor=>Boolean(actor&&(actor.role==='owner'||actor.permissions?.includes('*')||actor.permissions?.includes('team_chat.write')));
 const teamChatCanDeleteAny=actor=>Boolean(actor&&(actor.role==='owner'||actor.permissions?.includes('*')));
@@ -7675,11 +7849,17 @@ function collaboratorPermissions(row) {
   if (row.role !== "custom") return [...base];
   try {
     const selected = JSON.parse(row.permissionsJson || "[]");
-    return [...new Set((Array.isArray(selected) ? selected : []).filter((permission) => ADMIN_PERMISSIONS[permission] && permission !== "collaborators.manage"))];
+    const permissions = [...new Set((Array.isArray(selected) ? selected : []).filter((permission) => ADMIN_PERMISSIONS[permission] && permission !== "collaborators.manage"))];
+    // RH is a fixed, intentionally narrow role. Normalize older RH records too,
+    // which may still contain dashboard.view from an earlier implementation.
+    if (!row.roleId && permissions.includes("collaborators.create")) return [...ADMIN_ROLE_PERMISSIONS.hr];
+    return permissions;
   } catch { return []; }
 }
 
 function collaboratorAdminActor(row) {
+  const permissions = collaboratorPermissions(row);
+  const isHr = row.role === "custom" && !row.roleId && permissions.includes("collaborators.create");
   return {
     // Queries made from an admin session also contain the session id. Always
     // expose the collaborator id as the actor id so account operations target
@@ -7687,14 +7867,13 @@ function collaboratorAdminActor(row) {
     id: row.collaboratorActorId || row.id,
     name: row.name,
     email: row.email,
-    role: row.role,
+    role: isHr ? "hr" : row.role,
     roleId: row.roleId || null,
-    roleLabel: row.customRoleName || ADMIN_ROLE_LABELS[row.role] || row.role,
+    roleLabel: isHr ? ADMIN_ROLE_LABELS.hr : (row.customRoleName || ADMIN_ROLE_LABELS[row.role] || row.role),
     roleColor: /^#[0-9a-f]{6}$/i.test(String(row.roleColor || "")) ? row.roleColor : null,
-    permissions: collaboratorPermissions(row),
+    permissions,
   };
 }
-
 async function adminActor(req, env) {
   const token = cookie(req, "shoplab_session");
   if (!token) return null;
@@ -7724,10 +7903,12 @@ async function requireAdmin(req, env) {
 }
 
 function adminPermissionForRequest(method, path) {
+  if (path.startsWith("/api/v1/admin/team-call")) return "team_call.use";
   if (path === "/api/v1/admin/team-chat" && method === "POST") return "team_chat.write";
   if (path === "/api/v1/admin/activity") return null;
   if (path === "/api/v1/admin/team-chat" || path === "/api/v1/admin/team-chat/socket" || path === "/api/v1/admin/team-chat/lock" || (method === "DELETE" && path.startsWith("/api/v1/admin/team-chat/"))) return null;
-  if (path.startsWith("/api/v1/admin/collaborators") || path.startsWith("/api/v1/admin/roles")) return "collaborators.manage";
+  if (path.startsWith("/api/v1/admin/roles")) return "collaborators.manage";
+  if (path.startsWith("/api/v1/admin/collaborators")) return "collaborators.create";
   if (path.startsWith("/api/v1/admin/shared-files")) return "shared_files.manage";
   if (path.startsWith("/api/v1/admin/media-scripts")) return "media_scripts.view";
   if (path.includes("referral-rewards") || path.includes("gift-card-types") || path.includes("/rewards")) return "users.rewards";

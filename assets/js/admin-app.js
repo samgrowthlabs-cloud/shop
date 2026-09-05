@@ -15,8 +15,9 @@ const routes={
   'shoplab-ads':{label:'SHOPLAB Ads',group:'marketing',module:'ads',target:'shoplab-ads',permission:'shoplab_ads.view'},
   premium:{label:'SHOPLAB+',group:'growth',module:'main',target:'premium',permission:'premium.manage'},
   ia:{label:'Inteligência artificial',group:'growth',module:'v2',target:'ai-settings',permission:'ai.manage'},
-  equipe:{label:'Pessoas e cargos',group:'team',module:'v2',target:'collaborators',permission:'collaborators.manage'},
+  equipe:{label:'Pessoas e cargos',group:'team',module:'v2',target:'collaborators',permission:'collaborators.create'},
   arquivos:{label:'Arquivos compartilhados',group:'team',module:'v2',target:'shared-files',permission:'shared_files.manage'},
+  call:{label:'Call da equipe',group:'team',module:'call',target:'team-call',permission:'team_call.use'},
   midia:{label:'Roteiros',group:'team',module:'v2',target:'media-scripts',permission:'media_scripts.view'},
   conversor:{label:'Conversão',group:'team',module:'converter',target:'media-converter',permission:'media_conversion.use'},
   gravador:{label:'Gravador',group:'team',module:'recorder',target:'audio-recorder',permission:'media_recording.use'},
@@ -41,9 +42,9 @@ const groups=[
   {id:'team',label:'Equipe e acessos',icon:icons.team},
   {id:'appearance',label:'Aparência',icon:icons.appearance}
 ];
-const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','temas.html':'aparencia'};
+const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','call.html':'call','temas.html':'aparencia'};
 let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
-const moduleImports={main:()=>import('./admin.js?v=20260903-product-count-1'),v2:()=>import('./admin-v2.js?v=20260905-shared-audio-preview-1'),ads:()=>import('./shoplab-ads.js?v=20260831-ads-native-frequency-15'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21')};
+const moduleImports={main:()=>import('./admin.js?v=20260903-product-count-1'),v2:()=>import('./admin-v2.js?v=20260905-team-call-access-1'),ads:()=>import('./shoplab-ads.js?v=20260831-ads-native-frequency-15'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
 const loadedModules=new Map();
 const ensureModule=name=>{if(!loadedModules.has(name))loadedModules.set(name,moduleImports[name]().catch(error=>{loadedModules.delete(name);throw error}));return loadedModules.get(name)};
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();
@@ -52,7 +53,7 @@ window.setTimeout=(callback,delay,...args)=>{const id=nativeSetTimeout((...value
 window.setInterval=(callback,delay,...args)=>{const id=nativeSetInterval(callback,delay,...args);routeTimers.add(id);return id};
 window.clearTimeout=id=>{routeTimers.delete(id);nativeClearTimeout(id)};
 window.clearInterval=id=>{routeTimers.delete(id);nativeClearInterval(id)};
-function cancelPreviousRoute(){routeRequests.abort();routeRequests=new AbortController();for(const id of routeTimers){nativeClearTimeout(id);nativeClearInterval(id)}routeTimers.clear()}
+function cancelPreviousRoute(){window.dispatchEvent(new CustomEvent('shoplab:admin-route-leave',{detail:{route:currentRoute}}));routeRequests.abort();routeRequests=new AbortController();for(const id of routeTimers){nativeClearTimeout(id);nativeClearInterval(id)}routeTimers.clear()}
 const can=permission=>permission==='authenticated'&&Boolean(session?.actor)||session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission)||(permission==='media_scripts.view'&&['media_scripts.manage','media_scripts.edit','media_scripts.comment'].some(item=>session?.actor?.permissions?.includes(item)));
 const allowed=key=>routes[key]&&!deniedRoutes.has(key)&&can(routes[key].permission);
 const routeFromUrl=()=>new URL(location.href).searchParams.get('tab')||'painel';
@@ -124,7 +125,7 @@ async function navigate(requested,{push=true,source}={}){
   try{
     document.querySelector('.admin-main')?.classList.remove('ads-editor');document.querySelector('.ads-view-tabs')?.remove();
     await ensureModule(routes[route].module);
-    const controller=routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:window.ShoplabAdminV2;
+    const controller=routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:routes[route].module==='call'?window.ShoplabTeamCall:window.ShoplabAdminV2;
     await controller.run(routes[route].target,session);
     await api('/api/v1/admin/auth/session?section='+encodeURIComponent(routes[route].label)).catch(error=>console.warn('Falha ao registrar atividade administrativa',error));
     renderNavigation(route);

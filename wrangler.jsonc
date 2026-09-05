@@ -32,5 +32,15 @@
   },
   "images": {
     "binding": "IMAGES"
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "TEAM_CHAT", "class_name": "TeamChatRoom" },
+      { "name": "TEAM_CALL", "class_name": "TeamCallRoom" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1-team-realtime", "new_sqlite_classes": ["TeamChatRoom"] },
+    { "tag": "v2-team-call", "new_sqlite_classes": ["TeamCallRoom"] }
+  ]
 }
