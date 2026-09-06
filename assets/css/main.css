@@ -8993,3 +8993,202 @@ html body[data-page="home"] .product-rail .product-card .price > .old{
 #confirm-delete-account:hover:not(:disabled){background:#a91f1f!important;border-color:#a91f1f!important}
 #confirm-delete-account:disabled{opacity:.65;cursor:wait}
 @media(max-width:540px){.shoplab-confirm-dialog{width:min(420px,calc(100% - 28px))}.shoplab-confirm-dialog-card{padding:24px 20px!important}.shoplab-confirm-dialog-actions{display:flex!important;flex-direction:column!important;gap:12px!important}.shoplab-confirm-dialog-actions .btn{min-height:48px!important}.account-danger-zone>button.btn.danger{margin-top:10px!important}}
+/* Vídeo em destaque do produto: capa preservada, preview curto no card e player na página. */
+.product-card.has-video-preview .product-media .product-video-preview,
+.home-price-drop-card.has-video-preview .home-product-thumb .product-video-preview{object-fit:cover!important;background:#071b18}
+@media(max-width:760px){html body:not([data-admin-page]) .product-card.has-video-preview.show-alternate-image .product-media .product-video-preview{transform:none!important}}
+.detail-media.has-featured-video{display:grid;gap:10px;align-content:start}
+.detail-featured-video{width:100%;overflow:hidden;border-radius:16px;background:#071b18;aspect-ratio:1/1;box-shadow:var(--shadow)}
+.detail-featured-video video{display:block;width:100%;height:100%;object-fit:contain;background:#071b18}
+.detail-video-note{margin:0;color:var(--muted);font-size:12px;text-align:center}.detail-featured-stage{width:100%;min-width:0}.detail-featured-image{display:grid;place-items:center;width:100%;height:470px;padding:18px;border:0;border-radius:16px;background:#f8faf9;cursor:zoom-in}.detail-featured-image img{display:block;width:100%;height:100%;object-fit:contain}.detail-featured-thumbs{display:flex;gap:9px;max-width:100%;overflow-x:auto;padding:2px 1px 5px}.detail-featured-thumbs button{position:relative;width:72px;height:72px;flex:0 0 72px;overflow:hidden;padding:4px;border:2px solid var(--border);border-radius:8px;background:#f8faf9;cursor:pointer}.detail-featured-thumbs button.active{border-color:var(--accent)}.detail-featured-thumbs img{display:block;width:100%;height:100%;object-fit:contain}.video-thumb-play{position:absolute;inset:0;display:grid;place-items:center;background:rgba(4,25,22,.34);color:#fff;font-size:25px;text-shadow:0 2px 8px #000}
+@media(max-width:760px){.detail-featured-video{border-radius:12px;aspect-ratio:4/5}.detail-featured-image{height:min(82vw,440px);padding:10px;border-radius:12px}.detail-featured-thumbs button{width:64px;height:64px;flex-basis:64px}}
+
+}
+
+/* A galeria com video conserva a mesma estrutura visual da galeria de imagens. */
+@media(min-width:761px){
+  body[data-page="product"] .detail-media.has-featured-video{
+    display:grid;
+    grid-template-columns:76px minmax(0,1fr);
+    grid-template-rows:auto auto;
+    column-gap:12px;
+    row-gap:10px;
+    align-content:start;
+    min-width:0;
+  }
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-stage{grid-column:2;grid-row:1;min-width:0}
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-video,
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image{
+    box-sizing:border-box;width:100%;height:auto;min-height:0;aspect-ratio:1 / 1;padding:0;overflow:hidden;border:0;border-radius:0;box-shadow:none
+  }
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image img,
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-video video{
+    display:block;width:100%;height:100%;object-fit:contain;object-position:center
+  }
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-thumbs{
+    grid-column:1;grid-row:1;display:grid;grid-template-columns:1fr;align-content:start;gap:9px;margin:0;padding:0;overflow:visible
+  }
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-thumbs button{width:72px;height:72px;flex:none}
+  body[data-page="product"] .detail-media.has-featured-video .detail-video-note{grid-column:2;grid-row:2}
+}
+@media(max-width:760px){
+  body[data-page="product"] .detail-media.has-featured-video{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-video,
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image{width:100%;height:auto;aspect-ratio:1 / 1}
+}
+/* Miniatura de video claramente identificada na galeria do produto. */
+body[data-page="product"] .detail-featured-thumbs button:has(.video-thumb-play){background:#071b18!important}
+body[data-page="product"] .detail-featured-thumbs button:has(.video-thumb-play)>img{opacity:.78}
+body[data-page="product"] .detail-featured-thumbs .video-thumb-play{
+  position:absolute!important;
+  inset:0!important;
+  z-index:2!important;
+  display:grid!important;
+  place-items:center!important;
+  background:rgba(4,25,22,.28)!important;
+  color:transparent!important;
+  font-size:0!important;
+}
+body[data-page="product"] .detail-featured-thumbs .video-thumb-play::before{
+  content:"";
+  box-sizing:border-box;
+  width:34px;
+  height:34px;
+  border:2px solid #fff;
+  border-radius:50%;
+  background:rgba(5,55,48,.86);
+  box-shadow:0 3px 10px rgba(0,0,0,.38);
+}
+body[data-page="product"] .detail-featured-thumbs .video-thumb-play::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:0;
+  height:0;
+  margin-left:2px;
+  transform:translate(-50%,-50%);
+  border-top:7px solid transparent;
+  border-bottom:7px solid transparent;
+  border-left:11px solid #fff;
+}
+/* Miniatura dedicada de video: play e rotulo, sem reutilizar a capa do produto. */
+body[data-page="product"] .detail-featured-thumbs button.video-thumb{display:grid!important;grid-template-rows:1fr auto!important;place-items:center!important;gap:2px!important;padding:5px 4px 4px!important;background:#fff!important;color:#17201e!important}
+body[data-page="product"] .detail-featured-thumbs button.video-thumb .video-thumb-play{position:relative!important;inset:auto!important;z-index:auto!important;display:block!important;width:34px!important;height:34px!important;border:2px solid #28312f!important;border-radius:50%!important;background:#fff!important;color:transparent!important;box-shadow:none!important}
+body[data-page="product"] .detail-featured-thumbs button.video-thumb .video-thumb-play::before{display:none!important}
+body[data-page="product"] .detail-featured-thumbs button.video-thumb .video-thumb-play::after{content:""!important;position:absolute!important;left:50%!important;top:50%!important;width:0!important;height:0!important;margin-left:2px!important;transform:translate(-50%,-50%)!important;border-top:7px solid transparent!important;border-bottom:7px solid transparent!important;border-left:11px solid #28312f!important}
+body[data-page="product"] .detail-featured-thumbs button.video-thumb .video-thumb-label{display:block!important;font-size:11px!important;font-weight:800!important;line-height:1!important;text-decoration:underline!important}
+/* Imagens da galeria com melhor aproveitamento no celular. */
+@media(max-width:760px){
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-stage,
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image{
+    width:100%!important;
+    max-width:none!important;
+  }
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image{
+    height:100%!important;
+    min-height:100%!important;
+    padding:0!important;
+    overflow:hidden!important;
+  }
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image>img{
+    width:100%!important;
+    height:100%!important;
+    max-width:none!important;
+    max-height:none!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    transform:none!important;
+    transform-origin:center!important;
+  }
+}
+/* Galeria movel limpa: sem moldura ao redor das imagens. */
+@media(max-width:760px){
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-stage,
+  body[data-page="product"] .detail-media.has-featured-video .detail-main-image,
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image,
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image>img{
+    border:0!important;
+    outline:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  body[data-page="product"] .detail-media.has-featured-video .detail-featured-image>img{
+    width:92%!important;
+    height:92%!important;
+    max-width:92%!important;
+    max-height:92%!important;
+    transform:none!important;
+  }
+}
+/* Remove definitivamente qualquer moldura da midia principal no celular. */
+@media(max-width:760px){
+  html body[data-page="product"] .detail-media.has-featured-video,
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-stage,
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-stage.detail-main-image,
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-image,
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-image>img{
+    border-width:0!important;
+    border-style:none!important;
+    border-color:transparent!important;
+    outline:0!important;
+    box-shadow:none!important;
+    appearance:none!important;
+    -webkit-appearance:none!important;
+  }
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-stage::before,
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-stage::after,
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-image::before,
+  html body[data-page="product"] .detail-media.has-featured-video .detail-featured-image::after{
+    content:none!important;
+    display:none!important;
+    border:0!important;
+    box-shadow:none!important;
+  }
+}
+/* Corrige o espaco vazio do cabecalho compacto durante o scroll mobile. */
+@media(max-width:760px){
+  html body:not([data-admin-page]) .header.is-app-compact .header-ad-strip,
+  html body:not([data-admin-page]) .header.is-app-compact .subnav{
+    display:none!important;
+    width:0!important;
+    height:0!important;
+    min-height:0!important;
+    max-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+    border:0!important;
+  }
+  html body:not([data-admin-page]) .header.is-app-compact .mobile-home-header{
+    height:66px!important;
+    min-height:66px!important;
+    max-height:66px!important;
+    margin:0!important;
+    overflow:hidden!important;
+  }
+}
+/* Historico de busca em uma linha com reticencias. */
+.search-panel .recent-search-list{display:grid!important;min-width:0!important}
+.search-panel .recent-search-item{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  align-items:center!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+}
+.search-panel .recent-search-item>.history-icon{display:none!important}
+.search-panel .recent-search-item>span:last-child{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+}

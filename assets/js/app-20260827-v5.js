@@ -1,6 +1,6 @@
 import'./favicon.js?v=20260820-ads-render-no-title-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260903-catalog-100-1';
-import'./search-ui.js?v=20260803-media-domain-38';
-import'./public-media-20260827-v5.js';
+import'./search-ui.js?v=20260906-search-history-1';
+import'./public-media-20260827-v5.js?v=20260906-video-gallery-12';
 import{bindComparisonUI,comparisonPage,initializeComparisonPage}from'./compare-20260827-v5.js';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth-20260827-v5.js';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library-20260827-v5.js';

@@ -131,7 +131,7 @@ const BUILT_IN_ORIGINS = [
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-09-05-team-call-v4";
+const WORKER_BUILD = "2026-09-06-featured-video-v8";
 const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
 const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
@@ -3087,7 +3087,7 @@ async function getProductV2(req, env, slug, id) {
         `SELECT o.id,o.current_price_cents price,o.previous_price_cents oldPrice,o.currency,o.coupon_code coupon,o.installment_text installments,o.shipping_text shipping,o.availability,o.button_text buttonText,o.last_checked_at lastCheckedAt,pa.name store,pa.logo_url storeLogoUrl FROM offers o JOIN partners pa ON pa.id=o.partner_id WHERE o.product_id=? AND o.availability='available' AND (o.starts_at IS NULL OR datetime(o.starts_at)<=CURRENT_TIMESTAMP) AND (o.ends_at IS NULL OR datetime(o.ends_at)>=CURRENT_TIMESTAMP) ORDER BY o.is_primary DESC,o.priority DESC,o.current_price_cents`,
       ).bind(row.id),
       env.DB.prepare(
-        `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary,is_hover isHover FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
+        `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary,is_hover isHover,preview_start_seconds previewStartSeconds FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
       ).bind(row.id),
       env.DB.prepare(
         `SELECT a.id,a.name,a.slug,pa.role FROM product_authors pa JOIN authors a ON a.id=pa.author_id WHERE pa.product_id=?`,
@@ -3173,7 +3173,7 @@ async function getProduct(req, env, slug, id) {
       .bind(row.id)
       .all(),
     env.DB.prepare(
-      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary,is_hover isHover FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
+      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,credits,sort_order sortOrder,is_primary isPrimary,is_hover isHover,preview_start_seconds previewStartSeconds FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
     )
       .bind(row.id)
       .all(),
@@ -5044,7 +5044,7 @@ async function adminProductDetail(req, env, productId, id) {
       `SELECT id,partner_id partnerId,affiliate_url affiliateUrl,current_price_cents currentPriceCents,previous_price_cents previousPriceCents,coupon_code couponCode,availability,button_text buttonText,is_primary isPrimary FROM offers WHERE product_id=? ORDER BY is_primary DESC,priority DESC`,
     ).bind(productId),
     env.DB.prepare(
-      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,is_primary isPrimary,is_hover isHover,sort_order sortOrder FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
+      `SELECT id,type,storage_key storageKey,external_url externalUrl,alt_text altText,caption,is_primary isPrimary,is_hover isHover,preview_start_seconds previewStartSeconds,sort_order sortOrder FROM product_media WHERE product_id=? ORDER BY is_primary DESC,sort_order`,
     ).bind(productId),
     env.DB.prepare(
       `SELECT id,name,logo_url logoUrl FROM partners WHERE is_active=1 ORDER BY name`,
@@ -5083,27 +5083,26 @@ async function uploadProductMedia(req, env, productId, id) {
       id,
     );
   const contentLength = Number(req.headers.get("content-length") || 0);
-  if (contentLength > 8 * 1024 * 1024)
+  if (contentLength > 55 * 1024 * 1024)
     return fail(
       req,
       env,
       "FILE_TOO_LARGE",
-      "A imagem deve ter no máximo 8 MB",
+      "A mídia enviada deve ter no máximo 50 MB",
       413,
       id,
     );
   const form = await req.formData();
   const file = form.get("file");
-  if (
-    !(file instanceof File) ||
-    !file.type.startsWith("image/") ||
-    file.size > 8 * 1024 * 1024
-  )
+  const isImage = file instanceof File && file.type.startsWith("image/");
+  const isVideo = file instanceof File && ["video/mp4", "video/webm"].includes(file.type);
+  const maxSize = isVideo ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
+  if (!(file instanceof File) || (!isImage && !isVideo) || file.size > maxSize)
     return fail(
       req,
       env,
       "INVALID_FILE",
-      "Envie uma imagem válida de até 8 MB",
+      "Envie uma imagem de até 8 MB ou um vídeo MP4/WebM de até 50 MB",
       422,
       id,
     );
@@ -5132,25 +5131,33 @@ async function uploadProductMedia(req, env, productId, id) {
     },
     customMetadata: { productId, originalName: file.name.slice(0, 120) },
   });
-  const isPrimary = String(form.get("isPrimary")) === "true";
+  const isPrimary = isImage && String(form.get("isPrimary")) === "true";
+  const isHover = isVideo && String(form.get("isHover")) === "true";
+  const previewStartSeconds = isVideo ? Math.min(86400, Math.max(0, Number(form.get("previewStartSeconds")) || 0)) : 0;
   if (isPrimary)
     await env.DB.prepare(
       "UPDATE product_media SET is_primary=0 WHERE product_id=?",
     )
       .bind(productId)
       .run();
+  if (isHover)
+    await env.DB.prepare("UPDATE product_media SET is_hover=0 WHERE product_id=?")
+      .bind(productId)
+      .run();
   await env.DB.prepare(
-    `INSERT INTO product_media(id,product_id,type,storage_key,alt_text,caption,mime_type,is_primary,sort_order) VALUES(?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO product_media(id,product_id,type,storage_key,alt_text,caption,mime_type,is_primary,is_hover,preview_start_seconds,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       mediaId,
       productId,
-      "image",
+      isVideo ? "video" : "image",
       key,
       String(form.get("altText") || "").slice(0, 250),
       String(form.get("caption") || "").slice(0, 500),
       file.type,
       isPrimary ? 1 : 0,
+      isHover ? 1 : 0,
+      previewStartSeconds,
       Number(form.get("sortOrder")) || 0,
     )
     .run();
@@ -5159,7 +5166,7 @@ async function uploadProductMedia(req, env, productId, id) {
     env,
     {
       success: true,
-      data: { id: mediaId, url: `/media/${encodeURIComponent(key)}` },
+      data: { id: mediaId, type: isVideo ? "video" : "image", isHover, url: `/media/${encodeURIComponent(key)}` },
       meta: { requestId: id },
       error: null,
     },
@@ -5183,7 +5190,7 @@ async function deleteProductMedia(req, env, mediaId, id) {
     .run();
   if (media.isPrimary)
     await env.DB.prepare(
-      "UPDATE product_media SET is_primary=1 WHERE id=(SELECT id FROM product_media WHERE product_id=? ORDER BY sort_order,created_at LIMIT 1)",
+      "UPDATE product_media SET is_primary=1 WHERE id=(SELECT id FROM product_media WHERE product_id=? AND type='image' ORDER BY sort_order,created_at LIMIT 1)",
     )
       .bind(media.productId)
       .run();
@@ -5194,7 +5201,7 @@ async function updateProductMedia(req, env, mediaId, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const media = await env.DB.prepare(
-    "SELECT id,product_id productId,is_primary isPrimary,is_hover isHover FROM product_media WHERE id=?",
+    "SELECT id,product_id productId,is_primary isPrimary,is_hover isHover,preview_start_seconds previewStartSeconds FROM product_media WHERE id=?",
   )
     .bind(mediaId)
     .first();
@@ -5207,6 +5214,9 @@ async function updateProductMedia(req, env, mediaId, id) {
   const isHover = Object.prototype.hasOwnProperty.call(body, "isHover")
     ? Boolean(body.isHover)
     : Boolean(media.isHover);
+  const previewStartSeconds = Object.prototype.hasOwnProperty.call(body, "previewStartSeconds")
+    ? Math.min(86400, Math.max(0, Number(body.previewStartSeconds) || 0))
+    : Number(media.previewStartSeconds || 0);
   const statements = [];
   if (isPrimary)
     statements.push(
@@ -5222,18 +5232,19 @@ async function updateProductMedia(req, env, mediaId, id) {
     );
   statements.push(
     env.DB.prepare(
-      "UPDATE product_media SET alt_text=?,caption=?,is_primary=?,is_hover=?,sort_order=? WHERE id=?",
+      "UPDATE product_media SET alt_text=?,caption=?,is_primary=?,is_hover=?,preview_start_seconds=?,sort_order=? WHERE id=?",
     ).bind(
       String(body.altText || "").slice(0, 250),
       String(body.caption || "").slice(0, 500),
       isPrimary ? 1 : 0,
       isHover ? 1 : 0,
+      previewStartSeconds,
       Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,
       mediaId,
     ),
   );
   await env.DB.batch(statements);
-  return ok(req, env, { id: mediaId, isPrimary, isHover }, id);
+  return ok(req, env, { id: mediaId, isPrimary, isHover, previewStartSeconds }, id);
 }
 
 async function serveMedia(req, env, key, ctx) {
