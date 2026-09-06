@@ -37,6 +37,9 @@
 - Preserve validação de MIME, tamanho e remoção de arquivo substituído.
 - Para fonte externa/comprada, confirme licença webfont antes de enviar.
 
+## Conta operacional do Supabase
+
+A conta usada para administrar o projeto Supabase e o Supabase Auth (Authentication) é `zinsam2026@gmail.com`. Nunca registre senha, secret key, service role key, token ou código de recuperação no repositório.
 ## Conta operacional da Cloudflare
 
 A conta usada para administrar e publicar os recursos deste projeto na Cloudflare é `bidjorysamuel@gmail.com`. Nunca registre senha, token, chave de API ou código de recuperação no repositório.

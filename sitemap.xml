@@ -6,10 +6,10 @@
   <url><loc>https://shoplab.com.br/novidades</loc><lastmod>2026-07-27</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>https://shoplab.com.br/sobre</loc><lastmod>2026-07-27</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://shoplab.com.br/contato</loc><lastmod>2026-07-27</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>
-  <url><loc>https://shoplab.com.br/politica-de-afiliados</loc><lastmod>2026-07-27</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
-  <url><loc>https://shoplab.com.br/politica-de-privacidade</loc><lastmod>2026-07-27</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
-  <url><loc>https://shoplab.com.br/termos-de-uso</loc><lastmod>2026-07-27</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
-  <url><loc>https://shoplab.com.br/politica-de-publicidade</loc><lastmod>2026-08-16</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/politica-de-afiliados</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/politica-de-privacidade</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/termos-de-uso</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/politica-de-publicidade</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://shoplab.com.br/categoria?slug=livros</loc><lastmod>2026-07-27</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://shoplab.com.br/categoria?slug=tecnologia</loc><lastmod>2026-07-27</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://shoplab.com.br/categoria?slug=celular</loc><lastmod>2026-07-27</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
@@ -17,4 +17,11 @@
   <url><loc>https://shoplab.com.br/categoria?slug=games</loc><lastmod>2026-07-27</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://shoplab.com.br/categoria?slug=audio</loc><lastmod>2026-07-27</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://shoplab.com.br/categoria?slug=casa-inteligente</loc><lastmod>2026-07-27</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
-</urlset>
+  <url><loc>https://shoplab.com.br/politica-de-cookies</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/termos-shoplab-plus</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/regulamento-de-indicacoes</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/diretrizes-editoriais</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/politica-de-inteligencia-artificial</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/diretrizes-de-avaliacoes</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/acessibilidade</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://shoplab.com.br/seguranca</loc><lastmod>2026-09-06</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url></urlset>

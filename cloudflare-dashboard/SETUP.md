@@ -36,6 +36,7 @@ Este guia configura o ambiente de produção usando o Cloudflare Dashboard. O ma
 | `ALLOWED_ORIGINS` | Variável: uma ou mais origens do frontend, separadas por vírgula |
 | `ADMIN_PASSWORD` | Secret |
 | `TURNSTILE_SECRET_KEY` | Secret, se login administrativo usar Turnstile |
+| `SUPABASE_SECRET_KEY` | Secret do Supabase usado somente pelo Worker para excluir usuários do Auth |
 | `PUBLIC_SITE_URL` | Variável, se pagamentos estiverem ativos |
 
 Os secrets opcionais são documentados na tabela do README: Stripe, Mercado Pago, Mercado Livre, Resend, vales-presente e indicações.

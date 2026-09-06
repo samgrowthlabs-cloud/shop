@@ -740,6 +740,8 @@ async function route(request, env, ctx, requestId) {
     return userProfile(request, env, requestId);
   if (path === "/api/v1/user/profile" && request.method === "PUT")
     return updateUserProfile(request, env, requestId);
+  if (path === "/api/v1/user/account" && request.method === "DELETE")
+    return deleteOwnAccount(request, env, requestId);
   if (path === "/api/v1/user/subscription" && request.method === "GET")
     return userPremiumSubscription(request, env, requestId);
   if (path === "/api/v1/user/subscription/checkout" && request.method === "POST")
@@ -5524,13 +5526,8 @@ async function adminUsers(req,env,url,id){
   return ok(req,env,{items:rows.slice(0,limit),hasMore,nextOffset:offset+limit,total,loaded:Math.min(total,offset+limit)},id);
 }
 
-async function deleteAdminUser(req,env,userId,id){
-  const actor=await adminActor(req,env);
-  if(!actor)return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
-  if(actor.role!=="owner")return fail(req,env,"FORBIDDEN","Somente o proprietário pode excluir usuários definitivamente",403,id);
-  const profile=await env.DB.prepare("SELECT display_name displayName,email FROM user_profiles WHERE user_id=?").bind(userId).first();
-  if(!profile)return fail(req,env,"USER_NOT_FOUND","Usuário não encontrado",404,id);
-  await env.DB.batch([
+function deleteUserData(env,userId){
+  return env.DB.batch([
     env.DB.prepare("DELETE FROM reward_gift_cards WHERE reward_id IN (SELECT id FROM referral_rewards WHERE user_id=?)").bind(userId),
     env.DB.prepare("DELETE FROM share_visits WHERE share_link_id IN (SELECT id FROM share_links WHERE user_id=?) OR converted_user_id=?").bind(userId,userId),
     env.DB.prepare("DELETE FROM referrals WHERE referrer_user_id=? OR referred_user_id=?").bind(userId,userId),
@@ -5544,6 +5541,14 @@ async function deleteAdminUser(req,env,userId,id){
     env.DB.prepare("DELETE FROM premium_notification_log WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_access_grants WHERE user_id=?").bind(userId),
     env.DB.prepare("DELETE FROM user_profiles WHERE user_id=?").bind(userId)
   ]);
+}
+async function deleteAdminUser(req,env,userId,id){
+  const actor=await adminActor(req,env);
+  if(!actor)return fail(req,env,"UNAUTHORIZED","Não autorizado",401,id);
+  if(actor.role!=="owner")return fail(req,env,"FORBIDDEN","Somente o proprietário pode excluir usuários definitivamente",403,id);
+  const profile=await env.DB.prepare("SELECT display_name displayName,email FROM user_profiles WHERE user_id=?").bind(userId).first();
+  if(!profile)return fail(req,env,"USER_NOT_FOUND","Usuário não encontrado",404,id);
+  await deleteUserData(env,userId);
   return ok(req,env,{userId,displayName:profile.displayName||"",email:profile.email||""},id);
 }
 async function adminUserDetail(req,env,userId,id){
@@ -8106,6 +8111,32 @@ async function updateUserProfile(req, env, id) {
   await env.DB.prepare(`INSERT INTO user_profiles(user_id,email,display_name,last_seen_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,display_name=excluded.display_name,updated_at=CURRENT_TIMESTAMP`)
     .bind(user.id, user.email, displayName).run();
   return ok(req, env, { userId: user.id, email: user.email, displayName }, id);
+}
+async function deleteOwnAccount(req, env, id) {
+  const user = await authenticatedUser(req);
+  if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
+  const body = await readJson(req, 2048);
+  if (String(body.confirmation || "").trim().toUpperCase() !== "EXCLUIR")
+    return fail(req, env, "CONFIRMATION_REQUIRED", "Digite EXCLUIR para confirmar", 422, id);
+  const subscription = await env.DB.prepare("SELECT status FROM premium_subscriptions WHERE user_id=?").bind(user.id).first();
+  if (subscription?.status === "authorized")
+    return fail(req, env, "ACTIVE_SUBSCRIPTION", "Cancele sua assinatura SHOPLAB+ antes de excluir a conta", 409, id);
+  const secretKey = String(env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!secretKey)
+    return fail(req, env, "ACCOUNT_DELETION_NOT_CONFIGURED", "A exclusão de conta ainda não foi configurada", 503, id);
+  const authResponse = await fetch(SUPABASE_URL + "/auth/v1/admin/users/" + encodeURIComponent(user.id), {
+    method: "DELETE",
+    headers: { apikey: secretKey, authorization: "Bearer " + secretKey },
+  });
+  if (!authResponse.ok) {
+    const detail = await authResponse.text().catch(() => "");
+    console.error(JSON.stringify({ event: "supabase_user_delete_failed", userId: user.id, status: authResponse.status, detail: detail.slice(0, 500) }));
+    return fail(req, env, "ACCOUNT_DELETION_FAILED", "Não foi possível excluir a conta agora", 502, id);
+  }
+  await deleteUserData(env, user.id);
+  const response = ok(req, env, { deleted: true }, id);
+  response.headers.set("cache-control", "private, no-store, max-age=0");
+  return response;
 }
 async function activeUser(req, env) {
   const user = await authenticatedUser(req);

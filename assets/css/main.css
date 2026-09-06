@@ -8971,3 +8971,25 @@ html body[data-page="home"] .product-rail .product-card .price > .old{
 /* Ads em trilhos horizontais: ocupa aproximadamente três cards, sem ser comprimido. */
 .product-carousel-track>.shoplab-sponsored-card,.home-product-rail>.shoplab-sponsored-card,body[data-page="home"] .product-rail>.products>.shoplab-sponsored-card{flex:0 0 min(680px,calc(100vw - 64px))!important;width:min(680px,calc(100vw - 64px))!important;min-width:min(680px,calc(100vw - 64px))!important;max-width:min(680px,calc(100vw - 64px))!important;scroll-snap-align:start}
 @media(max-width:760px){.product-carousel-track>.shoplab-sponsored-card,.home-product-rail>.shoplab-sponsored-card,body[data-page="home"] .product-rail>.products>.shoplab-sponsored-card{flex-basis:calc(100vw - 44px)!important;width:calc(100vw - 44px)!important;min-width:calc(100vw - 44px)!important;max-width:calc(100vw - 44px)!important}}
+
+.account-danger-zone{grid-column:1/-1;border-color:color-mix(in srgb,var(--danger) 42%,var(--border));background:color-mix(in srgb,var(--danger) 4%,#fff)}.account-danger-zone .eyebrow,.account-danger-zone h3{color:var(--danger)}.account-danger-zone .btn:disabled{cursor:not-allowed;opacity:.5}@media(max-width:700px){.account-danger-zone{grid-column:auto}}
+
+.shoplab-confirm-dialog{width:min(480px,calc(100% - 32px));max-width:none;padding:0;border:0;border-radius:20px;background:transparent;color:var(--text);box-shadow:0 26px 80px rgba(10,35,30,.28)}.shoplab-confirm-dialog::backdrop{background:rgba(8,25,21,.68);backdrop-filter:blur(5px)}.shoplab-confirm-dialog-card{display:flex;flex-direction:column;align-items:center;padding:30px;text-align:center;border:1px solid color-mix(in srgb,var(--danger) 30%,var(--border));border-radius:20px;background:var(--surface)}.shoplab-confirm-dialog-icon{display:grid;place-items:center;width:52px;height:52px;margin-bottom:16px;border-radius:50%;background:color-mix(in srgb,var(--danger) 13%,var(--surface));color:var(--danger);font-size:26px;font-weight:900}.shoplab-confirm-dialog h2{margin:8px 0 10px;font-size:26px}.shoplab-confirm-dialog p{margin:0;color:var(--muted);line-height:1.65}.shoplab-confirm-dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:24px}.shoplab-confirm-dialog-actions .btn{justify-content:center;min-height:46px}.shoplab-confirm-dialog button:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:3px}@media(max-width:540px){.shoplab-confirm-dialog-card{padding:24px 18px}.shoplab-confirm-dialog-actions{grid-template-columns:1fr}.shoplab-confirm-dialog h2{font-size:23px}}
+/* Exclusão de conta: zona de perigo e confirmação visual SHOPLAB. */
+.account-danger-zone{gap:14px!important;padding-top:22px!important;padding-bottom:22px!important}
+.account-danger-zone label{margin-top:4px}
+.account-danger-zone>button.btn.danger{margin-top:8px!important;background:#c62828!important;border-color:#c62828!important;color:#fff!important;box-shadow:0 6px 16px rgba(198,40,40,.2);transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease}
+.account-danger-zone>button.btn.danger:not(:disabled):hover{background:#a91f1f!important;border-color:#a91f1f!important;box-shadow:0 8px 20px rgba(169,31,31,.28);transform:translateY(-1px)}
+.account-danger-zone>button.btn.danger:disabled{background:#f4dede!important;border-color:#e7bcbc!important;color:#985e5e!important;box-shadow:none;opacity:1!important}
+.shoplab-confirm-dialog-card{align-items:stretch!important;padding:30px!important;text-align:left!important;border:1px solid #e5c4c4!important;box-shadow:0 24px 70px rgba(18,35,31,.24)}
+.shoplab-confirm-dialog-icon{align-self:flex-start;margin-bottom:14px!important;background:#fde8e8!important;color:#b42323!important}
+.shoplab-confirm-dialog .eyebrow{color:#a82323!important}
+.shoplab-confirm-dialog h2{color:#241b1b;font-weight:850}
+.shoplab-confirm-dialog-actions{gap:14px!important;margin-top:26px!important}
+.shoplab-confirm-dialog-actions .btn{width:100%;margin:0!important;border-radius:11px!important}
+#cancel-delete-account{background:#fff!important;border-color:#b8c9c5!important;color:#173a33!important}
+#cancel-delete-account:hover{border-color:var(--accent)!important;background:#f3faf8!important}
+#confirm-delete-account{background:#c62828!important;border-color:#c62828!important;color:#fff!important;box-shadow:0 6px 16px rgba(198,40,40,.2)}
+#confirm-delete-account:hover:not(:disabled){background:#a91f1f!important;border-color:#a91f1f!important}
+#confirm-delete-account:disabled{opacity:.65;cursor:wait}
+@media(max-width:540px){.shoplab-confirm-dialog{width:min(420px,calc(100% - 28px))}.shoplab-confirm-dialog-card{padding:24px 20px!important}.shoplab-confirm-dialog-actions{display:flex!important;flex-direction:column!important;gap:12px!important}.shoplab-confirm-dialog-actions .btn{min-height:48px!important}.account-danger-zone>button.btn.danger{margin-top:10px!important}}
