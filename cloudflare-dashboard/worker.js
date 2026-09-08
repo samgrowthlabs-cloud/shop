@@ -1534,7 +1534,7 @@ function applyPromotionDiscount(product, rules) {
 }
 
 const PRODUCT_CARD_SELECT = `SELECT p.id,p.name,p.slug,p.product_type productType,
-  p.short_description shortDescription,p.editorial_score editorialScore,
+  p.short_description shortDescription,p.tags_json tagsJson,p.editorial_score editorialScore,
   p.is_featured isFeatured,p.view_count viewCount,p.updated_at updatedAt,
   c.name category,b.name brand,COALESCE(o.current_price_cents,p.base_price_cents) price,
   COALESCE(o.previous_price_cents,p.compare_at_price_cents) oldPrice,pa.name store,o.id offerId,
@@ -3611,7 +3611,7 @@ async function createProductV2(req, env, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO products(id,name,slug,cta_code,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,price_source,price_source_item_id,price_source_offer_id,price_source_url,price_sync_enabled,price_synced_at,price_sync_status,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ?=1 THEN 'ok' ELSE NULL END,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
+      `INSERT INTO products(id,name,slug,cta_code,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,tags_json,price_source,price_source_item_id,price_source_offer_id,price_source_url,price_sync_enabled,price_synced_at,price_sync_status,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ?=1 THEN 'ok' ELSE NULL END,CASE WHEN ?='published' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
     ).bind(
       productId,
       String(body.name).trim(),
@@ -3630,6 +3630,7 @@ async function createProductV2(req, env, id) {
       comparePrice,
       body.isFeatured ? 1 : 0,
       JSON.stringify(Array.isArray(body.specificationGroups) ? body.specificationGroups : []),
+      JSON.stringify(normalizeProductTags(body.tags)),
       priceSync.source,
       priceSync.itemId,
       priceSync.offerId,
@@ -3706,7 +3707,7 @@ async function updateProductV2(req, env, productId, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   const statements = [
     env.DB.prepare(
-      `UPDATE products SET name=?,slug=?,cta_code=?,product_type=?,status=CASE WHEN ?=1 THEN ? ELSE status END,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?=1 AND ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE products SET name=?,slug=?,cta_code=?,product_type=?,status=CASE WHEN ?=1 THEN ? ELSE status END,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,tags_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?=1 AND ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     ).bind(
       String(body.name).trim(),
       body.slug,
@@ -3725,6 +3726,7 @@ async function updateProductV2(req, env, productId, id) {
       comparePrice,
       body.isFeatured ? 1 : 0,
       JSON.stringify(Array.isArray(body.specificationGroups) ? body.specificationGroups : []),
+      JSON.stringify(normalizeProductTags(body.tags)),
       priceSync.supplied ? 1 : 0,priceSync.source,
       priceSync.supplied ? 1 : 0,priceSync.itemId,
       priceSync.supplied ? 1 : 0,priceSync.offerId,
@@ -4152,7 +4154,7 @@ async function searchV2(req, env, url, ctx, id) {
   }
   let { results } = await env.DB.prepare(
     `
-    SELECT p.id,p.name,p.slug,p.short_description shortDescription,p.specifications_json specificationsJson,p.updated_at updatedAt,
+    SELECT p.id,p.name,p.slug,p.short_description shortDescription,p.tags_json tagsJson,p.specifications_json specificationsJson,p.updated_at updatedAt,
       p.editorial_score editorialScore,p.is_featured isFeatured,p.view_count viewCount,
       (SELECT ROUND(AVG(ur.rating),1) FROM user_ratings ur WHERE ur.product_slug=p.slug) ratingAverage,
       (SELECT COUNT(*) FROM user_ratings ur WHERE ur.product_slug=p.slug) ratingTotal,
@@ -4191,7 +4193,7 @@ async function searchV2(req, env, url, ctx, id) {
       .filter((product) => maxPriceCents == null || Number(product.price || 0) <= maxPriceCents)
       .map((product) => {
         const words = normalizeSearch(
-          [product.name, product.brand, product.category, product.shortDescription, product.specificationsJson]
+          [product.name, product.brand, product.category, product.shortDescription, product.tagsJson, product.specificationsJson]
             .filter(Boolean)
             .join(" "),
         ).split(" ");
@@ -4282,15 +4284,18 @@ const SEARCH_INTENT_SCHEMA = {
 };
 
 const ADMIN_AI_SPECIFICATION_TEMPLATES = {
-  phone: ["Tela", "Tamanho da tela", "Resolu??o", "Taxa de atualiza??o", "Processador", "Mem?ria RAM", "Armazenamento", "C?mera principal", "C?mera frontal", "Bateria", "Carregamento", "5G", "Sistema operacional", "Peso", "Resist?ncia ? ?gua"],
-  laptop: ["Marca", "Linha", "Modelo", "Processador", "N?cleos e threads", "Mem?ria RAM", "Tipo de mem?ria", "Armazenamento", "Placa de v?deo", "Tamanho da tela", "Resolu??o", "Sistema operacional", "Conectividade", "Portas", "Bateria", "Peso", "Garantia"],
-  tablet: ["Marca", "Modelo", "Tamanho da tela", "Resolu??o", "Processador", "Mem?ria RAM", "Armazenamento", "C?meras", "Bateria", "Caneta compat?vel", "Conectividade", "Sistema operacional", "Peso"],
-  smartwatch: ["Marca", "Modelo", "Tamanho da caixa", "Tela", "Sensores", "GPS", "Resist?ncia ? ?gua", "Bateria", "Conectividade", "Compatibilidade", "Peso"],
-  television: ["Marca", "Modelo", "Tamanho da tela", "Resolu??o", "Tipo de painel", "Taxa de atualiza??o", "HDR", "Sistema operacional", "Conex?es", "Som", "Padr?o VESA"],
-  camera: ["Marca", "Modelo", "Tipo", "Resolu??o", "Sensor", "Lente", "Zoom", "V?deo", "Estabiliza??o", "Conectividade", "Peso"],
-  console: ["Marca", "Modelo", "Armazenamento", "Resolu??o", "Taxa de atualiza??o", "M?dia", "Conectividade", "Portas", "Controle incluso", "Dimens?es", "Peso"],
-  audio: ["Marca", "Modelo", "Tipo", "Conex?o", "Bluetooth", "Cancelamento de ru?do", "Bateria", "Microfone", "Compatibilidade", "Peso"],
-  technology: ["Marca", "Modelo", "Dimens?es", "Peso", "Conectividade", "Alimenta??o", "Compatibilidade", "Garantia"],
+  phone: ["Tela", "Tamanho da tela", "Resolução", "Taxa de atualização", "Processador", "Memória RAM", "Armazenamento", "Câmera principal", "Câmera frontal", "Bateria", "Carregamento", "5G", "Sistema operacional", "Peso", "Resistência à água"],
+  laptop: ["Marca", "Linha", "Modelo", "Processador", "Núcleos e threads", "Memória RAM", "Tipo de memória", "Armazenamento", "Placa de vídeo", "Tamanho da tela", "Resolução", "Taxa de atualização", "Sistema operacional", "Conectividade", "Portas", "Bateria", "Peso", "Garantia"],
+  tablet: ["Marca", "Modelo", "Tamanho da tela", "Resolução", "Taxa de atualização", "Processador", "Memória RAM", "Armazenamento", "Câmeras", "Bateria", "Caneta compatível", "Conectividade", "Sistema operacional", "Peso"],
+  smartwatch: ["Marca", "Modelo", "Tamanho da caixa", "Tela", "Sensores", "GPS", "Resistência à água", "Bateria", "Conectividade", "Compatibilidade", "Peso"],
+  television: ["Marca", "Modelo", "Tamanho da tela", "Resolução", "Tipo de painel", "Taxa de atualização", "HDR", "Sistema operacional", "Conexões", "Som", "Padrão VESA"],
+  camera: ["Marca", "Modelo", "Tipo", "Resolução", "Sensor", "Lente", "Zoom", "Vídeo", "Estabilização", "Conectividade", "Peso"],
+  console: ["Marca", "Modelo", "Armazenamento", "Resolução", "Taxa de atualização", "Mídia", "Conectividade", "Portas", "Controle incluso", "Dimensões", "Peso"],
+  audio: ["Marca", "Modelo", "Tipo", "Conexão", "Bluetooth", "Cancelamento de ruído", "Bateria", "Microfone", "Compatibilidade", "Peso"],
+  monitor: ["Marca", "Modelo", "Tamanho", "Resolução", "Tipo de painel", "Taxa de atualização", "Tempo de resposta", "Brilho", "HDR", "Sincronização adaptativa", "Conexões", "Ajustes ergonômicos"],
+  desktop: ["Marca", "Modelo", "Processador", "Placa-mãe", "Memória RAM", "Armazenamento", "Placa de vídeo", "Fonte", "Gabinete", "Sistema operacional", "Conectividade", "Portas", "Garantia"],
+  peripheral: ["Marca", "Modelo", "Tipo", "Conexão", "Compatibilidade", "Alimentação", "Iluminação", "Dimensões", "Peso", "Garantia"],
+  technology: ["Marca", "Modelo", "Dimensões", "Peso", "Conectividade", "Alimentação", "Compatibilidade", "Garantia"],
 };
 
 function adminAiSpecificationTemplate(source, current) {
@@ -4299,13 +4304,36 @@ function adminAiSpecificationTemplate(source, current) {
   if (/notebook|laptop|macbook/.test(text)) return "laptop";
   if (/tablet|ipad/.test(text)) return "tablet";
   if (/smartwatch|relogio inteligente|smart band/.test(text)) return "smartwatch";
-  if (/tv |televisao|televisor|smart tv/.test(text)) return "television";
+  if (/(^|\s)tv(\s|$)|televisao|televisor|smart tv/.test(text)) return "television";
   if (/camera|webcam|filmadora/.test(text)) return "camera";
   if (/playstation|xbox|nintendo switch|console/.test(text)) return "console";
   if (/fone|headset|headphone|earbuds|caixa de som/.test(text)) return "audio";
+  if (/monitor/.test(text)) return "monitor";
+  if (/computador|desktop|pc gamer/.test(text)) return "desktop";
+  if (/teclado|mouse|periferico/.test(text)) return "peripheral";
   return "technology";
 }
 
+function normalizeAdminAiSpecifications(templateKey, value) {
+  const fields = ADMIN_AI_SPECIFICATION_TEMPLATES[templateKey] || ADMIN_AI_SPECIFICATION_TEMPLATES.technology;
+  const canonicalByName = new Map(fields.map((name) => [normalizeSearch(name), name]));
+  const aliases = new Map([
+    ["ram", "Memória RAM"], ["memoria", "Memória RAM"], ["ssd", "Armazenamento"],
+    ["capacidade de armazenamento", "Armazenamento"], ["cpu", "Processador"], ["chip", "Processador"],
+    ["gpu", "Placa de vídeo"], ["display", "Tela"], ["tela polegadas", "Tamanho da tela"],
+    ["camera traseira", "Câmera principal"], ["sistema", "Sistema operacional"],
+    ["conectores", "Conexões"], ["portas e conexoes", "Conexões"], ["vesa", "Padrão VESA"],
+    ["cancelamento de ruido ativo", "Cancelamento de ruído"], ["anc", "Cancelamento de ruído"],
+  ].map(([alias, name]) => [normalizeSearch(alias), name]));
+  const values = new Map();
+  for (const item of Array.isArray(value) ? value : []) {
+    const rawName = normalizeSearch(item?.name);
+    const canonical = canonicalByName.get(rawName) || aliases.get(rawName);
+    const itemValue = String(item?.value || "").trim().slice(0, 300);
+    if (canonical && canonicalByName.has(normalizeSearch(canonical)) && itemValue && !values.has(canonical)) values.set(canonical, itemValue);
+  }
+  return fields.filter((name) => values.has(name)).map((name) => ({ name, value: values.get(name) })).slice(0, 20);
+}
 const ADMIN_PRODUCT_DRAFT_SCHEMA = {
   type: "object",
   properties: {
@@ -4831,7 +4859,7 @@ async function adminAiProductDraft(req, env, id) {
       return fail(req, env, "AI_FEATURE_DISABLED", "O assistente de cadastro está desativado", 409, id);
     const result = await runAiWithFallback(env, aiSetting, {
       messages: [
-        { role: "system", content: `Padroniza??o obrigat?ria: este produto usa o modelo '${specificationTemplate}'. Retorne especifica??es usando somente estes nomes de campo, nesta mesma grafia e ordem quando houver valor confirmado: ${ADMIN_AI_SPECIFICATION_TEMPLATES[specificationTemplate].join(", ")}. N?o crie sin?nimos ou campos equivalentes. Omitir valor desconhecido ? obrigat?rio.` },
+        { role: "system", content: `Padronização obrigatória: este produto usa o modelo '${specificationTemplate}'. Retorne especificações usando somente estes nomes de campo, nesta mesma grafia e ordem quando houver valor confirmado: ${ADMIN_AI_SPECIFICATION_TEMPLATES[specificationTemplate].join(", ")}. Não crie sinônimos ou campos equivalentes. Omitir valor desconhecido é obrigatório.` },
         { role: "system", content: `Você é o editor-chefe de catálogo e SEO da SHOPLAB. Transforme dados reais de produto em uma página que seja encontrada, entendida e confiável. Escreva em português brasileiro natural; SEO é precisão de intenção, não repetição de palavras-chave. Para name, crie um título de alta intenção: comece pelo tipo de produto que o comprador pesquisa, inclua marca e modelo, depois somente o principal diferencial verificável (capacidade, tamanho, padrão, compatibilidade ou uso). Prefira 55 a 90 caracteres, sem caixa-alta, emojis, hype, preço, frete ou termos vazios como “imperdível”, “premium” e “melhor”. Preserve exatamente marca, modelo, capacidade, medidas e padrões técnicos fornecidos. Para shortDescription, entregue uma síntese convincente de 2 frases: o que é, para quem serve e o diferencial concreto; inclua naturalmente termos de busca relevantes. Para fullDescription, escreva uma descrição escaneável com abertura clara, benefícios ancorados em fatos e características úteis; não invente avaliações, desempenho, garantias, certificações, compatibilidade, preço ou benefícios. Especificações só podem conter dados explícitos na entrada. Se um dado não estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hífen e refletir o título. imageAlt deve ser descritivo e acessível, sem SEO forçado. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro físico, digital para produto digital e affiliate nos demais casos. Retorne somente o JSON solicitado.` },
         { role: "user", content: JSON.stringify({ source, current }).slice(0, 16000) },
       ],
@@ -4842,9 +4870,7 @@ async function adminAiProductDraft(req, env, id) {
     if (!raw || typeof raw.name !== "string") throw new Error("Resposta estruturada inválida");
     const validCategories = new Set((categories.results || []).map((item) => item.id));
     const slug = normalizeSearch(raw.slug || raw.name).replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
-    const specifications = (Array.isArray(raw.specifications) ? raw.specifications : [])
-      .map((item) => ({ name: String(item?.name || "").trim().slice(0, 100), value: String(item?.value || "").trim().slice(0, 300) }))
-      .filter((item) => item.name && item.value).slice(0, 20);
+    const specifications = normalizeAdminAiSpecifications(specificationTemplate, raw.specifications);
     return ok(req, env, {
       name: String(raw.name).trim().slice(0, 160), slug: slug.slice(0, 160),
       shortDescription: String(raw.shortDescription || "").trim().slice(0, 500),
@@ -5026,7 +5052,7 @@ async function adminProductDetail(req, env, productId, id) {
   if (!actor)
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const product = await env.DB.prepare(
-    `SELECT id,name,slug,cta_code ctaCode,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson,price_source priceSource,price_source_item_id priceSourceItemId,price_source_offer_id priceSourceOfferId,price_source_url priceSourceUrl,price_sync_enabled priceSyncEnabled,price_synced_at priceSyncedAt,price_sync_status priceSyncStatus,price_sync_error priceSyncError FROM products WHERE id=?`,
+    `SELECT id,name,slug,cta_code ctaCode,subtitle,product_type productType,status,category_id categoryId,brand_id brandId,short_description shortDescription,full_description fullDescription,editorial_review editorialReview,editorial_score editorialScore,base_price_cents basePriceCents,compare_at_price_cents compareAtPriceCents,is_featured isFeatured,specifications_json specificationsJson,tags_json tagsJson,price_source priceSource,price_source_item_id priceSourceItemId,price_source_offer_id priceSourceOfferId,price_source_url priceSourceUrl,price_sync_enabled priceSyncEnabled,price_synced_at priceSyncedAt,price_sync_status priceSyncStatus,price_sync_error priceSyncError FROM products WHERE id=?`,
   )
     .bind(productId)
     .first();
@@ -5058,6 +5084,7 @@ async function adminProductDetail(req, env, productId, id) {
       ...product,
       sourceProductUrl: product.priceSourceUrl || null,
       specificationGroups: parse(product.specificationsJson, []),
+      tags: parse(product.tagsJson, []),
       offers: actor.role === "owner"
         ? offers.results || []
         : (offers.results || []).map(({ affiliateUrl, ...offer }) => ({ ...offer, affiliateManagedByOwner: Boolean(affiliateUrl) })),
@@ -9675,6 +9702,13 @@ async function verifyTurnstile(token, req, env) {
   return res.json();
 }
 function shoplabCtaCode(value) { const code=String(value||'').trim().toUpperCase(); return code ? (code.startsWith('SL-') ? code : `SL-${code}`) : null; }
+function normalizeProductTags(value) {
+  const source = Array.isArray(value) ? value : String(value || "").split(/[,;\n]/);
+  const seen = new Set();
+  return source.map(tag => String(tag || "").trim().replace(/\s+/g, " ").slice(0, 60))
+    .filter(tag => { const key=normalizeSearch(tag); if (!key || seen.has(key)) return false; seen.add(key); return true; })
+    .slice(0, 30);
+}
 function validateProduct(b) {
   if (!b || typeof b !== "object") return "Dados inválidos";
   if (!String(b.name || "").trim() || String(b.name).length > 160)
