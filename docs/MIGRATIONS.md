@@ -29,3 +29,12 @@
 ## Como executar
 
 No Cloudflare Dashboard: D1 → banco escolhido → Console → cole o conteúdo do arquivo → Execute. Registre no changelog interno a data, ambiente e arquivo aplicado.
+## Descoberta por categorias e coleções
+
+Antes de publicar o novo catálogo, aplique `catalog-discovery-upgrade.sql` em bancos existentes, depois de `product-collections-upgrade.sql` e das migrações de imagem de categoria que ainda não estiverem instaladas. Em banco novo, `schema.sql` já contém a estrutura.
+
+A migração preserva IDs e vínculos, registra o backfill para não repeti-lo sobre edições posteriores, normaliza tags e mantém a categoria-filha anterior como subcategoria do produto. Hierarquias legadas com mais de dois níveis interrompem a execução antes do backfill. Consulte [arquitetura, endpoints, ordem de publicação e validação](CATALOG-DISCOVERY.md).
+
+## Area de Noticias
+
+Execute `cloudflare-dashboard/news-upgrade.sql` depois das migracoes existentes. A migracao e aditiva e idempotente.

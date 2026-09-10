@@ -204,7 +204,7 @@ node --check assets/js/admin-v2.js
 
 1. Aplique `schema.sql` ou as migrações necessárias no D1.
 2. Confirme bindings, variáveis e secrets no Worker.
-3. Publique `cloudflare-dashboard/worker.js` no Worker configurado.
+3. Na raiz do projeto, execute `npx wrangler deploy`. Não publique somente o conteúdo de `cloudflare-dashboard/worker.js`, pois módulos locais como `cloudflare-dashboard/news.js` precisam ser enviados no mesmo build.
 4. Publique a raiz do repositório como site estático (por exemplo, Cloudflare Pages).
 5. Defina `API_BASE_URL` com o domínio do Worker e `USE_MOCK_DATA: false`.
 6. Confira CORS, login, upload, página de produto, `/api/v1/health`, redirecionamento de oferta e os webhooks de pagamento.
@@ -313,3 +313,7 @@ As rotas administrativas exigem sessão e permissão header_ads.manage.
 - Atualize schema.sql, migração e ensureShoplabAdsSchema() ao criar colunas.
 - Teste anônimo/autenticado, desktop/celular, período, categoria, produto vinculado, dispensa e múltiplos candidatos.
 - Se adicionar medição, consentimento ou terceiros, revise as políticas antes da publicação.
+
+## Descoberta por categorias e coleções
+
+O catálogo distingue categoria principal, subcategoria, marca, características e coleções manuais/dinâmicas. As telas ficam no grupo Catálogo do Admin; as páginas públicas usam URLs canônicas geradas pelo Worker. Consulte [a documentação da implementação e migração](docs/CATALOG-DISCOVERY.md) antes da publicação.

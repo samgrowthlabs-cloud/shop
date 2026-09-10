@@ -1,3 +1,6 @@
+import { newsRoute, NewsAnalyticsDO } from "./news.js";
+export { NewsAnalyticsDO };
+
 const TEAM_CALL_MAX_PARTICIPANTS = 4;
 const MAX_SIGNAL_BYTES = 64 * 1024;
 
@@ -127,11 +130,12 @@ const enc = new TextEncoder();
 const BUILT_IN_ORIGINS = [
   "https://shoplab.com.br",
   "https://www.shoplab.com.br",
+  "https://noticias.shoplab.com.br",
 ];
 const SUPABASE_URL = "https://oqfizduaciuutvtlqmni.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VYMjF0XGyXzJSiZ9H1Tt_w_nr_ynDyQ";
 const REFERRAL_PUBLIC_ORIGIN = "https://link.shoplab.com.br";
-const WORKER_BUILD = "2026-09-06-featured-video-v8";
+const WORKER_BUILD = "2026-09-08-catalog-discovery-v1";
 const ADMIN_PASSWORD_PBKDF2_ITERATIONS = 100000;
 const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
@@ -145,6 +149,12 @@ const ADMIN_PERMISSION_DEFINITIONS = [
   ["products.ai", "Produtos", "Usar IA no cadastro de produtos", true],
   ["products.publish", "Produtos", "Publicar e retirar produtos do site", false],
   ["products.delete", "Produtos", "Excluir produtos definitivamente", true],
+  ["news.view", "Notícias", "Ver notícias e rascunhos", true],
+  ["news.create", "Notícias", "Criar notícias em rascunho", true],
+  ["news.edit", "Notícias", "Editar notícias e relacionar produtos", true],
+  ["news.media", "Notícias", "Enviar imagens de capa", true],
+  ["news.publish", "Notícias", "Publicar, agendar e arquivar notícias", true],
+  ["news.delete", "Notícias", "Excluir notícias definitivamente", false],
   ["prices.edit", "Preços", "Atualizar preços manualmente", true],
   ["affiliate_links.manage", "Preços", "Alterar links de afiliado e ofertas", false],
   ["categories.manage", "Catálogo", "Gerenciar categorias", true],
@@ -331,6 +341,7 @@ export default {
     env = { ...env, DB: databaseFor(env) };
     try {
       const url = new URL(request.url);
+      if((url.hostname==='noticias.shoplab.com.br'||url.hostname.endsWith('.workers.dev'))&&request.method==='GET'&&(url.pathname==='/noticias'||url.pathname.startsWith('/noticias/'))){const target=new URL(url.pathname+url.search,'https://shoplab.com.br');return Response.redirect(target.href,308)}
       // A 101 WebSocket response owns a live socket and cannot be cloned.
       // Keep HTTP admin requests in the audit trail, but let WebSocket
       // endpoints perform their own authentication and connection logging.
@@ -428,7 +439,7 @@ export default {
           },
           503,
         );
-      if (/no such table:.*(?:user_favorites|user_ratings|user_cart|user_view_history)/i.test(detail))
+      if (/no such table:.*(?:user_favorites|user_ratings|user_cart|user_view_history|user_saved_news)/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"USER_LIBRARY_MIGRATION_REQUIRED",message:"Execute user-library-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*admin_collaborators|no such column:.*collaborator_id|no column named collaborator_id/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"ADMIN_COLLABORATORS_MIGRATION_REQUIRED",message:"Execute admin-collaborators-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
@@ -498,6 +509,8 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_SCALE_MIGRATION_REQUIRED",message:"Execute category-image-scale-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such column:.*image_position_/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATEGORY_IMAGE_POSITION_MIGRATION_REQUIRED",message:"Execute category-image-position-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such table:.*(?:category_metadata|collection_metadata|features|product_features|product_classification|catalog_aliases|catalog_migrations)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"CATALOG_DISCOVERY_MIGRATION_REQUIRED",message:"Execute catalog-discovery-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*comparison_analysis_cache/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"COMPARISON_CACHE_MIGRATION_REQUIRED",message:"Execute comparison-analysis-cache-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*free_ai_credit_usage/i.test(detail))
@@ -576,13 +589,14 @@ export default {
 
 async function dynamicSitemap(env) {
   const siteOrigin = "https://shoplab.com.br";
-  const [productQuery, categoryQuery] = await env.DB.batch([
+  const [productQuery, categoryQuery, newsQuery] = await env.DB.batch([
     env.DB.prepare(
       "SELECT slug,COALESCE(updated_at,published_at,created_at) lastModified FROM products WHERE status='published' ORDER BY published_at DESC,name",
     ),
     env.DB.prepare(
-      "SELECT slug,updated_at lastModified FROM categories WHERE is_active=1 ORDER BY sort_order,name",
+      "SELECT '/'||COALESCE(parent.slug||'/','')||c.slug path,c.updated_at lastModified FROM categories c LEFT JOIN categories parent ON parent.id=c.parent_id WHERE c.is_active=1 AND (parent.id IS NULL OR parent.is_active=1) UNION ALL SELECT '/'||COALESCE(c.slug||'/','colecoes/')||pc.slug path,pc.updated_at lastModified FROM product_collections pc LEFT JOIN collection_metadata m ON m.collection_id=pc.id LEFT JOIN categories c ON c.id=m.category_id WHERE pc.is_active=1 AND (c.id IS NULL OR c.is_active=1)",
     ),
+    env.DB.prepare("SELECT slug,COALESCE(updated_at,published_at,created_at) lastModified FROM news_articles WHERE status='published' AND datetime(published_at)<=datetime('now') ORDER BY published_at DESC"),
   ]);
   const escapeXml = (value) =>
     String(value ?? "").replace(
@@ -608,6 +622,7 @@ async function dynamicSitemap(env) {
     ["/produtos", "0.9", "daily"],
     ["/promocoes", "0.8", "daily"],
     ["/novidades", "0.8", "daily"],
+    ["/noticias", "0.9", "hourly"],
     ["/sobre", "0.5", "monthly"],
     ["/contato", "0.4", "monthly"],
     ["/politica-de-afiliados", "0.3", "yearly"],
@@ -620,7 +635,7 @@ async function dynamicSitemap(env) {
     changefreq,
   }));
   const categories = (categoryQuery.results || []).map((category) => ({
-    loc: `${siteOrigin}/categoria?slug=${encodeURIComponent(category.slug)}`,
+    loc: `${siteOrigin}${category.path}`,
     lastmod: date(category.lastModified),
     priority: "0.7",
     changefreq: "weekly",
@@ -631,7 +646,13 @@ async function dynamicSitemap(env) {
     priority: "0.8",
     changefreq: "weekly",
   }));
-  const urls = [...staticPages, ...categories, ...products]
+  const newsArticles = (newsQuery.results || []).map((article) => ({
+    loc: `${siteOrigin}/noticias/${encodeURIComponent(article.slug)}`,
+    lastmod: date(article.lastModified),
+    priority: "0.8",
+    changefreq: "daily",
+  }));
+  const urls = [...staticPages, ...categories, ...products, ...newsArticles]
     .map(
       (entry) =>
         `<url><loc>${escapeXml(entry.loc)}</loc><lastmod>${entry.lastmod}</lastmod><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`,
@@ -659,6 +680,19 @@ async function route(request, env, ctx, requestId) {
   if (request.method === "GET" && path === "/sitemap.xml")
     return dynamicSitemap(env);
 
+  if (request.method === "GET" && path === "/api/v1/discovery")
+    return catalogDiscovery(request, env, requestId);
+  if (request.method === "GET" && /^\/(categoria|colecao)(\.html)?$/.test(path) && url.searchParams.has('slug')) {
+    const isCategory = path.startsWith('/categoria'), slug = url.searchParams.get('slug');
+    const entity = await env.DB.prepare(isCategory ? `${CATALOG_CATEGORY_SELECT} WHERE c.slug=? AND c.is_active=1 AND (parent.id IS NULL OR parent.is_active=1)` : `${CATALOG_COLLECTION_SELECT} WHERE pc.slug=? AND pc.is_active=1 AND (c.id IS NULL OR c.is_active=1)`).bind(slug).first();
+    let resolved = entity ? {entity} : null;
+    if(!resolved){
+      const alias=await env.DB.prepare("SELECT path FROM catalog_aliases WHERE entity_type=? AND (path='/'||? OR path LIKE '%/'||?) LIMIT 1").bind(isCategory?'category':'collection',slug,slug).first();
+      if(alias)resolved=await catalogResolve(env,alias.path);
+    }
+    if (resolved) { const target = new URL(resolved.entity.path,request.url); for (const [key,value] of url.searchParams) if (key !== 'slug') target.searchParams.append(key,value); return Response.redirect(target,301); }
+    return new Response('<!doctype html><html lang="pt-BR"><head><meta name="robots" content="noindex"><title>Página não encontrada | SHOPLAB</title></head><body><h1>Página não encontrada</h1><a href="/produtos">Explorar produtos</a></body></html>',{status:404,headers:{'content-type':'text/html; charset=utf-8'}});
+  }
   if (request.method === "GET" && path === "/api/v1/home")
     return publicHomeData(request, env, ctx, requestId);
   if (request.method === "GET" && path === "/api/v1/categories")
@@ -774,7 +808,7 @@ async function route(request, env, ctx, requestId) {
     return redeemManualUserReward(request, env, path.split("/").at(-2), requestId);
   if (path === "/api/v1/user/share-links" && request.method === "POST")
     return createUserShareLink(request, env, requestId);
-  if (request.method === "PUT" && /^\/api\/v1\/user\/(favorites|ratings|cart)\/[^/]+$/.test(path))
+  if (request.method === "PUT" && /^\/api\/v1\/user\/(favorites|ratings|cart|news-saves)\/[^/]+$/.test(path))
     return updateUserLibraryItem(request, env, path, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/auth/login")
     return login(request, env, requestId);
@@ -784,16 +818,26 @@ async function route(request, env, ctx, requestId) {
     return sessionStatus(request, env, requestId);
   if (request.method === "PUT" && path === "/api/v1/admin/auth/password")
     return changeAdminCollaboratorPassword(request, env, requestId);
+  let authenticatedAdminActor = null;
   if (path.startsWith("/api/v1/admin/")) {
     const permission = adminPermissionForRequest(request.method, path);
     const actor = await adminActor(request, env);
+    authenticatedAdminActor = actor;
     if (!actor)
       return fail(request, env, "UNAUTHORIZED", "Sessão administrativa inválida", 401, requestId);
-    const allowedByFeatureDependency=request.method==="GET" && path==="/api/v1/admin/products" && actor.permissions.includes("promotions.manage");
+    const allowedByFeatureDependency=request.method==="GET" && ((path==="/api/v1/admin/products" && actor.permissions.includes("promotions.manage")) || (path==='/api/v1/admin/taxonomy' && actor.permissions.includes('categories.manage')));
     const allowedByMediaScripts=path.startsWith("/api/v1/admin/media-scripts") && ["media_scripts.manage","media_scripts.view","media_scripts.edit","media_scripts.comment"].some(item=>actor.permissions.includes(item));
     if (permission && !actor.permissions.includes("*") && !actor.permissions.includes(permission) && !allowedByFeatureDependency && !allowedByMediaScripts)
       return fail(request, env, "FORBIDDEN", "Seu cargo não permite realizar esta ação", 403, requestId);
   }
+  const newsResponse = await newsRoute(request, env, url, authenticatedAdminActor);
+  if (newsResponse) return cors(request, env, newsResponse);
+  if (/^\/api\/v1\/admin\/products\/[^/]+\/classification$/.test(path))
+    return catalogProduct(request,env,path.split('/').at(-2),requestId);
+  if (/^\/api\/v1\/admin\/taxonomy\/(categories|collections)\/[^/]+\/image$/.test(path))
+    return catalogImage(request,env,path.split('/').at(-3),path.split('/').at(-2),requestId);
+  if (path === '/api/v1/admin/taxonomy' || path.startsWith('/api/v1/admin/taxonomy/'))
+    return catalogAdmin(request,env,requestId,path);
   if (request.method === "GET" && path === "/api/v1/admin/collaborators")
     return adminCollaborators(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/roles")
@@ -1069,6 +1113,11 @@ async function route(request, env, ctx, requestId) {
     return createProductV2(request, env, requestId);
   if (path.startsWith("/api/v1/admin/products/") && request.method === "PUT")
     return updateProductV2(request, env, path.split("/").pop(), requestId);
+  if (request.method === 'GET' && !path.startsWith('/api/') && !path.startsWith('/admin/') && env.ASSETS) {
+    const page = await catalogPage(request,env,path);
+    if (page) return page;
+    return env.ASSETS.fetch(request);
+  }
   return fail(request, env, "NOT_FOUND", "Rota não encontrada", 404, requestId);
 }
 
@@ -1126,7 +1175,7 @@ async function publicHomeData(req, env, ctx, id) {
 }
 async function listCategories(req, env, id) {
   const { results } = await env.DB.prepare(
-    `SELECT c.id,c.name,c.slug,c.description,c.icon,c.image_storage_key imageStorageKey,c.image_scale imageScale,c.image_position_x imagePositionX,c.image_position_y imagePositionY,COUNT(p.id) count FROM categories c LEFT JOIN products p ON p.category_id=c.id AND p.status='published' WHERE c.is_active=1 GROUP BY c.id ORDER BY c.sort_order,c.name`,
+    `SELECT c.parent_id parentId,'/'||COALESCE((SELECT parent.slug||'/' FROM categories parent WHERE parent.id=c.parent_id),'')||c.slug path,c.id,c.name,c.slug,c.description,c.icon,c.image_storage_key imageStorageKey,c.image_scale imageScale,c.image_position_x imagePositionX,c.image_position_y imagePositionY,COUNT(p.id) count FROM categories c LEFT JOIN products p ON p.category_id=c.id AND p.status='published' WHERE c.is_active=1 AND (c.parent_id IS NULL OR EXISTS(SELECT 1 FROM categories parent WHERE parent.id=c.parent_id AND parent.is_active=1)) GROUP BY c.id ORDER BY c.sort_order,c.name`,
   ).all();
   const origin=new URL(req.url).origin;
   return ok(req, env, (results||[]).map(category=>({...category,imageUrl:category.imageStorageKey?`${origin}/media/${encodeURIComponent(category.imageStorageKey)}`:null})), id);
@@ -1397,7 +1446,7 @@ async function listProducts(req, env, url, id) {
   let where = `p.status='published'`,
     args = [];
   if (category) {
-    where += ` AND c.slug=?`;
+    where += ` AND EXISTS(SELECT 1 FROM categories selected WHERE selected.slug=? AND (selected.id=p.category_id OR EXISTS(SELECT 1 FROM product_classification cl WHERE cl.product_id=p.id AND cl.subcategory_id=selected.id)))`;
     args.push(category);
   }
   if (store) {
@@ -1418,7 +1467,7 @@ async function listProductsV2(req, env, url, id) {
   let where = `p.status='published'`;
   const args = [];
   if (category) {
-    where += ` AND c.slug=?`;
+    where += ` AND EXISTS(SELECT 1 FROM categories selected WHERE selected.slug=? AND (selected.id=p.category_id OR EXISTS(SELECT 1 FROM product_classification cl WHERE cl.product_id=p.id AND cl.subcategory_id=selected.id)))`;
     args.push(category);
   }
   const { results } = await env.DB.prepare(
@@ -1542,7 +1591,7 @@ const PRODUCT_CARD_SELECT = `SELECT p.id,p.name,p.slug,p.product_type productTyp
   FROM products p
   LEFT JOIN categories c ON c.id=p.category_id
   LEFT JOIN brands b ON b.id=p.brand_id
-  LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
+  LEFT JOIN offers o ON o.id=(SELECT chosen.id FROM offers chosen WHERE chosen.product_id=p.id AND chosen.is_primary=1 ORDER BY chosen.priority DESC,chosen.id LIMIT 1)
   LEFT JOIN partners pa ON pa.id=o.partner_id
   LEFT JOIN product_media pm ON pm.id=(
     SELECT selected_media.id FROM product_media selected_media
@@ -4138,7 +4187,7 @@ async function searchV2(req, env, url, ctx, id) {
         : "rank ASC,COALESCE(p.editorial_score,0) DESC,p.is_featured DESC,p.view_count DESC";
   const args = [ftsQuery];
   let intentFilters = "";
-  const categoryFilter = category ? " AND c.slug=?" : "";
+  const categoryFilter = category ? " AND EXISTS(SELECT 1 FROM categories selected WHERE selected.slug=? AND (selected.id=p.category_id OR EXISTS(SELECT 1 FROM product_classification cl WHERE cl.product_id=p.id AND cl.subcategory_id=selected.id)))" : "";
   if (category) args.push(category);
   if (brand) {
     intentFilters += " AND lower(b.name)=?";
@@ -4183,11 +4232,10 @@ async function searchV2(req, env, url, ctx, id) {
     .all();
   if (!results.length) {
     const fallback = await env.DB.prepare(
-      `${PRODUCT_CARD_SELECT} WHERE p.status='published' ORDER BY p.view_count DESC,p.editorial_score DESC LIMIT 200`,
-    ).all();
+      `${PRODUCT_CARD_SELECT} WHERE p.status='published'${categoryFilter} ORDER BY p.view_count DESC,p.editorial_score DESC LIMIT 200`,
+    ).bind(...(category?[category]:[])).all();
     const queryTerms = correctedQuery.split(" ").filter(Boolean);
     results = (fallback.results || [])
-      .filter((product) => !category || normalizeSearch(product.category).replace(/\s+/g, "-") === category)
       .filter((product) => !brand || normalizeSearch(product.brand) === brand)
       .filter((product) => minPriceCents == null || Number(product.price || 0) >= minPriceCents)
       .filter((product) => maxPriceCents == null || Number(product.price || 0) <= maxPriceCents)
@@ -5572,7 +5620,7 @@ function deleteUserData(env,userId){
     env.DB.prepare("DELETE FROM referral_rewards WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM manual_user_rewards WHERE user_id=?").bind(userId),
     env.DB.prepare("DELETE FROM user_sessions WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM share_links WHERE user_id=?").bind(userId),
     env.DB.prepare("DELETE FROM user_favorites WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM user_ratings WHERE user_id=?").bind(userId),
-    env.DB.prepare("DELETE FROM user_cart WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM user_view_history WHERE user_id=?").bind(userId),
+    env.DB.prepare("DELETE FROM user_cart WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM user_view_history WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM user_saved_news WHERE user_id=?").bind(userId),
     env.DB.prepare("DELETE FROM events WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_product_insight_cache WHERE user_id=?").bind(userId),
     env.DB.prepare("DELETE FROM premium_subscriptions WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_ai_usage WHERE user_id=?").bind(userId),
     env.DB.prepare("DELETE FROM free_ai_credit_usage WHERE user_id=?").bind(userId),env.DB.prepare("DELETE FROM premium_pass_payments WHERE user_id=?").bind(userId),
@@ -6641,7 +6689,7 @@ async function adminCategories(req, env, id) {
   if (!(await requireAdmin(req, env)))
     return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, id);
   const { results } = await env.DB.prepare(
-    "SELECT c.id,c.name,c.slug,c.description,c.icon,c.image_storage_key imageStorageKey,c.image_scale imageScale,c.image_position_x imagePositionX,c.image_position_y imagePositionY,c.is_active isActive,c.sort_order sortOrder,COUNT(p.id) productCount FROM categories c LEFT JOIN products p ON p.category_id=c.id GROUP BY c.id ORDER BY c.sort_order,c.name",
+    "SELECT c.parent_id parentId,'/'||COALESCE((SELECT parent.slug||'/' FROM categories parent WHERE parent.id=c.parent_id),'')||c.slug path,c.id,c.name,c.slug,c.description,c.icon,c.image_storage_key imageStorageKey,c.image_scale imageScale,c.image_position_x imagePositionX,c.image_position_y imagePositionY,c.is_active isActive,c.sort_order sortOrder,COUNT(p.id) productCount FROM categories c LEFT JOIN products p ON p.category_id=c.id GROUP BY c.id ORDER BY c.sort_order,c.name",
   ).all();
   const origin=new URL(req.url).origin;
   return ok(req, env, (results||[]).map(category=>({...category,imageUrl:category.imageStorageKey?`${origin}/media/${encodeURIComponent(category.imageStorageKey)}`:null})), id);
@@ -7516,18 +7564,16 @@ async function removeThemeMedia(req, env, themeId, kind, id) {
 }
 
 async function publicCollection(req, env, slug, id) {
-  const collection=await env.DB.prepare(`SELECT id,name,slug,description FROM product_collections WHERE slug=? AND is_active=1`).bind(String(slug).slice(0,100)).first();
+  const collection=await env.DB.prepare(`${CATALOG_COLLECTION_SELECT} WHERE pc.slug=? AND pc.is_active=1 AND (c.id IS NULL OR c.is_active=1)`).bind(String(slug).slice(0,100)).first();
   if(!collection)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id);
-  const {results=[]}=await env.DB.prepare(`${PRODUCT_CARD_SELECT} LEFT JOIN product_collection_items pci ON pci.product_id=p.id AND pci.collection_id=? LEFT JOIN product_collection_categories pcc ON pcc.category_id=p.category_id AND pcc.collection_id=? WHERE p.status='published' AND (pci.collection_id IS NOT NULL OR pcc.collection_id IS NOT NULL) ORDER BY CASE WHEN pci.product_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(pci.sort_order,pcc.sort_order),p.name`).bind(collection.id,collection.id).all();
-  return ok(req,env,{...collection,products:results.map(normalizeProduct)},id);
+  return ok(req,env,{...collection,...await catalogRows(env,collection,'collection',new URL(req.url).searchParams)},id);
 }
 async function publicFeaturedCollections(req,env,id){
-  const {results=[]}=await env.DB.prepare(`SELECT id,name,slug,description,home_title homeTitle FROM product_collections WHERE is_active=1 AND is_home_featured=1 ORDER BY home_sort_order,name LIMIT 8`).all();
+  const {results=[]}=await env.DB.prepare(`${CATALOG_COLLECTION_SELECT} WHERE pc.is_active=1 AND pc.is_home_featured=1 AND (c.id IS NULL OR c.is_active=1) ORDER BY pc.home_sort_order,pc.name LIMIT 8`).all();
   if(!results.length)return ok(req,env,[],id);
-  const statements=results.map(collection=>env.DB.prepare(`${PRODUCT_CARD_SELECT} LEFT JOIN product_collection_items pci ON pci.product_id=p.id AND pci.collection_id=? LEFT JOIN product_collection_categories pcc ON pcc.category_id=p.category_id AND pcc.collection_id=? WHERE p.status='published' AND (pci.collection_id IS NOT NULL OR pcc.collection_id IS NOT NULL) ORDER BY CASE WHEN pci.product_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(pci.sort_order,pcc.sort_order),p.name LIMIT 12`).bind(collection.id,collection.id));
+  const statements=results.map(collection=>{const predicate=catalogCollectionPredicate(collection);return env.DB.prepare(`${PRODUCT_CARD_SELECT} WHERE p.status='published' AND (${predicate.sql}) ORDER BY p.is_featured DESC,p.editorial_score DESC,p.id LIMIT 12`).bind(...predicate.values)});
   const productResults=await env.DB.batch(statements);
-  const collections=results.map((collection,index)=>({...collection,products:(productResults[index]?.results||[]).map(normalizeProduct)})).filter(collection=>collection.products.length);
-  return ok(req,env,collections,id);
+  return ok(req,env,results.map((collection,index)=>({...collection,homeTitle:collection.home_title,products:(productResults[index]?.results||[]).map(normalizeProduct)})).filter(collection=>collection.products.length),id);
 }
 async function adminCollections(req, env, id) {
   const [collections,products,categories]=await env.DB.batch([
@@ -7544,10 +7590,9 @@ async function saveCollection(req,env,collectionId,id){
   statements.push(env.DB.prepare(`DELETE FROM product_collection_items WHERE collection_id=?`).bind(targetId),env.DB.prepare(`DELETE FROM product_collection_categories WHERE collection_id=?`).bind(targetId));productIds.forEach((v,i)=>statements.push(env.DB.prepare(`INSERT INTO product_collection_items(collection_id,product_id,sort_order) SELECT ?,id,? FROM products WHERE id=?`).bind(targetId,i,v)));categoryIds.forEach((v,i)=>statements.push(env.DB.prepare(`INSERT INTO product_collection_categories(collection_id,category_id,sort_order) SELECT ?,id,? FROM categories WHERE id=?`).bind(targetId,i,v)));
   try{const result=await env.DB.batch(statements);if(collectionId&&!result[0].meta.changes)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id)}catch(error){if(/unique constraint failed:.*slug/i.test(String(error)))return fail(req,env,"COLLECTION_SLUG_EXISTS","Este link já está sendo usado",409,id);throw error}return ok(req,env,{id:targetId,slug,link:`colecao.html?slug=${encodeURIComponent(slug)}`},id);
 }
-async function deleteCollection(req, env, collectionId, id) {
-  const result=await env.DB.prepare(`DELETE FROM product_collections WHERE id=?`).bind(String(collectionId).slice(0,100)).run();
-  if(!result.meta.changes)return fail(req,env,"COLLECTION_NOT_FOUND","Coleção não encontrada",404,id);
-  return ok(req,env,{id:collectionId,deleted:true},id);
+async function deleteCollection(req,env,collectionId,id) {
+  const result=await env.DB.prepare('UPDATE product_collections SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(collectionId).run();
+  return result.meta.changes?ok(req,env,{id:collectionId,deleted:true,deactivated:true},id):fail(req,env,'NOT_FOUND','Coleção não encontrada',404,id);
 }
 
 async function adminHeaderSpotlights(req, env, id) {
@@ -7946,10 +7991,19 @@ async function requireAdmin(req, env) {
 }
 
 function adminPermissionForRequest(method, path) {
+  if (path === '/api/v1/admin/taxonomy' && method === 'GET') return 'products.view';
+  if (path.startsWith('/api/v1/admin/taxonomy')) return 'categories.manage';
   if (path.startsWith("/api/v1/admin/team-call")) return "team_call.use";
   if (path === "/api/v1/admin/team-chat" && method === "POST") return "team_chat.write";
   if (path === "/api/v1/admin/activity") return null;
   if (path === "/api/v1/admin/team-chat" || path === "/api/v1/admin/team-chat/socket" || path === "/api/v1/admin/team-chat/lock" || (method === "DELETE" && path.startsWith("/api/v1/admin/team-chat/"))) return null;
+  if (path.startsWith("/api/v1/admin/news")) {
+    if (path.endsWith("/media")) return "news.media";
+    if (method === "GET") return "news.view";
+    if (method === "POST") return "news.create";
+    if (method === "DELETE") return "news.delete";
+    return "news.edit";
+  }
   if (path.startsWith("/api/v1/admin/roles")) return "collaborators.manage";
   if (path.startsWith("/api/v1/admin/collaborators")) return "collaborators.create";
   if (path.startsWith("/api/v1/admin/shared-files")) return "shared_files.manage";
@@ -9652,18 +9706,20 @@ async function personalizedRecommendations(req, env, id) {
 async function userLibrary(req, env, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
-  const [favorites, ratings, cart, history] = await env.DB.batch([
+  const [favorites, ratings, cart, history, savedNews] = await env.DB.batch([
     env.DB.prepare(`SELECT f.product_slug slug,p.name,COALESCE(o.current_price_cents,p.base_price_cents) price,pm.storage_key storageKey,pm.external_url externalUrl,pm.alt_text altText FROM user_favorites f JOIN products p ON p.slug=f.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN product_media pm ON pm.id=(SELECT id FROM product_media WHERE product_id=p.id AND type='image' ORDER BY is_primary DESC,sort_order,created_at LIMIT 1) WHERE f.user_id=? ORDER BY f.created_at DESC`).bind(user.id),
     env.DB.prepare(`SELECT r.product_slug slug,r.rating,r.updated_at updatedAt,p.name,pm.storage_key storageKey,pm.external_url externalUrl,pm.alt_text altText FROM user_ratings r JOIN products p ON p.slug=r.product_slug LEFT JOIN product_media pm ON pm.id=(SELECT id FROM product_media WHERE product_id=p.id AND type='image' ORDER BY is_primary DESC,sort_order,created_at LIMIT 1) WHERE r.user_id=? ORDER BY r.updated_at DESC`).bind(user.id),
     env.DB.prepare(`SELECT c.product_slug slug,c.quantity,p.name,COALESCE(o.current_price_cents,p.base_price_cents) price,pm.storage_key storageKey,pm.external_url externalUrl,pm.alt_text altText FROM user_cart c JOIN products p ON p.slug=c.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 LEFT JOIN product_media pm ON pm.id=(SELECT id FROM product_media WHERE product_id=p.id AND type='image' ORDER BY is_primary DESC,sort_order,created_at LIMIT 1) WHERE c.user_id=? ORDER BY c.updated_at DESC`).bind(user.id),
     env.DB.prepare(`SELECT h.product_slug slug,h.viewed_at viewedAt,p.name,COALESCE(o.current_price_cents,p.base_price_cents) price FROM user_view_history h JOIN products p ON p.slug=h.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE h.user_id=? ORDER BY h.viewed_at DESC LIMIT 20`).bind(user.id),
+    env.DB.prepare("SELECT n.slug,n.title,n.excerpt,n.category,n.author,n.reading_time readingTime,n.image_url imageUrl,n.image_alt imageAlt,n.published_at publishedAt,s.created_at savedAt FROM user_saved_news s JOIN news_articles n ON n.id=s.article_id WHERE s.user_id=? AND n.status='published' AND datetime(n.published_at)<=datetime('now') ORDER BY s.created_at DESC").bind(user.id),
   ]);
-  return ok(req, env, { favorites:favorites.results||[], ratings:ratings.results||[], cart:cart.results||[], history:history.results||[] }, id);
+  return ok(req, env, { favorites:favorites.results||[], ratings:ratings.results||[], cart:cart.results||[], history:history.results||[], savedNews:savedNews.results||[] }, id);
 }
 async function updateUserLibraryItem(req, env, path, id) {
   const user = await activeUser(req, env);
   if (!user) return fail(req, env, "UNAUTHORIZED", "Entre na sua conta", 401, id);
   const [, , , , type, encodedSlug] = path.split("/"), slug = decodeURIComponent(encodedSlug), body = await readJson(req, 4096);
+  if(type==='news-saves'){const article=await env.DB.prepare("SELECT id,slug FROM news_articles WHERE slug=? AND status='published'" ).bind(slug).first();if(!article)return fail(req,env,'NEWS_NOT_FOUND','Notícia não encontrada',404,id);if(body.active===false)await env.DB.prepare('DELETE FROM user_saved_news WHERE user_id=? AND article_id=?').bind(user.id,article.id).run();else await env.DB.prepare('INSERT OR IGNORE INTO user_saved_news(user_id,article_id) VALUES(?,?)').bind(user.id,article.id).run();return ok(req,env,{slug,active:body.active!==false},id)}
   const product = await env.DB.prepare("SELECT slug FROM products WHERE slug=? AND status='published'").bind(slug).first();
   if (!product) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, id);
   if (type === "favorites") {
@@ -9710,6 +9766,7 @@ function normalizeProductTags(value) {
     .slice(0, 30);
 }
 function validateProduct(b) {
+  if(b?.status==="published"&&!b.categoryId)return "Selecione uma categoria antes de publicar";
   if (!b || typeof b !== "object") return "Dados inválidos";
   if (!String(b.name || "").trim() || String(b.name).length > 160)
     return "Nome inválido";
@@ -9881,11 +9938,314 @@ function cors(req, env, res) {
     res.headers.set("access-control-allow-origin", origin);
     res.headers.set("vary", "Origin");
     res.headers.set("access-control-allow-credentials", "true");
+    res.headers.set("cache-control", "no-store, max-age=0");
   }
   res.headers.set(
     "access-control-allow-methods",
     "GET,POST,PUT,DELETE,OPTIONS",
   );
-  res.headers.set("access-control-allow-headers", "Content-Type, Authorization, X-Shoplab-Ref");
+  res.headers.set("access-control-allow-headers", "Content-Type, Authorization, X-Shoplab-Ref, X-Shoplab-Visitor");
   return res;
+}
+
+
+// Catalog discovery: additive metadata over the original product/category contracts.
+const CATALOG_CATEGORY_SELECT = `SELECT c.*,m.seo_title seoTitle,m.seo_description seoDescription,
+ parent.slug parentSlug,'/'||COALESCE(parent.slug||'/','')||c.slug path
+ FROM categories c LEFT JOIN category_metadata m ON m.category_id=c.id LEFT JOIN categories parent ON parent.id=c.parent_id`;
+const CATALOG_COLLECTION_SELECT = `SELECT pc.*,m.category_id categoryId,COALESCE(m.collection_type,'legacy') collectionType,
+ COALESCE(m.discovery_group,'need') discoveryGroup,m.rules_json rulesJson,m.image_storage_key imageStorageKey,
+ m.seo_title seoTitle,m.seo_description seoDescription,m.buying_guide buyingGuide,c.slug categorySlug,
+ '/'||COALESCE(c.slug||'/','colecoes/')||pc.slug path
+ FROM product_collections pc LEFT JOIN collection_metadata m ON m.collection_id=pc.id LEFT JOIN categories c ON c.id=m.category_id`;
+
+function catalogRules(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Regras inválidas');
+  const allowed = new Set(['version','categoryId','brandId','subcategoryId','minPriceCents','maxPriceCents','featureIds','minScore','featured','status']);
+  for (const key of Object.keys(input)) if (!allowed.has(key)) throw new Error(`Regra não suportada: ${key}`);
+  if (input.version !== undefined && input.version !== 1) throw new Error('Versão de regras não suportada');
+  if (input.status !== undefined && !['active','published'].includes(input.status)) throw new Error('Coleções públicas usam apenas produtos publicados');
+  const result = {version:1};
+  for (const key of ['categoryId','brandId','subcategoryId']) if (input[key]) {
+    if (typeof input[key] !== 'string' || input[key].length > 100) throw new Error('Identificador inválido');
+    result[key] = input[key];
+  }
+  for (const key of ['minPriceCents','maxPriceCents','minScore']) if (input[key] !== undefined && input[key] !== null && input[key] !== '') {
+    if (!Number.isSafeInteger(input[key]) || input[key] < 0 || input[key] > (key === 'minScore' ? 100 : 1000000000)) throw new Error('Preço ou nota inválida');
+    result[key] = input[key];
+  }
+  if (result.minPriceCents !== undefined && result.maxPriceCents !== undefined && result.minPriceCents > result.maxPriceCents) throw new Error('Preço mínimo maior que o máximo');
+  if (input.featureIds !== undefined) {
+    if (!Array.isArray(input.featureIds) || input.featureIds.length > 30 || input.featureIds.some(v => typeof v !== 'string' || !v || v.length > 1000)) throw new Error('Características inválidas');
+    result.featureIds = [...new Set(input.featureIds)];
+  }
+  if (input.featured !== undefined) { if (typeof input.featured !== 'boolean') throw new Error('Destaque inválido'); result.featured = input.featured; }
+  return result;
+}
+
+function catalogRuleSql(input) {
+  const rules = catalogRules(input), clauses = [], values = [];
+  for (const [key,column] of [['categoryId','p.category_id'],['brandId','p.brand_id']]) if (rules[key]) { clauses.push(`${column}=?`); values.push(rules[key]); }
+  if (rules.subcategoryId) { clauses.push('EXISTS(SELECT 1 FROM product_classification cl WHERE cl.product_id=p.id AND cl.subcategory_id=?)'); values.push(rules.subcategoryId); }
+  for (const [key,operator] of [['minPriceCents','>='],['maxPriceCents','<=']]) if (rules[key] !== undefined) { clauses.push(`COALESCE(o.current_price_cents,p.base_price_cents) ${operator} ?`); values.push(rules[key]); }
+  if (rules.minScore !== undefined) { clauses.push('p.editorial_score>=?'); values.push(rules.minScore); }
+  if (rules.featured !== undefined) { clauses.push('p.is_featured=?'); values.push(rules.featured ? 1 : 0); }
+  for (const featureId of rules.featureIds || []) { clauses.push('EXISTS(SELECT 1 FROM product_features pf JOIN features f ON f.id=pf.feature_id WHERE pf.product_id=p.id AND pf.feature_id=? AND f.is_active=1)'); values.push(featureId); }
+  return {sql:clauses.length ? clauses.join(' AND ') : '1=1',values};
+}
+
+function catalogCollectionPredicate(collection) {
+  if (Array.isArray(collection.previewProductIds) && collection.collectionType === 'manual') return {sql:'p.id IN(SELECT value FROM json_each(?))',values:[JSON.stringify(collection.previewProductIds)]};
+  if (collection.collectionType === 'dynamic') {
+    const compiled = catalogRuleSql(JSON.parse(collection.rulesJson || '{"version":1}'));
+    if (collection.categoryId) { compiled.sql += ' AND p.category_id=?'; compiled.values.push(collection.categoryId); }
+    return compiled;
+  }
+  let sql = 'EXISTS(SELECT 1 FROM product_collection_items ci WHERE ci.product_id=p.id AND ci.collection_id=?)';
+  const values = [collection.id];
+  if (collection.collectionType === 'legacy') { sql = `(${sql} OR EXISTS(SELECT 1 FROM product_collection_categories cc WHERE (cc.category_id=p.category_id OR EXISTS(SELECT 1 FROM product_classification cl WHERE cl.product_id=p.id AND cl.subcategory_id=cc.category_id)) AND cc.collection_id=?))`; values.push(collection.id); }
+  return {sql,values};
+}
+
+async function catalogRows(env, entity, kind, params = new URLSearchParams()) {
+  const predicate = kind === 'collection' ? catalogCollectionPredicate(entity) : entity.parent_id
+    ? {sql:'EXISTS(SELECT 1 FROM product_classification cl WHERE cl.product_id=p.id AND cl.subcategory_id=?)',values:[entity.id]}
+    : {sql:'p.category_id=?',values:[entity.id]};
+  const filters = {};
+  if (params.get('brand')) filters.brandId = params.get('brand');
+  if (params.get('feature')) filters.featureIds = params.getAll('feature');
+  for (const [param,key] of [['minPrice','minPriceCents'],['maxPrice','maxPriceCents']]) if (params.has(param)) filters[key] = Number(params.get(param));
+  const extra = catalogRuleSql(filters), where = `p.status='published' AND (${predicate.sql}) AND (${extra.sql})`;
+  const values = [...predicate.values,...extra.values];
+  const limit = clamp(params.get('limit'),1,48,24), page = clamp(params.get('page'),1,10000,1);
+  let order = {'price-asc':'price ASC,p.id','price-desc':'price DESC,p.id',score:'p.editorial_score DESC,p.id',popular:'p.view_count DESC,p.id',new:'p.published_at DESC,p.id'}[params.get('sort')] || 'p.is_featured DESC,p.editorial_score DESC,p.id';
+  const orderValues=[];
+  if(kind==='collection' && entity.collectionType!=='dynamic' && !params.get('sort')) {
+    order='COALESCE((SELECT ci.sort_order FROM product_collection_items ci WHERE ci.product_id=p.id AND ci.collection_id=?),2147483647),'+order;
+    orderValues.push(entity.id);
+  }
+  const [count,rows] = await env.DB.batch([
+    env.DB.prepare(`SELECT COUNT(DISTINCT p.id) total FROM products p LEFT JOIN offers o ON o.id=(SELECT chosen.id FROM offers chosen WHERE chosen.product_id=p.id AND chosen.is_primary=1 ORDER BY chosen.priority DESC,chosen.id LIMIT 1) WHERE ${where}`).bind(...values),
+    env.DB.prepare(`${PRODUCT_CARD_SELECT} WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...values,...orderValues,limit,(page-1)*limit),
+  ]);
+  return {products:(rows.results || []).map(normalizeProduct),total:Number(count.results?.[0]?.total || 0),page,limit};
+}
+
+async function catalogResolve(env,path) {
+  if(!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)?$/.test(path))return null;
+  const segments=path.slice(1).split('/'),slug=segments.at(-1),prefix=segments.length===2?segments[0]:'';
+  const [categories,collections] = await env.DB.batch([
+    env.DB.prepare(`${CATALOG_CATEGORY_SELECT} WHERE c.is_active=1 AND (parent.id IS NULL OR parent.is_active=1) AND c.slug=? AND ((?='' AND c.parent_id IS NULL) OR parent.slug=?)`).bind(slug,prefix,prefix),
+    env.DB.prepare(`${CATALOG_COLLECTION_SELECT} WHERE pc.is_active=1 AND (c.id IS NULL OR c.is_active=1) AND pc.slug=? AND ((?='colecoes' AND c.id IS NULL) OR c.slug=?)`).bind(slug,prefix,prefix),
+  ]);
+  if (categories.results?.[0]) return {kind:'category',entity:categories.results[0]};
+  if (collections.results?.[0]) return {kind:'collection',entity:collections.results[0]};
+  const alias = await env.DB.prepare('SELECT * FROM catalog_aliases WHERE path=?').bind(path).first();
+  if (!alias) return null;
+  const entity = await env.DB.prepare(alias.entity_type === 'category'
+    ? `${CATALOG_CATEGORY_SELECT} WHERE c.id=? AND c.is_active=1 AND (parent.id IS NULL OR parent.is_active=1)`
+    : `${CATALOG_COLLECTION_SELECT} WHERE pc.id=? AND pc.is_active=1 AND (c.id IS NULL OR c.is_active=1)`).bind(alias.entity_id).first();
+  return entity ? {kind:alias.entity_type,entity,redirect:entity.path} : null;
+}
+
+async function catalogDiscovery(req,env,id) {
+  const url = new URL(req.url), path = url.searchParams.get('path') || '';
+  const resolved = await catalogResolve(env,path);
+  if (!resolved) return fail(req,env,'NOT_FOUND','Categoria ou coleção não encontrada',404,id);
+  const {kind,entity} = resolved;
+  try {
+    const data = await catalogRows(env,entity,kind,url.searchParams);
+    const rootId = kind === 'category' ? entity.parent_id || entity.id : entity.categoryId;
+    const [children,collections,brands,features] = await env.DB.batch([
+      env.DB.prepare(`${CATALOG_CATEGORY_SELECT} WHERE c.parent_id=? AND c.is_active=1 ORDER BY c.sort_order,c.name`).bind(rootId || ''),
+      env.DB.prepare(`${CATALOG_COLLECTION_SELECT} WHERE pc.is_active=1 AND m.category_id=? ORDER BY pc.home_sort_order,pc.name LIMIT 100`).bind(rootId || ''),
+      env.DB.prepare("SELECT b.id,b.name FROM brands b WHERE b.is_active=1 AND EXISTS(SELECT 1 FROM products p WHERE p.brand_id=b.id AND p.status='published' AND (? IS NULL OR p.category_id=?)) ORDER BY b.name").bind(rootId || null,rootId || null),
+      env.DB.prepare("SELECT f.id,f.name FROM features f WHERE f.is_active=1 AND EXISTS(SELECT 1 FROM product_features pf JOIN products p ON p.id=pf.product_id WHERE pf.feature_id=f.id AND p.status='published' AND (? IS NULL OR p.category_id=?)) ORDER BY f.name LIMIT 500").bind(rootId || null,rootId || null),
+    ]);
+    return ok(req,env,{kind,...entity,...data,children:children.results || [],collections:collections.results || [],brands:brands.results || [],features:features.results || []},id);
+  } catch(error) { return fail(req,env,'INVALID_FILTER',error.message,422,id); }
+}
+
+async function catalogAdmin(req,env,id,path) {
+  const parts = path.split('/').slice(5), resource = parts[0], entityId = parts[1];
+  if (req.method === 'GET' && !resource) {
+    const view=new URL(req.url).searchParams.get('view') || 'all';
+    const queries={
+      categories:()=>env.DB.prepare(`${CATALOG_CATEGORY_SELECT} ORDER BY c.sort_order,c.name`),
+      collections:()=>env.DB.prepare(`${CATALOG_COLLECTION_SELECT} ORDER BY pc.home_sort_order,pc.name`),
+      features:()=>env.DB.prepare('SELECT * FROM features ORDER BY name'),
+      brands:()=>env.DB.prepare('SELECT id,name,is_active FROM brands ORDER BY name'),
+      products:()=>env.DB.prepare('SELECT id,name,slug,status FROM products ORDER BY name LIMIT 1000'),
+      items:()=>env.DB.prepare('SELECT collection_id,product_id FROM product_collection_items'),
+      legacyCategories:()=>env.DB.prepare('SELECT collection_id,category_id FROM product_collection_categories'),
+    };
+    const keys=({categories:['categories'],features:['features'],product:['categories','collections','features','brands']})[view] || Object.keys(queries);
+    const result=await env.DB.batch(keys.map(key=>queries[key]()));
+    const data=Object.fromEntries(Object.keys(queries).map(key=>[key,[]]));
+    keys.forEach((key,index)=>{data[key]=result[index].results || []});
+    return ok(req,env,data,id);
+  }
+  if (resource === 'preview' && req.method === 'POST') {
+    try { const body = await readJson(req,100000); const rules = catalogRules(body.rules); await catalogValidateReferences(env,rules); const previewProductIds=catalogIds(body.productIds || [],1000); await catalogRequireIds(env,'products',previewProductIds); return ok(req,env,await catalogRows(env,{id:body.id || '',previewProductIds,collectionType:body.collectionType || 'dynamic',categoryId:body.categoryId || null,rulesJson:JSON.stringify(rules)},'collection'),id); }
+    catch(error) { return fail(req,env,'VALIDATION_ERROR',error.message,422,id); }
+  }
+  if (!['categories','collections','features'].includes(resource)) return fail(req,env,'NOT_FOUND','Recurso não encontrado',404,id);
+  const table = {categories:'categories',collections:'product_collections',features:'features'}[resource];
+  if (req.method === 'DELETE' && entityId) {
+    const result = await env.DB.prepare(`UPDATE ${table} SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(entityId).run();
+    return result.meta.changes ? ok(req,env,{id:entityId,deactivated:true},id) : fail(req,env,'NOT_FOUND','Registro não encontrado',404,id);
+  }
+  if (!['POST','PUT'].includes(req.method) || (req.method === 'PUT' && !entityId)) return fail(req,env,'METHOD_NOT_ALLOWED','Método não permitido',405,id);
+  try {
+    const body = await readJson(req,100000), name = String(body.name || '').trim(), slug = String(body.slug || '').trim();
+    if (!name || name.length > (resource==='features'?100:140) || !(resource==='features'?/^[a-z0-9][a-z0-9-]{1,999}$/:/^[a-z0-9][a-z0-9-]{1,99}$/).test(slug)) throw new Error('Informe nome e slug válido (2 a 100 caracteres)');
+    const targetId = entityId || crypto.randomUUID();
+    const current = entityId ? await env.DB.prepare(`SELECT * FROM ${table} WHERE id=?`).bind(entityId).first() : null;
+    if (entityId && !current) return fail(req,env,'NOT_FOUND','Registro não encontrado',404,id);
+    const active = body.isActive === false ? 0 : 1, description = String(body.description || '').slice(0,1000), order = clamp(body.sortOrder,-10000,10000,0);
+    const seoTitle = String(body.seoTitle || '').slice(0,160), seoDescription = String(body.seoDescription || '').slice(0,320), statements = [];
+    if (resource === 'features') {
+      const duplicate = await env.DB.prepare('SELECT id FROM features WHERE name=? AND id<>?').bind(name,targetId).first();
+      if (duplicate) throw new Error('Já existe uma característica com este nome');
+      statements.push(entityId ? env.DB.prepare('UPDATE features SET name=?,slug=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(name,slug,active,targetId)
+        : env.DB.prepare('INSERT INTO features(id,name,slug,is_active) VALUES(?,?,?,?)').bind(targetId,name,slug,active));
+    } else {
+      const parentId = body.categoryId || null;
+      let parent = null;
+      if (parentId) { parent = await env.DB.prepare('SELECT * FROM categories WHERE id=?').bind(parentId).first(); if (!parent || parent.parent_id || parent.id === targetId) throw new Error('Escolha uma categoria principal válida'); }
+      if (resource === 'categories' && current && (current.parent_id || null)!==parentId) {
+        const classified=await env.DB.prepare('SELECT 1 used FROM product_classification WHERE subcategory_id=? LIMIT 1').bind(targetId).first();
+        if(classified)throw new Error('Reclassifique os produtos antes de mover esta subcategoria');
+      }
+      if (resource === 'categories' && parentId) {
+        const used = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM categories WHERE parent_id=?) + (SELECT COUNT(*) FROM products WHERE category_id=?) + (SELECT COUNT(*) FROM collection_metadata WHERE category_id=?) total').bind(targetId,targetId,targetId).first();
+        if (used.total) throw new Error('Categoria com produtos, subcategorias ou coleções não pode se tornar subcategoria');
+      }
+      const canonicalPath = '/' + (parent ? parent.slug+'/' : resource === 'collections' ? 'colecoes/' : '') + slug;
+      const reserved = new Set(['api','admin','assets','media','colecoes','categoria','colecao','produto','produtos','busca','comparar','marca','autor','novidades','promocoes','conta','entrar','cadastro','sobre','contato','offline','auth-callback','recuperar-senha','redefinir-senha','premium-checkout','robots','sitemap','seguranca','acessibilidade','regulamento-de-indicacoes','404','manifest']);
+      if (resource === 'categories' && !parent && (reserved.has(slug) || slug.startsWith('politica-') || slug.startsWith('termos-') || slug.startsWith('diretrizes-'))) throw new Error('Slug reservado para uma página do site');
+      const owners = await env.DB.batch([
+        env.DB.prepare(`${CATALOG_CATEGORY_SELECT} WHERE '/'||COALESCE(parent.slug||'/','')||c.slug=?`).bind(canonicalPath),
+        env.DB.prepare(`${CATALOG_COLLECTION_SELECT} WHERE '/'||COALESCE(c.slug||'/','colecoes/')||pc.slug=?`).bind(canonicalPath),
+      ]);
+      if (owners.some(result=>(result.results || []).some(row=>row.id!==targetId))) throw new Error('Este caminho já pertence a outra categoria ou coleção');
+      const collision = await catalogResolve(env,canonicalPath);
+      const historical = await env.DB.prepare("SELECT entity_id FROM catalog_aliases WHERE path=? OR (entity_type=? AND (path='/'||? OR path LIKE '%/'||?))").bind(canonicalPath,resource==='categories'?'category':'collection',slug,slug).first();
+      if ((collision && collision.entity.id !== targetId) || (historical && historical.entity_id !== targetId)) throw new Error('Este caminho já pertence a outra categoria ou coleção');
+      if (resource === 'categories') {
+        statements.push(entityId ? env.DB.prepare('UPDATE categories SET name=?,slug=?,description=?,parent_id=?,is_active=?,sort_order=?,icon=?,image_scale=?,image_position_x=?,image_position_y=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(name,slug,description,parentId,active,order,String(body.icon || '').slice(0,8),clamp(body.imageScale,50,250,current?.image_scale||100),clamp(body.imagePositionX,-100,100,current?.image_position_x||0),clamp(body.imagePositionY,-100,100,current?.image_position_y||0),targetId)
+          : env.DB.prepare('INSERT INTO categories(id,name,slug,description,parent_id,is_active,sort_order,icon,image_scale,image_position_x,image_position_y) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(targetId,name,slug,description,parentId,active,order,String(body.icon || '').slice(0,8),clamp(body.imageScale,50,250,100),clamp(body.imagePositionX,-100,100,0),clamp(body.imagePositionY,-100,100,0)));
+        statements.push(env.DB.prepare('INSERT INTO category_metadata(category_id,seo_title,seo_description) VALUES(?,?,?) ON CONFLICT(category_id) DO UPDATE SET seo_title=excluded.seo_title,seo_description=excluded.seo_description').bind(targetId,seoTitle,seoDescription));
+      } else {
+        const type = body.collectionType || 'manual';
+        if (!['manual','dynamic','legacy'].includes(type) || (type === 'legacy' && !current)) throw new Error('Tipo de coleção inválido');
+        const rules = catalogRules(body.rules || {});
+        if (parentId && rules.categoryId && parentId !== rules.categoryId) throw new Error('A categoria da regra deve corresponder à categoria da coleção');
+        await catalogValidateReferences(env,rules);
+        const group = body.discoveryGroup || 'need'; if (!['need','budget','highlight'].includes(group)) throw new Error('Grupo inválido');
+        const productIds = catalogIds(body.productIds || [],1000);
+        if (type === 'dynamic' && productIds.length) throw new Error('Coleções dinâmicas usam regras; remova a seleção manual');
+        await catalogRequireIds(env,'products',productIds);
+        statements.push(entityId ? env.DB.prepare('UPDATE product_collections SET name=?,slug=?,description=?,is_active=?,is_home_featured=?,home_sort_order=?,home_title=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(name,slug,description,active,body.isFeatured ? 1 : 0,order,String(body.homeTitle??current?.home_title??'').slice(0,140),targetId)
+          : env.DB.prepare('INSERT INTO product_collections(id,name,slug,description,is_active,is_home_featured,home_sort_order,home_title) VALUES(?,?,?,?,?,?,?,?)').bind(targetId,name,slug,description,active,body.isFeatured ? 1 : 0,order,String(body.homeTitle||'').slice(0,140)));
+        statements.push(env.DB.prepare(`INSERT INTO collection_metadata(collection_id,category_id,collection_type,discovery_group,rules_json,seo_title,seo_description,buying_guide) VALUES(?,?,?,?,?,?,?,?)
+          ON CONFLICT(collection_id) DO UPDATE SET category_id=excluded.category_id,collection_type=excluded.collection_type,discovery_group=excluded.discovery_group,rules_json=excluded.rules_json,seo_title=excluded.seo_title,seo_description=excluded.seo_description,buying_guide=excluded.buying_guide`).bind(targetId,parentId,type,group,JSON.stringify(rules),seoTitle,seoDescription,String(body.buyingGuide || '').slice(0,5000)));
+        statements.push(env.DB.prepare('DELETE FROM product_collection_items WHERE collection_id=?').bind(targetId));
+        // JSON table expansion keeps relation writes bounded to one statement.
+        statements.push(env.DB.prepare('INSERT INTO product_collection_items(collection_id,product_id,sort_order) SELECT ?,value,CAST(key AS INTEGER) FROM json_each(?)').bind(targetId,JSON.stringify(productIds)));
+        if (type !== 'legacy') statements.push(env.DB.prepare('DELETE FROM product_collection_categories WHERE collection_id=?').bind(targetId));
+      }
+    }
+    await env.DB.batch(statements);
+    return ok(req,env,{id:targetId},id);
+  } catch(error) { return fail(req,env,'VALIDATION_ERROR',/UNIQUE constraint/i.test(error.message) ? 'Este slug já está em uso' : error.message,422,id); }
+}
+
+function catalogIds(values,limit=100) {
+  if (!Array.isArray(values) || values.length > limit || values.some(v=>typeof v !== 'string' || !v || v.length>1000)) throw new Error('Seleção inválida ou muito extensa');
+  return [...new Set(values)];
+}
+async function catalogRequireIds(env,table,ids) {
+  if (!['products','categories','brands','features','product_collections'].includes(table)) throw new Error('Recurso inválido');
+  if (!ids.length) return;
+  const row = await env.DB.prepare(`SELECT COUNT(*) total FROM ${table} WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)).first();
+  if (Number(row.total) !== ids.length) throw new Error('A seleção contém registros inexistentes');
+}
+async function catalogValidateReferences(env,rules) {
+  for (const [key,table] of [['categoryId','categories'],['subcategoryId','categories'],['brandId','brands']]) if (rules[key]) await catalogRequireIds(env,table,[rules[key]]);
+  await catalogRequireIds(env,'features',rules.featureIds || []);
+  if (rules.subcategoryId) {
+    const sub = await env.DB.prepare('SELECT parent_id FROM categories WHERE id=?').bind(rules.subcategoryId).first();
+    if (!sub?.parent_id || (rules.categoryId && sub.parent_id !== rules.categoryId)) throw new Error('Subcategoria incompatível com a regra');
+  }
+}
+
+async function catalogProduct(req,env,productId,id) {
+  const product = await env.DB.prepare('SELECT id,category_id,brand_id,tags_json FROM products WHERE id=?').bind(productId).first();
+  if (!product) return fail(req,env,'NOT_FOUND','Produto não encontrado',404,id);
+  if (req.method === 'GET') {
+    const [classification,features,collections] = await env.DB.batch([
+      env.DB.prepare('SELECT subcategory_id FROM product_classification WHERE product_id=?').bind(productId),
+      env.DB.prepare('SELECT feature_id FROM product_features WHERE product_id=?').bind(productId),
+      env.DB.prepare("SELECT ci.collection_id FROM product_collection_items ci LEFT JOIN collection_metadata cm ON cm.collection_id=ci.collection_id WHERE ci.product_id=? AND COALESCE(cm.collection_type,'legacy')='manual'").bind(productId),
+    ]);
+    return ok(req,env,{categoryId:product.category_id,brandId:product.brand_id,subcategoryId:classification.results?.[0]?.subcategory_id || '',featureIds:features.results.map(x=>x.feature_id),collectionIds:collections.results.map(x=>x.collection_id)},id);
+  }
+  if (req.method !== 'PUT') return fail(req,env,'METHOD_NOT_ALLOWED','Método não permitido',405,id);
+  try {
+    const body = await readJson(req,100000), featureIds = catalogIds(body.featureIds || []), collectionIds = catalogIds(body.collectionIds || []);
+    const category = await env.DB.prepare('SELECT id,parent_id FROM categories WHERE id=?').bind(body.categoryId || '').first();
+    if (!category || category.parent_id) throw new Error('Selecione uma categoria principal');
+    if (body.subcategoryId) {
+      const sub = await env.DB.prepare('SELECT parent_id FROM categories WHERE id=?').bind(body.subcategoryId).first();
+      if (sub?.parent_id !== category.id) throw new Error('A subcategoria não pertence à categoria principal');
+    }
+    await catalogRequireIds(env,'brands',body.brandId ? [body.brandId] : []);
+    await catalogRequireIds(env,'features',featureIds);
+    if (collectionIds.length) {
+      const manual = await env.DB.prepare("SELECT COUNT(*) total FROM collection_metadata WHERE collection_type='manual' AND collection_id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(collectionIds)).first();
+      if (Number(manual.total) !== collectionIds.length) throw new Error('Selecione apenas coleções manuais');
+    }
+    await env.DB.batch([
+      env.DB.prepare('UPDATE products SET category_id=?,brand_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(category.id,body.brandId || null,productId),
+      env.DB.prepare('INSERT INTO product_classification(product_id,subcategory_id) VALUES(?,?) ON CONFLICT(product_id) DO UPDATE SET subcategory_id=excluded.subcategory_id').bind(productId,body.subcategoryId || null),
+      env.DB.prepare('DELETE FROM product_features WHERE product_id=?').bind(productId),
+      env.DB.prepare('INSERT INTO product_features(product_id,feature_id) SELECT ?,value FROM json_each(?)').bind(productId,JSON.stringify(featureIds)),
+      env.DB.prepare('UPDATE products SET tags_json=(SELECT json_group_array(f.name) FROM features f JOIN product_features pf ON pf.feature_id=f.id WHERE pf.product_id=?) WHERE id=?').bind(productId,productId),
+      env.DB.prepare("DELETE FROM product_collection_items WHERE product_id=? AND collection_id IN(SELECT collection_id FROM collection_metadata WHERE collection_type='manual')").bind(productId),
+      env.DB.prepare('INSERT INTO product_collection_items(product_id,collection_id) SELECT ?,value FROM json_each(?)').bind(productId,JSON.stringify(collectionIds)),
+    ]);
+    return ok(req,env,{id:productId},id);
+  } catch(error) { return fail(req,env,'VALIDATION_ERROR',error.message,422,id); }
+}
+
+async function catalogImage(req,env,resource,entityId,id) {
+  if (!['categories','collections'].includes(resource) || req.method !== 'POST') return fail(req,env,'METHOD_NOT_ALLOWED','Método não permitido',405,id);
+  const table = resource === 'categories' ? 'categories' : 'collection_metadata', column = resource === 'categories' ? 'id' : 'collection_id';
+  const row = await env.DB.prepare(`SELECT image_storage_key FROM ${table} WHERE ${column}=?`).bind(entityId).first();
+  if (!row) return fail(req,env,'NOT_FOUND','Registro não encontrado',404,id);
+  let key;
+  try { const form = await req.formData(),file=form.get('image');if(!(file instanceof File)||!file.size||!['image/png','image/jpeg','image/webp','image/avif','image/gif'].includes(file.type))throw new Error('Envie uma imagem PNG, JPEG, WebP, AVIF ou GIF'); key = await storeSiteImage(env,file,resource,entityId); }
+  catch(error) { return fail(req,env,'INVALID_FILE',error.message,422,id); }
+  await env.DB.batch([env.DB.prepare(`UPDATE ${table} SET image_storage_key=? WHERE ${column}=?`).bind(key,entityId),env.DB.prepare(`UPDATE ${resource==='categories'?'categories':'product_collections'} SET updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(entityId)]);
+  if (row.image_storage_key && row.image_storage_key !== key) await env.MEDIA.delete(row.image_storage_key);
+  return ok(req,env,{imageStorageKey:key},id);
+}
+
+async function catalogPage(req,env,path) {
+  if (!env.ASSETS || !/^(?:\/[a-z0-9-]+){1,2}$/.test(path)) return null;
+  const resolved = await catalogResolve(env,path);
+  if (!resolved) return null;
+  if (resolved.redirect) { const target=new URL(resolved.redirect,req.url);target.search=new URL(req.url).search;return Response.redirect(target,301); }
+  const {kind,entity} = resolved, canonical = new URL(entity.path,req.url).href;
+  const title = entity.seoTitle || `${entity.name} | SHOPLAB`, description = entity.seoDescription || entity.description || `Compare produtos em ${entity.name}.`;
+  const escape = value => String(value || '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const data = await catalogRows(env,entity,kind);
+  const breadcrumbs = [{'@type':'ListItem',position:1,name:'Início',item:new URL('/',req.url).href}];
+  const rootSlug=entity.parentSlug || entity.categorySlug;
+  if(rootSlug) breadcrumbs.push({'@type':'ListItem',position:2,name:rootSlug.replace(/-/g,' '),item:new URL('/'+rootSlug,req.url).href});
+  breadcrumbs.push({'@type':'ListItem',position:breadcrumbs.length+1,name:entity.name,item:canonical});
+  const schema = JSON.stringify({'@context':'https://schema.org','@type':'CollectionPage',name:entity.name,url:canonical,breadcrumb:{'@type':'BreadcrumbList',itemListElement:breadcrumbs},mainEntity:{'@type':'ItemList',numberOfItems:data.total,itemListElement:data.products.map((p,i)=>({'@type':'ListItem',position:i+1,url:new URL(`/produto?slug=${encodeURIComponent(p.slug)}`,req.url).href,name:p.name}))}}).replace(/</g,'\\u003c');
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/"><meta name="robots" content="${new URL(req.url).search?'noindex,follow':'index,follow'}"><title>${escape(title)}</title><meta name="description" content="${escape(description)}"><link rel="canonical" href="${escape(canonical)}"><link rel="stylesheet" href="/assets/css/main.css?v=20260908-discovery-1"><script type="application/ld+json">${schema}</script></head><body data-page="discovery"><div id="app"><main id="conteudo" class="container page-hero"><nav aria-label="Caminho"><a href="/">Início</a> / ${escape(entity.name)}</nav><h1>${escape(entity.name)}</h1><p>${escape(description)}</p><p>${data.total} produtos</p><ul>${data.products.map(p=>`<li><a href="/produto?slug=${encodeURIComponent(p.slug)}">${escape(p.name)}</a></li>`).join('')}</ul></main></div><script type="module" src="/assets/js/app.js?v=20260908-discovery-1"></script></body></html>`;
+  return new Response(html,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=60','x-content-type-options':'nosniff'}});
 }

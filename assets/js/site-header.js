@@ -85,7 +85,7 @@ function themeLogo(theme){
 }
 
 function headerSpotlight(config){
-  const row=document.querySelector('.account-site-header .header-row');
+  const row=document.querySelector('.account-site-header .header-row,.news-site-header .header-row');
   if(!row||row.querySelector('.header-highlight'))return;
   const spotlight=(config.headerSpotlights||[]).find(item=>item.mediaUrl);
   if(!spotlight)return;

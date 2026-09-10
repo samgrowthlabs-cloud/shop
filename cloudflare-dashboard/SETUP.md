@@ -19,7 +19,7 @@ Este guia configura o ambiente de produção usando o Cloudflare Dashboard. O ma
 ## 3. Criar e configurar o Worker
 
 1. Em **Workers & Pages**, crie ou abra o Worker de API.
-2. Publique o conteúdo de `worker.js`.
+2. Publique o projeto pela raiz com `npx wrangler deploy`. Não cole apenas `worker.js` no editor do Dashboard: o backend usa módulos locais, incluindo `cloudflare-dashboard/news.js`, que o Wrangler empacota automaticamente.
 3. Em **Settings → Bindings**, crie os bindings:
 
 | Tipo | Nome exato | Necessário |
@@ -104,3 +104,6 @@ O Worker pode usar cron para rotinas de conta. O agendamento sugerido é `*/30 *
 - Rotacione qualquer secret exposto.
 - Faça backup do D1 antes de migrar.
 - Mantenha staging separado de produção quando houver mudança de banco, pagamento ou autenticação.
+## Catálogo com URLs de descoberta
+
+Em banco existente, aplique `catalog-discovery-upgrade.sql` antes de atualizar o Worker e os assets, seguindo [o guia de migração](../docs/CATALOG-DISCOVERY.md). O domínio público precisa ser servido pelo Worker com binding `ASSETS`; as rotas limpas são renderizadas nele. Preserve o `assets.run_worker_first` de `wrangler.jsonc` para os redirects de `categoria`, `colecao` e o sitemap dinâmico. A API isolada em outro domínio não substitui essa configuração do site público.

@@ -6,4 +6,5 @@ Disallow: /premium-checkout.html
 Disallow: /recuperar-senha.html
 Disallow: /redefinir-senha.html
 Sitemap: https://shoplab.com.br/sitemap.xml
+Sitemap: https://shoplab.com.br/news-sitemap.xml
 Sitemap: https://shoplab.bidjorysamuel.workers.dev/sitemap.xml

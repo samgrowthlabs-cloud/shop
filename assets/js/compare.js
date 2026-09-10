@@ -68,8 +68,11 @@ function renderBar(selected) {
   document.body.append(tray);
 }
 
+let comparisonUiBound=false;
 export function bindComparisonUI() {
   syncButtons();
+  if(comparisonUiBound)return;
+  comparisonUiBound=true;
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-compare-product]');
     if (button) {

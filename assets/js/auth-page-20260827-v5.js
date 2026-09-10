@@ -23,6 +23,15 @@ function rows(items,kind){
   return `<div class="account-list">${items.map(item=>{const image=item.storageKey?`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(item.storageKey)}?w=160&q=76`:item.externalUrl||'';return`<article><a class="account-product-thumb" href="produto.html?slug=${encodeURIComponent(item.slug)}" aria-label="Ver ${esc(item.name||item.slug)}">${image?`<img src="${esc(image)}" alt="${esc(item.altText||item.name||'Produto')}" loading="lazy" decoding="async">`:`<img class="fallback" src="assets/icons/${icon}.svg" alt="">`}</a><a class="account-product-copy" href="produto.html?slug=${encodeURIComponent(item.slug)}"><strong>${esc(item.name||String(item.slug).replaceAll('-',' '))}</strong>${item.price!=null?`<small>${money(item.price)}</small>`:''}</a>${kind==='cart'?`<div class="account-item-side"><button class="btn ghost" type="button" data-remove-cart="${esc(item.slug)}" data-cart-quantity="${Number(item.quantity)||1}">Remover</button></div>`:''}${kind==='favorites'?'<img class="account-status-icon favorite" src="assets/icons/heart.svg" alt="Produto curtido">':''}${kind==='ratings'?`<span class="account-rating" aria-label="${Number(item.rating)} de 5 estrelas">${'★'.repeat(Number(item.rating))}${'☆'.repeat(5-Number(item.rating))}</span>`:''}</article>`}).join('')}</div>`;
 }
 
+function newsRows(items){
+  if(!Array.isArray(items)||!items.length)return '<div class="account-empty"><img src="assets/icons/news.svg" alt=""><p>Nenhuma notícia salva ainda.</p><a class="btn ghost" href="/noticias">Ver notícias</a></div>';
+  const mediaUrl=value=>{if(!value)return'';try{return new URL(value,SHOPLAB_CONFIG.API_BASE_URL+'/').href}catch{return''}};
+  return '<div class="account-list account-news-list">'+items.map(item=>{
+    const image=mediaUrl(item.imageUrl),href='/noticias/'+encodeURIComponent(item.slug),title=item.title||String(item.slug||'').replaceAll('-',' '),meta=[item.category,(Number(item.readingTime)||1)+' min de leitura'].filter(Boolean).join(' · ');
+    return '<article class="account-news-item"><a class="account-product-thumb" href="'+href+'" aria-label="Ler '+esc(title)+'">'+(image?'<img src="'+esc(image)+'" alt="'+esc(item.imageAlt||title)+'" loading="lazy" decoding="async">':'<img class="fallback" src="assets/icons/news.svg" alt="">')+'</a><a class="account-product-copy" href="'+href+'"><strong>'+esc(title)+'</strong>'+(item.excerpt?'<p>'+esc(item.excerpt)+'</p>':'')+'<small>'+esc(meta)+'</small></a><div class="account-item-side"><button class="btn ghost" type="button" data-remove-saved-news="'+esc(item.slug)+'" aria-label="Remover '+esc(title)+' das notícias salvas">Remover</button></div></article>';
+  }).join('')+'</div>';
+}
+
 function premiumBenefits(limit){
   return `<div class="premium-benefits">
     <article><span aria-hidden="true">⌕</span><div><strong>Busca inteligente Plus</strong><p>Entende o que você procura e prioriza adequação, qualidade, avaliações, preço e custo-benefício.</p></div></article>
@@ -81,18 +90,40 @@ async function account(){
   refreshPremiumPaymentReturn();
   subscriptionRequest.then(subscription=>{if(!subscription&&!cachedSubscription&&$('#premium-subscription'))$('#premium-subscription').innerHTML='<p>Não foi possível carregar o plano SHOPLAB+ agora. Tente atualizar a página.</p>'});
   startPresence();
-  const accountTabs={perfil:'profile',gerenciar:'manage-account',plus:'premium',convites:'invites',lista:'cart',favoritos:'favorites',avaliacoes:'ratings'};
-  const legacyTabs={profile:'perfil','manage-account':'gerenciar',premium:'plus',invites:'convites',cart:'lista',carrinho:'lista',favorites:'favoritos',ratings:'avaliacoes','cart-list':'lista','favorites-list':'favoritos','ratings-list':'avaliacoes'};
+  const accountTabs={perfil:'profile',gerenciar:'manage-account',plus:'premium',convites:'invites',lista:'cart',noticias:'saved-news',favoritos:'favorites',avaliacoes:'ratings'};
+  const legacyTabs={profile:'perfil','manage-account':'gerenciar',premium:'plus',invites:'convites',cart:'lista',carrinho:'lista','saved-news':'noticias',favorites:'favoritos',ratings:'avaliacoes','cart-list':'lista','favorites-list':'favoritos','ratings-list':'avaliacoes'};
   const accountParams=new URLSearchParams(location.search),legacyTab=legacyTabs[location.hash.slice(1)],hasRequestedTab=accountTabs[accountParams.get('aba')]||legacyTab||accountParams.has('premium_payment');
   let activeTab=accountParams.get('aba');
   if(accountParams.has('premium_payment'))activeTab='plus';
   if(!accountTabs[activeTab])activeTab=legacyTab||'perfil';
   if(location.hash){const cleanUrl=new URL(location.href);cleanUrl.hash='';cleanUrl.searchParams.set('aba',activeTab);history.replaceState(null,'',cleanUrl)}
   if(hasRequestedTab)document.body.dataset.accountSection=activeTab;
-  const accountTabTitles={perfil:'Meu perfil',gerenciar:'Gerenciar conta',plus:'SHOPLAB Plus',convites:'Convites e recompensas',lista:'Minha lista',favoritos:'Produtos curtidos',avaliacoes:'Minhas avaliações'};
-  const mobileTabTitle=$('#mobile-account-tab-title');if(mobileTabTitle)mobileTabTitle.textContent=accountTabTitles[activeTab]||'Minha conta';
-  Object.entries(accountTabs).forEach(([tab,id])=>{const panel=document.getElementById(id);if(panel)panel.hidden=tab!==activeTab});
-  $('.account-sidebar nav')?.querySelectorAll('[data-account-tab]').forEach(link=>{const active=link.dataset.accountTab===activeTab;link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')});
+  const accountTabTitles={perfil:'Meu perfil',gerenciar:'Gerenciar conta',plus:'SHOPLAB Plus',convites:'Convites e recompensas',lista:'Minha lista',noticias:'Notícias salvas',favoritos:'Produtos curtidos',avaliacoes:'Minhas avaliações'};
+  const paintAccountTab=(tab,{updateHistory=false,replaceHistory=false}={})=>{
+    if(!accountTabs[tab])return;
+    activeTab=tab;
+    document.body.dataset.accountSection=tab;
+    const mobileTabTitle=$('#mobile-account-tab-title');if(mobileTabTitle)mobileTabTitle.textContent=accountTabTitles[tab]||'Minha conta';
+    Object.entries(accountTabs).forEach(([key,panelId])=>{const panel=document.getElementById(panelId);if(panel)panel.hidden=key!==tab});
+    document.querySelectorAll('[data-account-tab]').forEach(link=>{const selected=link.dataset.accountTab===tab;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')});
+    if(updateHistory){const next=new URL(location.href);next.hash='';next.search='';next.searchParams.set('aba',tab);history[replaceHistory?'replaceState':'pushState']({accountTab:tab},'',next)}
+  };
+  if(hasRequestedTab)paintAccountTab(activeTab);
+  else{Object.entries(accountTabs).forEach(([key,panelId])=>{const panel=document.getElementById(panelId);if(panel)panel.hidden=key!==activeTab});document.querySelectorAll('[data-account-tab]').forEach(link=>link.classList.toggle('active',link.dataset.accountTab===activeTab))}
+  document.addEventListener('click',event=>{
+    const link=event.target.closest('a[href]');
+    if(!link||event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    const next=new URL(link.href,location.href);
+    if(next.origin!==location.origin||!/(?:^|\/)conta\.html$/.test(next.pathname))return;
+    const tab=next.searchParams.get('aba');
+    if(accountTabs[tab]){event.preventDefault();paintAccountTab(tab,{updateHistory:true});return}
+    if(link.closest('.mobile-account-tab-header')){event.preventDefault();delete document.body.dataset.accountSection;history.pushState({accountOverview:true},'',next)}
+  });
+  addEventListener('popstate',()=>{
+    const tab=new URLSearchParams(location.search).get('aba');
+    if(accountTabs[tab])paintAccountTab(tab);
+    else delete document.body.dataset.accountSection
+  });
   const displayName=profile.displayName||user.user_metadata?.display_name||user.email?.split('@')[0]||'Minha conta',initials=displayName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase(),avatar=user.user_metadata?.avatar_url||user.user_metadata?.picture||'';
   const paintAvatar=id=>{const target=$(id);if(!target)return;if(avatar){target.innerHTML=`<img src="${esc(avatar)}" alt="Foto de ${esc(displayName)}" referrerpolicy="no-referrer">`;return}if(!target.querySelector("img"))target.innerHTML=`<b>${esc(initials)}</b>`};
   ['#header-account-avatar','#mobile-header-account-avatar','#mobile-overview-avatar','#sidebar-account-avatar','#profile-account-avatar'].forEach(paintAvatar);
@@ -103,12 +134,13 @@ async function account(){
   $('#mobile-overview-email').textContent=user.email||'';
   $('#account-new-email').value=user.email||'';
   $('#display-name').value=displayName;
+  $('#saved-news-list').innerHTML=newsRows(library.savedNews||[]);
   $('#favorites-list').innerHTML=rows(library.favorites||[],'favorites');
   $('#ratings-list').innerHTML=rows(library.ratings||[],'ratings');
   $('#cart-list').innerHTML=rows(library.cart||[],'cart');
   const referral=await userApi('referrals').catch(()=>null);if(referral){const target=$('#referral-summary'),progress=referral.nextMilestone?Math.min(100,Math.round(referral.qualified/referral.nextMilestone*100)):100;target.innerHTML=`<div class="referral-numbers"><strong>${referral.qualified}</strong><span>convites qualificados</span><strong>${referral.pending}</strong><span>em validação</span></div><div class="referral-progress"><span style="width:${progress}%"></span></div><p>${referral.nextMilestone?`Faltam ${Math.max(0,referral.nextMilestone-referral.qualified)} para solicitar a recompensa de ${referral.nextMilestone} convites.`:'Você alcançou todas as metas disponíveis.'}</p><small>${esc(referral.rules)}</small>${(referral.rewards||[]).map(item=>`<div class="referral-reward"><b>Meta de ${item.milestone}</b><span>${esc(item.status)}</span></div>`).join('')}`}
-  const counts={cart:(library.cart||[]).length,favorites:(library.favorites||[]).length,ratings:(library.ratings||[]).length};
-  ['#account-cart-count','#mobile-account-cart-count','#mobile-summary-cart','#sidebar-cart-count','#summary-cart-count'].forEach(selector=>{const target=$(selector);if(target){target.textContent=counts.cart;target.hidden=!counts.cart&&['#account-cart-count','#mobile-account-cart-count'].includes(selector)}});$('#summary-favorites-count').textContent=counts.favorites;$('#summary-ratings-count').textContent=counts.ratings;$('#mobile-summary-favorites').textContent=counts.favorites;$('#mobile-summary-ratings').textContent=counts.ratings;
+  const counts={cart:(library.cart||[]).length,news:(library.savedNews||[]).length,favorites:(library.favorites||[]).length,ratings:(library.ratings||[]).length};
+  ['#account-cart-count','#mobile-account-cart-count','#mobile-summary-cart','#sidebar-cart-count','#summary-cart-count'].forEach(selector=>{const target=$(selector);if(target){target.textContent=counts.cart;target.hidden=!counts.cart&&['#account-cart-count','#mobile-account-cart-count'].includes(selector)}});$('#sidebar-news-count').textContent=counts.news;$('#summary-favorites-count').textContent=counts.favorites;$('#summary-ratings-count').textContent=counts.ratings;$('#mobile-summary-favorites').textContent=counts.favorites;$('#mobile-summary-ratings').textContent=counts.ratings;
   $('#account-form').onsubmit=async event=>{event.preventDefault();try{await apiProfile({method:'PUT',body:JSON.stringify({displayName:$('#display-name').value})});message('Perfil salvo.','success')}catch(error){message(error.message)}};
   $('#account-email-form').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button'),email=$('#account-new-email').value.trim();if(email.toLowerCase()===String(user.email||'').toLowerCase()){securityMessage('Esse já é o e-mail atual da sua conta.');return}button.disabled=true;try{await updateAccountCredentials({email});securityMessage('Solicitação enviada. Confirme a alteração pelos e-mails enviados pela SHOPLAB.','success')}catch(error){securityMessage(error.message)}finally{button.disabled=false}};
   $('#account-password-form').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button'),password=$('#account-new-password').value,confirmation=$('#account-confirm-password').value;if(password!==confirmation){securityMessage('As senhas não coincidem. Digite a mesma senha nos dois campos.');return}if(password.length<8){securityMessage('A nova senha precisa ter pelo menos 8 caracteres.');return}button.disabled=true;try{await updateAccountCredentials({password});event.currentTarget.reset();securityMessage('Senha alterada com sucesso.','success')}catch(error){securityMessage(error.message)}finally{button.disabled=false}};
@@ -121,6 +153,7 @@ async function account(){
     confirmDeleteButton.onclick=async()=>{confirmDeleteButton.disabled=true;cancelDeleteButton.disabled=true;confirmDeleteButton.textContent='Excluindo conta…';try{await userApi('account',{method:'DELETE',body:JSON.stringify({confirmation:deleteConfirmation.value})});deleteDialog.close();await signOut().catch(()=>null);try{sessionStorage.clear()}catch{}location.replace('index.html?conta=excluida')}catch(error){deleteDialog.close();securityMessage(error.message);deleteButton.disabled=false;confirmDeleteButton.disabled=false;cancelDeleteButton.disabled=false;confirmDeleteButton.textContent='Sim, excluir definitivamente'}};
   }$('#manage-sign-out').onclick=async()=>{await signOut();location.replace('entrar.html')};
   $('#cart-list').onclick=async event=>{const button=event.target.closest('[data-remove-cart]');if(!button)return;await setCart(button.dataset.removeCart,0);button.closest('article').remove();counts.cart=Math.max(0,counts.cart-1);['#account-cart-count','#mobile-account-cart-count','#mobile-summary-cart','#sidebar-cart-count','#summary-cart-count'].forEach(selector=>{const target=$(selector);if(target){target.textContent=counts.cart;target.hidden=!counts.cart&&['#account-cart-count','#mobile-account-cart-count'].includes(selector)}});if(!$('#cart-list article'))$('#cart-list').innerHTML=rows([],'cart')};
+  $('#saved-news-list').onclick=async event=>{const button=event.target.closest('[data-remove-saved-news]');if(!button)return;await userApi('news-saves/'+encodeURIComponent(button.dataset.removeSavedNews),{method:'PUT',body:JSON.stringify({active:false})});button.closest('article').remove();counts.news=Math.max(0,counts.news-1);$('#sidebar-news-count').textContent=counts.news;if(!$('#saved-news-list article'))$('#saved-news-list').innerHTML=newsRows([])};
   $('#sign-out').onclick=async()=>{await signOut();location.replace('index.html')};
   $('#mobile-sign-out').onclick=async()=>{await signOut();location.replace('index.html')};
 }

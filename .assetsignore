@@ -10,3 +10,5 @@ supabase-email-templates/
 *.md
 wrangler.jsonc
 assets/vendor/ffmpeg/core/ffmpeg-core.wasm
+
+tests/

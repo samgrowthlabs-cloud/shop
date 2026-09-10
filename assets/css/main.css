@@ -900,7 +900,7 @@ html,body,#app{max-width:100%;overflow-x:clip}
 .footer-logo{display:block;width:max-content;max-width:210px;margin:0 0 14px!important}.footer-logo img{display:block;width:auto;height:34px;max-width:210px;object-fit:contain;object-position:left center}
 @media(max-width:600px){.footer-logo{max-width:180px}.footer-logo img{height:30px;max-width:180px}}
 
-@view-transition{navigation:auto}
+
 .header{view-transition-name:shoplab-header}.page-content-pending{min-height:1px}
 ::view-transition-old(shoplab-header),::view-transition-new(shoplab-header){animation-duration:.01s}
 @media(min-width:761px){.header-brand{flex:0 0 210px;width:210px;min-width:210px}.header-brand .brand-images,.header-brand .default-site-logo{width:210px;max-width:210px}.header-brand .brand-image{max-width:210px}}
@@ -2816,6 +2816,7 @@ body[data-auth-page="account"][data-account-section="gerenciar"] #manage-account
 body[data-auth-page="account"][data-account-section="plus"] #premium,
 body[data-auth-page="account"][data-account-section="convites"] #invites,
 body[data-auth-page="account"][data-account-section="lista"] #cart,
+body[data-auth-page="account"][data-account-section="noticias"] #saved-news,
 body[data-auth-page="account"][data-account-section="favoritos"] #favorites,
 body[data-auth-page="account"][data-account-section="avaliacoes"] #ratings{display:block!important}
 
@@ -4898,7 +4899,7 @@ body[data-page="product"] .detail-main-image img{
   .catalog .product-card .current-price,.listing-section .product-card .current-price{font-size:17px!important}
 }
 /* Camada de experiencia mobile semelhante a aplicativo. */
-@view-transition{navigation:auto}
+
 ::view-transition-old(root){animation:shoplab-page-out .14s ease both}
 ::view-transition-new(root){animation:shoplab-page-in .2s ease both}
 @keyframes shoplab-page-out{to{opacity:.72;transform:translateX(-5px)}}
@@ -9191,4 +9192,74 @@ body[data-page="product"] .detail-featured-thumbs button.video-thumb .video-thum
   white-space:nowrap!important;
   overflow-wrap:normal!important;
   word-break:normal!important;
+}
+/* Catalog discovery uses the existing site typography and product cards. */
+.discovery-group{margin-block:28px}.discovery-links{display:flex;flex-wrap:wrap;gap:12px}
+.discovery-banner{width:100%;max-height:320px;object-fit:contain;border-radius:16px;margin-block:20px}
+.discovery-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:14px;align-items:end;margin-block:24px}
+.discovery-filters label{display:grid;gap:8px;min-width:0}.discovery-filters input,.discovery-filters select{width:100%;min-width:0;padding:10px;border:1px solid var(--border,#dce5e2);border-radius:8px;background:var(--surface,#fff);color:var(--text)}
+.discovery-pagination{display:flex;justify-content:center;align-items:center;gap:16px;margin-block:24px}.discovery-guide{white-space:pre-line}
+@media(max-width:600px){.discovery-filters{grid-template-columns:1fr 1fr}.discovery-links .btn{max-width:100%;white-space:normal;text-align:left}.discovery-page .page-title{overflow-wrap:anywhere}}
+
+/* Atalho global de Noticias. */
+.desktop-nav-links .news-nav-link{display:inline-flex!important;align-items:center;gap:6px}
+.desktop-nav-links .news-nav-link .news-nav-icon{display:block!important;width:18px!important;height:18px!important;max-width:18px!important;flex:0 0 18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;background:transparent!important;filter:none!important}
+@media(max-width:760px){.pwa-bottom-nav{grid-template-columns:repeat(6,minmax(0,1fr))!important;padding-inline:4px!important}.pwa-bottom-nav a{gap:1px!important;padding-inline:1px!important;font-size:9px!important}.pwa-bottom-nav svg{width:21px!important;height:21px!important}}
+
+
+/* Cabeçalho público desktop: uma única geometria em todas as páginas. */
+@media(min-width:761px){
+  body:not([data-admin-page]) .header>.header-row,
+  html[data-seasonal-theme] body:not([data-admin-page]) .header>.header-row{
+    display:grid!important;
+    grid-template-columns:minmax(130px,190px) minmax(220px,1fr) minmax(125px,280px)!important;
+    align-items:center!important;
+    gap:clamp(9px,1.45vw,26px)!important;
+    width:min(1180px,calc(100% - 32px))!important;
+    height:74px!important;
+    min-height:74px!important;
+    max-height:74px!important;
+    margin-inline:auto!important;
+    padding:0!important;
+  }
+  body:not([data-admin-page]) .header>.subnav{
+    display:block!important;
+    height:44px!important;
+    min-height:44px!important;
+    max-height:44px!important;
+  }
+  body:not([data-admin-page]) .header>.subnav>.container,
+  body:not([data-admin-page]) .header .desktop-nav-links{
+    height:44px!important;
+    min-height:44px!important;
+    max-height:44px!important;
+  }
+  body:not([data-admin-page]) .header .desktop-nav-links{
+    display:flex!important;
+    align-items:center!important;
+    padding:0!important;
+  }
+  body:not([data-admin-page]) .header .desktop-nav-links>a,
+  body:not([data-admin-page]) .header .nav-account-actions{
+    align-self:stretch;
+    align-items:center!important;
+  }
+  body:not([data-admin-page]) .header .news-nav-link{
+    display:inline-flex!important;
+    flex-direction:row!important;
+    align-items:center!important;
+    gap:6px!important;
+    height:44px!important;
+    white-space:nowrap!important;
+  }
+  body:not([data-admin-page]) .header .news-nav-icon{
+    display:block!important;
+    width:18px!important;
+    min-width:18px!important;
+    max-width:18px!important;
+    height:18px!important;
+    min-height:18px!important;
+    max-height:18px!important;
+    flex:0 0 18px!important;
+  }
 }

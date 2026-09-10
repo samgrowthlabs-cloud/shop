@@ -25,6 +25,7 @@ function currentSection(){
   if(page==='home'||/index\.html$/.test(path)||path==='/')return'home';
   if(page==='search'||/busca\.html$/.test(path))return'search';
   if(page==='promotions'||/promocoes\.html$/.test(path))return'offers';
+  if(page==='news'||/^\/noticias(?:\/|$)/.test(path))return'news';
   if(/conta\.html$/.test(path)&&new URLSearchParams(location.search).get('aba')==='lista')return'list';
   if(/conta\.html$|entrar\.html$|cadastro\.html$/.test(path))return'account';
   return'';
@@ -51,6 +52,7 @@ function installMobileNavigation(){
     ['home','index.html','Início','M3 11.5 12 4l9 7.5M5.5 10v9h13v-9M9.5 19v-5h5v5'],
     ['search','busca.html','Buscar','M10.8 4a6.8 6.8 0 1 0 0 13.6 6.8 6.8 0 0 0 0-13.6ZM16 16l4 4'],
     ['offers','promocoes.html','Ofertas','M4 7.5V5h2.5L19 17.5 13.5 23 1 10.5V7.5h3Zm3.5 1h.01'],
+    ['news','noticias.html','Notícias','M5 4h12a2 2 0 0 1 2 2v13H7a2 2 0 0 1-2-2V4M19 8h2v9a2 2 0 0 1-2 2M8.5 8h7M8.5 11.5h7M8.5 15h4'],
     ['list','conta.html?aba=lista','Lista','M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'],
     ['account','conta.html','Conta','M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 9a7 7 0 0 1 14 0']
   ];

@@ -4,15 +4,23 @@
   "main": "cloudflare-dashboard/worker.js",
   "compatibility_date": "2026-07-15",
   "keep_vars": true,
+  "workers_dev": true,
   "observability": {
     "enabled": true
   },
   "triggers": {
     "crons": ["17 3 * * *"]
   },
+  "routes": [
+    { "pattern": "noticias.shoplab.com.br", "custom_domain": true },
+    { "pattern": "shoplab.com.br/noticias*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/js/news.js*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/css/news.css*", "zone_name": "shoplab.com.br" }
+  ],
   "assets": {
     "directory": ".",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": ["/categoria", "/categoria.html", "/colecao", "/colecao.html", "/noticias", "/noticias/*", "/sitemap.xml"]
   },
   "d1_databases": [
     {
@@ -36,11 +44,13 @@
   "durable_objects": {
     "bindings": [
       { "name": "TEAM_CHAT", "class_name": "TeamChatRoom" },
-      { "name": "TEAM_CALL", "class_name": "TeamCallRoom" }
+      { "name": "TEAM_CALL", "class_name": "TeamCallRoom" },
+      { "name": "NEWS_ANALYTICS", "class_name": "NewsAnalyticsDO" }
     ]
   },
   "migrations": [
     { "tag": "v1-team-realtime", "new_sqlite_classes": ["TeamChatRoom"] },
-    { "tag": "v2-team-call", "new_sqlite_classes": ["TeamCallRoom"] }
+    { "tag": "v2-team-call", "new_sqlite_classes": ["TeamCallRoom"] },
+    { "tag": "v3-news-analytics", "new_sqlite_classes": ["NewsAnalyticsDO"] }
   ]
 }

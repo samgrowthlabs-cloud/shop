@@ -4,11 +4,13 @@ const routes={
   painel:{label:'Resumo',group:'overview',module:'main',target:'dashboard',permission:'dashboard.view'},
   usuarios:{label:'Usuários',group:'growth',module:'main',target:'users',permission:'users.view'},
   produtos:{label:'Produtos',group:'catalog',module:'v2',target:'products',permission:'products.view'},
-  categorias:{label:'Categorias',group:'catalog',module:'main',target:'categories',permission:'categories.manage'},
-  colecoes:{label:'Coleções',group:'catalog',module:'main',target:'collections',permission:'categories.manage'},
+  categorias:{label:'Categorias e subcategorias',group:'catalog',module:'taxonomy',target:'categories',permission:'categories.manage'},
+  colecoes:{label:'Coleções',group:'catalog',module:'taxonomy',target:'collections',permission:'categories.manage'},
+  caracteristicas:{label:'Características',group:'catalog',module:'taxonomy',target:'features',permission:'categories.manage'},
   marcas:{label:'Marcas',group:'catalog',module:'v2',target:'brands',permission:'brands.manage'},
   parceiros:{label:'Lojas parceiras',group:'catalog',module:'v2',target:'partners',permission:'partners.manage'},
   promocoes:{label:'Promoções',group:'marketing',module:'v2',target:'promotions',permission:'promotions.manage'},
+  noticias:{label:'Notícias',group:'marketing',module:'news',target:'news',permission:'news.view'},
   banners:{label:'Banners',group:'marketing',module:'v2',target:'banners',permission:'banners.manage'},
   destaques:{label:'Destaques',group:'marketing',module:'v2',target:'header-spotlight',permission:'header_spotlights.manage'},
   anuncios:{label:'Abaixo do menu',group:'marketing',module:'v2',target:'header-ads',permission:'header_ads.manage'},
@@ -44,7 +46,7 @@ const groups=[
 ];
 const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','call.html':'call','temas.html':'aparencia'};
 let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
-const moduleImports={main:()=>import('./admin.js?v=20260903-product-count-1'),v2:()=>import('./admin-v2.js?v=20260908-product-search-tags-1'),ads:()=>import('./shoplab-ads.js?v=20260831-ads-native-frequency-15'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
+const moduleImports={taxonomy:()=>import('./admin-taxonomy.js?v=20260908-discovery-1'),main:()=>import('./admin.js?v=20260903-product-count-1'),v2:()=>import('./admin-v2.js?v=20260908-discovery-1'),news:()=>import('./admin-news.js?v=20260910-quill-images-1'),ads:()=>import('./shoplab-ads.js?v=20260831-ads-native-frequency-15'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
 const loadedModules=new Map();
 const ensureModule=name=>{if(!loadedModules.has(name))loadedModules.set(name,moduleImports[name]().catch(error=>{loadedModules.delete(name);throw error}));return loadedModules.get(name)};
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();
@@ -125,8 +127,9 @@ async function navigate(requested,{push=true,source}={}){
   try{
     document.querySelector('.admin-main')?.classList.remove('ads-editor');document.querySelector('.ads-view-tabs')?.remove();
     await ensureModule(routes[route].module);
-    const controller=routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:routes[route].module==='call'?window.ShoplabTeamCall:window.ShoplabAdminV2;
+    const controller=routes[route].module==='taxonomy'?window.ShoplabTaxonomy:routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='news'?window.ShoplabAdminNews:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:routes[route].module==='call'?window.ShoplabTeamCall:window.ShoplabAdminV2;
     await controller.run(routes[route].target,session);
+    if(routes[route].target==='product-form'){const taxonomy=await import('./admin-taxonomy.js?v=20260908-discovery-1');await taxonomy.mountProductClassification();}
     await api('/api/v1/admin/auth/session?section='+encodeURIComponent(routes[route].label)).catch(error=>console.warn('Falha ao registrar atividade administrativa',error));
     renderNavigation(route);
   }catch(error){
