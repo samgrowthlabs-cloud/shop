@@ -14,6 +14,8 @@
   "routes": [
     { "pattern": "noticias.shoplab.com.br", "custom_domain": true },
     { "pattern": "shoplab.com.br/noticias*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/api/v1/news*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/news-sitemap.xml", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/news.js*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/css/news.css*", "zone_name": "shoplab.com.br" }
   ],
