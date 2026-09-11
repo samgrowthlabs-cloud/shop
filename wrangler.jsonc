@@ -17,6 +17,7 @@
     { "pattern": "shoplab.com.br/api/v1/news*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/news-sitemap.xml", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/news.js*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/js/shoplab-ads-public.js*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/css/news.css*", "zone_name": "shoplab.com.br" }
   ],
   "assets": {
