@@ -1,7 +1,7 @@
 import{initSiteHeader}from'./site-header.js?v=20260911-unified-header-1';
 import{session,userApi,currentUser}from'./auth.js';
 import{localLibrary,syncAccountLibrary}from'./user-library.js';
-import{mountShoplabAds,preloadShoplabAds}from'./shoplab-ads-public.js?v=20260911-news-ads-preload-1';
+import{mountShoplabAds,preloadShoplabAds}from'./shoplab-ads-public.js?v=20260911-title-visibility-4';
 const app=document.querySelector('#news-app'),apiBase='https://shoplab.bidjorysamuel.workers.dev',state={category:'Todas',cursor:null,loading:false,items:[],seen:new Set()};
 const workerUrl=value=>value?new URL(value,apiBase+'/').href:'';
 const isLocal=/^(?:localhost|127(?:\.[0-9]+){3}|\[::1\])$/i.test(location.hostname);

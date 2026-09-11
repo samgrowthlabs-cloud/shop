@@ -6,8 +6,9 @@ import{session as authSession,currentUser,signOut,startPresence,userApi}from'./a
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library-20260827-v5.js';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
-import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260903-dynamic-limits-1';
+import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260911-title-visibility-4';
 import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260821-header-spotlight-carousel-1';
+import{initUniversalSearch}from'./universal-search.js?v=20260911-ads-tabs-1';
 import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-comparisons.js?v=20260820-home-cards-1';
 const mediaVariant=(key,width)=>`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(key)}?w=${width}&q=78`;
 const $=(s,r=document)=>r.querySelector(s)||(s==='#theme'?{}:null), money=v=>(v/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),parse=(value,fallback={})=>{try{return JSON.parse(value)||fallback}catch{return fallback}};
@@ -497,6 +498,7 @@ async function init(){
   bindHeaderAdStrip();
   mountShoplabAds();
   bindListingFilters();bindPromotionsPagination();bindComparisonUI();
+  if(page==='search')await initUniversalSearch();
   if(page==='product')loadProductRecommendations();
   document.addEventListener('click',e=>{const a=e.target.closest('[data-offer]');if(a){e.preventDefault();trackEvent({type:'offer_click',slug:a.dataset.offer});alert('Oferta demonstrativa. O redirecionamento será ativado pela futura API.') }});
 }
