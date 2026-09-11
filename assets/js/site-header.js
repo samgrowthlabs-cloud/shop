@@ -1,8 +1,10 @@
 import{getSiteConfig,cachedSiteConfig}from'./api.js?v=20260820-product-media-prefetch-1';
+import{renderHeaderHighlight}from'./visual-renderers.js?v=20260821-header-spotlight-carousel-1';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const PREMIUM_BRAND_KEY='shoplab:premium-brand';
-const DEFAULT_WORDMARK='assets/img/shoplab-wordmark.png';
+// Use a root-relative fallback because this module also runs on nested routes.
+const DEFAULT_WORDMARK='/assets/img/shoplab-wordmark.png';
 
 export function cachedPremiumBrand(){
   try{return sessionStorage.getItem(PREMIUM_BRAND_KEY)==='1'}catch{return false}
@@ -87,25 +89,21 @@ function themeLogo(theme){
 function headerSpotlight(config){
   const row=document.querySelector('.account-site-header .header-row,.news-site-header .header-row');
   if(!row||row.querySelector('.header-highlight'))return;
-  const spotlight=(config.headerSpotlights||[]).find(item=>item.mediaUrl);
-  if(!spotlight)return;
-  const item=document.createElement('a');
-  item.className='header-highlight has-media';
-  item.href=spotlight.linkUrl||'promocoes.html';
-  item.title=spotlight.altText||spotlight.name||'Destaque SHOPLAB';
-  const source=esc(spotlight.mediaUrl);
-  const control=(value,min,max,fallback)=>{const number=Number(value);return Math.min(max,Math.max(min,Number.isFinite(number)?number:fallback))};
-  item.style.setProperty('--spotlight-x',`${control(spotlight.imagePositionX,0,100,50)}%`);
-  item.style.setProperty('--spotlight-y',`${control(spotlight.imagePositionY,0,100,50)}%`);
-  item.style.setProperty('--spotlight-scale',String(control(spotlight.imageScale,10,400,100)/100));
-  item.innerHTML=`<img src="${source}" data-src="${source}" alt="${esc(item.title)}" width="560" height="92" decoding="async" fetchpriority="high">`;
-  row.append(item);
+  const promotion=(config.headerPromotions||[])[0],value=Number(promotion?.discountValue)||0;
+  const markup=renderHeaderHighlight(config.headerSpotlights||[],{
+    label:promotion?.name||'OFERTAS VERIFICADAS',
+    detail:promotion?.discountType==='percentage'&&value?`ATÉ ${value}% OFF`:'CONFIRA AGORA',
+    href:promotion?`promocoes.html#${encodeURIComponent(promotion.slug)}`:'promocoes.html'
+  });
+  row.insertAdjacentHTML('beforeend',markup);
 }
 
 function paintHeader(config){if(!config)return;warmHeaderMedia(config);applySiteTheme(config.theme);themeLogo(config.theme);headerSpotlight(config);setPremiumBrand(cachedPremiumBrand())}
 
-export async function initSiteHeader(){
-  paintHeader(cachedSiteConfig());
+export async function initSiteHeader({refresh=true}={}){
+  const cached=cachedSiteConfig();
+  paintHeader(cached);
+  if(!refresh)return cached||null;
   try{
     const config=await getSiteConfig();
     paintHeader(config);

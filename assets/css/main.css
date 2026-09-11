@@ -9204,7 +9204,7 @@ body[data-page="product"] .detail-featured-thumbs button.video-thumb .video-thum
 /* Atalho global de Noticias. */
 .desktop-nav-links .news-nav-link{display:inline-flex!important;align-items:center;gap:6px}
 .desktop-nav-links .news-nav-link .news-nav-icon{display:block!important;width:18px!important;height:18px!important;max-width:18px!important;flex:0 0 18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;background:transparent!important;filter:none!important}
-@media(max-width:760px){.pwa-bottom-nav{grid-template-columns:repeat(6,minmax(0,1fr))!important;padding-inline:4px!important}.pwa-bottom-nav a{gap:1px!important;padding-inline:1px!important;font-size:9px!important}.pwa-bottom-nav svg{width:21px!important;height:21px!important}}
+@media(max-width:760px){.pwa-bottom-nav{grid-template-columns:repeat(5,minmax(0,1fr))!important;padding-inline:4px!important}.pwa-bottom-nav [data-pwa-nav="account"]{display:none!important}.pwa-bottom-nav a{gap:1px!important;padding-inline:1px!important;font-size:9px!important}.pwa-bottom-nav svg{width:21px!important;height:21px!important}}
 
 
 /* Cabeçalho público desktop: uma única geometria em todas as páginas. */

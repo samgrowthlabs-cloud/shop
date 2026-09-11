@@ -54,7 +54,6 @@ function installMobileNavigation(){
     ['offers','promocoes.html','Ofertas','M4 7.5V5h2.5L19 17.5 13.5 23 1 10.5V7.5h3Zm3.5 1h.01'],
     ['news','noticias.html','Notícias','M5 4h12a2 2 0 0 1 2 2v13H7a2 2 0 0 1-2-2V4M19 8h2v9a2 2 0 0 1-2 2M8.5 8h7M8.5 11.5h7M8.5 15h4'],
     ['list','conta.html?aba=lista','Lista','M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'],
-    ['account','conta.html','Conta','M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 9a7 7 0 0 1 14 0']
   ];
   let nav=document.querySelector('.pwa-bottom-nav');
   if(!nav){
@@ -62,6 +61,7 @@ function installMobileNavigation(){
     nav.innerHTML=items.map(([key,href,label,path])=>`<a data-pwa-nav="${key}" href="${href}">${icon(path)}<span>${label}</span></a>`).join('');
     document.body.append(nav);
   }
+  nav.querySelector('[data-pwa-nav="account"]')?.remove();
   nav.querySelectorAll('[data-pwa-nav]').forEach(link=>{
     const selected=link.dataset.pwaNav===active;link.classList.toggle('active',selected);
     if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');

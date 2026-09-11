@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS news_articles (
   seo_description TEXT,
   canonical_url TEXT,
   views INTEGER NOT NULL DEFAULT 0,
+  unique_views INTEGER NOT NULL DEFAULT 0,
+  likes INTEGER NOT NULL DEFAULT 0,
   clicks INTEGER NOT NULL DEFAULT 0,
   read_50 INTEGER NOT NULL DEFAULT 0,
   read_90 INTEGER NOT NULL DEFAULT 0,
@@ -53,6 +55,8 @@ CREATE TABLE IF NOT EXISTS news_article_stats_daily (
   article_id TEXT NOT NULL REFERENCES news_articles(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
   views INTEGER NOT NULL DEFAULT 0,
+  unique_views INTEGER NOT NULL DEFAULT 0,
+  likes INTEGER NOT NULL DEFAULT 0,
   clicks INTEGER NOT NULL DEFAULT 0,
   read_25 INTEGER NOT NULL DEFAULT 0,
   read_50 INTEGER NOT NULL DEFAULT 0,
@@ -83,3 +87,19 @@ CREATE TABLE IF NOT EXISTS news_article_authorship (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS news_article_likes (
+  article_id TEXT NOT NULL REFERENCES news_articles(id) ON DELETE CASCADE,
+  visitor_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(article_id, visitor_id)
+);
+CREATE INDEX IF NOT EXISTS idx_news_article_likes_visitor ON news_article_likes(visitor_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS news_unique_views (
+  article_id TEXT NOT NULL REFERENCES news_articles(id) ON DELETE CASCADE,
+  visitor_id TEXT NOT NULL,
+  first_viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(article_id, visitor_id)
+);
+CREATE INDEX IF NOT EXISTS idx_news_unique_views_visitor ON news_unique_views(visitor_id, first_viewed_at DESC);
