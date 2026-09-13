@@ -4394,12 +4394,13 @@ const ADMIN_PRODUCT_DRAFT_SCHEMA = {
     categoryId: { type: ["string", "null"] },
     productType: { type: "string", enum: ["affiliate", "book", "digital"] },
     imageAlt: { type: "string" },
+    tags: { type: "array", minItems: 6, maxItems: 12, items: { type: "string" } },
     specifications: { type: "array", maxItems: 20, items: {
       type: "object", properties: { name: { type: "string" }, value: { type: "string" } },
       required: ["name", "value"], additionalProperties: false,
     } },
   },
-  required: ["name", "slug", "shortDescription", "fullDescription", "categoryId", "productType", "imageAlt", "specifications"],
+  required: ["name", "slug", "shortDescription", "fullDescription", "categoryId", "productType", "imageAlt", "tags", "specifications"],
   additionalProperties: false,
 };
 
@@ -4912,7 +4913,7 @@ async function adminAiProductDraft(req, env, id) {
     const result = await runAiWithFallback(env, aiSetting, {
       messages: [
         { role: "system", content: `Padronização obrigatória: este produto usa o modelo '${specificationTemplate}'. Retorne especificações usando somente estes nomes de campo, nesta mesma grafia e ordem quando houver valor confirmado: ${ADMIN_AI_SPECIFICATION_TEMPLATES[specificationTemplate].join(", ")}. Não crie sinônimos ou campos equivalentes. Omitir valor desconhecido é obrigatório.` },
-        { role: "system", content: `Você é o editor-chefe de catálogo e SEO da SHOPLAB. Transforme dados reais de produto em uma página que seja encontrada, entendida e confiável. Escreva em português brasileiro natural; SEO é precisão de intenção, não repetição de palavras-chave. Para name, crie um título de alta intenção: comece pelo tipo de produto que o comprador pesquisa, inclua marca e modelo, depois somente o principal diferencial verificável (capacidade, tamanho, padrão, compatibilidade ou uso). Prefira 55 a 90 caracteres, sem caixa-alta, emojis, hype, preço, frete ou termos vazios como “imperdível”, “premium” e “melhor”. Preserve exatamente marca, modelo, capacidade, medidas e padrões técnicos fornecidos. Para shortDescription, entregue uma síntese convincente de 2 frases: o que é, para quem serve e o diferencial concreto; inclua naturalmente termos de busca relevantes. Para fullDescription, escreva uma descrição escaneável com abertura clara, benefícios ancorados em fatos e características úteis; não invente avaliações, desempenho, garantias, certificações, compatibilidade, preço ou benefícios. Especificações só podem conter dados explícitos na entrada. Se um dado não estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hífen e refletir o título. imageAlt deve ser descritivo e acessível, sem SEO forçado. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro físico, digital para produto digital e affiliate nos demais casos. Retorne somente o JSON solicitado.` },
+        { role: "system", content: `Você é o editor-chefe de catálogo e SEO da SHOPLAB. Transforme dados reais de produto em uma página que seja encontrada, entendida e confiável. Escreva em português brasileiro natural; SEO é precisão de intenção, não repetição de palavras-chave. Para name, crie um título de alta intenção: comece pelo tipo de produto que o comprador pesquisa, inclua marca e modelo, depois somente o principal diferencial verificável (capacidade, tamanho, padrão, compatibilidade ou uso). Prefira 55 a 90 caracteres, sem caixa-alta, emojis, hype, preço, frete ou termos vazios como “imperdível”, “premium” e “melhor”. Preserve exatamente marca, modelo, capacidade, medidas e padrões técnicos fornecidos. Para shortDescription, entregue uma síntese convincente de 2 frases: o que é, para quem serve e o diferencial concreto; inclua naturalmente termos de busca relevantes. Para fullDescription, escreva uma descrição escaneável com abertura clara, benefícios ancorados em fatos e características úteis; não invente avaliações, desempenho, garantias, certificações, compatibilidade, preço ou benefícios. Especificações só podem conter dados explícitos na entrada. Se um dado não estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hífen e refletir o título. imageAlt deve ser descritivo e acessível, sem SEO forçado. Para tags, gere de 6 a 12 termos de busca úteis, específicos e não repetidos, combinando categoria, marca, modelo, características confirmadas, compatibilidade e intenção de uso; não inclua preço, promoção nem alegações não fornecidas. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro físico, digital para produto digital e affiliate nos demais casos. Retorne somente o JSON solicitado.` },
         { role: "user", content: JSON.stringify({ source, current }).slice(0, 16000) },
       ],
       response_format: { type: "json_schema", json_schema: ADMIN_PRODUCT_DRAFT_SCHEMA },
@@ -4929,7 +4930,7 @@ async function adminAiProductDraft(req, env, id) {
       fullDescription: String(raw.fullDescription || "").trim().slice(0, 10000),
       categoryId: validCategories.has(raw.categoryId) ? raw.categoryId : null,
       productType: ["affiliate", "book", "digital"].includes(raw.productType) ? raw.productType : "affiliate",
-      imageAlt: String(raw.imageAlt || "").trim().slice(0, 250), specificationTemplate, specifications,
+      imageAlt: String(raw.imageAlt || "").trim().slice(0, 250), tags: normalizeProductTags(raw.tags).slice(0, 20), specificationTemplate, specifications,
     }, id);
   } catch (error) {
     console.warn(JSON.stringify({ event: "admin_ai_product_draft_failed", requestId: id, error: String(error?.message || error) }));
