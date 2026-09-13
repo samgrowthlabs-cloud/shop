@@ -1,3 +1,4 @@
+import'./image-priority.js?v=20260913-all-images-high-1';
 import'./favicon.js?v=20260803-media-domain-38';import{currentUser,userApi}from'./auth-20260827-v5.js';
 
 const $=selector=>document.querySelector(selector);

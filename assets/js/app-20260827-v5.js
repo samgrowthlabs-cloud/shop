@@ -1,3 +1,4 @@
+import'./image-priority.js?v=20260913-all-images-high-1';
 import'./favicon.js?v=20260820-ads-render-no-title-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260903-catalog-100-1';
 import'./search-ui.js?v=20260906-search-history-1';
 import'./public-media-20260827-v5.js?v=20260906-video-gallery-12';
@@ -6,7 +7,7 @@ import{session as authSession,currentUser,signOut,startPresence,userApi}from'./a
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library-20260827-v5.js';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
-import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260911-title-visibility-4';
+import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260913-search-compact-9x6-2';
 import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260821-header-spotlight-carousel-1';
 import{initUniversalSearch}from'./universal-search.js?v=20260911-ads-tabs-1';
 import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-comparisons.js?v=20260820-home-cards-1';

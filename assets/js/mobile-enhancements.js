@@ -122,7 +122,8 @@ function prioritizeMobileContent(){
   const images=[...document.querySelectorAll('main img:not([data-mobile-priority]),.home-banner img:not([data-mobile-priority]),.product-card img:not([data-mobile-priority])')];
   images.forEach(image=>{
     image.dataset.mobilePriority='1';
-    if(!image.hasAttribute('loading'))image.loading='lazy';
+    image.loading='eager';
+    image.fetchPriority='high';
     image.decoding='async';
   });
   document.querySelectorAll('main .home-section:not(.mobile-deferred-section),main .product-related-section:not(.mobile-deferred-section),main>section:not(.mobile-deferred-section)').forEach((section,index)=>{

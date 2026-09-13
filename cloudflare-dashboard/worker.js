@@ -889,6 +889,10 @@ async function route(request, env, ctx, requestId) {
     return saveAdminMediaScript(request, env, path.split("/").pop(), requestId);
   if (request.method === "DELETE" && /^\/api\/v1\/admin\/media-scripts\/[^/]+$/.test(path))
     return deleteAdminMediaScript(request, env, path.split("/").pop(), requestId);
+  if (request.method === "GET" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/versions$/.test(path))
+    return listAdminMediaScriptVersions(request, env, path.split("/").at(-2), requestId);
+  if (request.method === "POST" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/versions\/[^/]+\/restore$/.test(path))
+    return restoreAdminMediaScriptVersion(request, env, path.split("/").at(-4), path.split("/").at(-2), requestId);
   if (request.method === "GET" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/comments$/.test(path))
     return listAdminMediaScriptComments(request, env, path.split("/").at(-2), requestId);
   if (request.method === "POST" && /^\/api\/v1\/admin\/media-scripts\/[^/]+\/comments$/.test(path))
@@ -6140,8 +6144,14 @@ async function ensureAdminMediaScriptsSchema(env) {
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_media_scripts_updated ON admin_media_scripts(updated_at,title)`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_media_script_comments (id TEXT PRIMARY KEY,script_id TEXT NOT NULL REFERENCES admin_media_scripts(id) ON DELETE CASCADE,author_id TEXT NOT NULL,author_name TEXT NOT NULL,comment_text TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_media_script_annotations (id TEXT PRIMARY KEY,script_id TEXT NOT NULL REFERENCES admin_media_scripts(id) ON DELETE CASCADE,start_offset INTEGER NOT NULL,end_offset INTEGER NOT NULL,note TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'custom',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_media_script_versions (
+    id TEXT PRIMARY KEY,script_id TEXT NOT NULL REFERENCES admin_media_scripts(id) ON DELETE CASCADE,version_number INTEGER NOT NULL,
+    title TEXT NOT NULL,content TEXT NOT NULL,notes TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'draft',annotations_json TEXT NOT NULL DEFAULT '[]',
+    actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(script_id,version_number)
+  )`).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_media_script_annotations_script ON admin_media_script_annotations(script_id,start_offset)`).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_media_script_comments_script ON admin_media_script_comments(script_id,created_at)`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_media_script_versions_script ON admin_media_script_versions(script_id,version_number DESC)`).run();
 }
 
 async function adminMediaScripts(req, env, id) {
@@ -6154,6 +6164,11 @@ async function adminMediaScripts(req, env, id) {
 }
 
 async function replaceAdminMediaScriptAnnotations(env,scriptId,annotations){const statements=[env.DB.prepare(`DELETE FROM admin_media_script_annotations WHERE script_id=?`).bind(scriptId),...annotations.map(item=>env.DB.prepare(`INSERT INTO admin_media_script_annotations(id,script_id,start_offset,end_offset,note,kind) VALUES(?,?,?,?,?,?)`).bind(item.id,scriptId,item.start,item.end,item.note,item.kind))];await env.DB.batch(statements)}
+
+async function createAdminMediaScriptVersion(env,script,annotations,actor){
+  const next=await env.DB.prepare(`SELECT COALESCE(MAX(version_number),0)+1 versionNumber FROM admin_media_script_versions WHERE script_id=?`).bind(script.id).first();
+  await env.DB.prepare(`INSERT INTO admin_media_script_versions(id,script_id,version_number,title,content,notes,status,annotations_json,actor_id,actor_name) VALUES(?,?,?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),script.id,Number(next?.versionNumber)||1,script.title,script.content,script.notes||'',script.status||'draft',JSON.stringify(annotations||[]),actor.id,actor.name).run();
+}
 
 async function saveAdminMediaScript(req, env, scriptId, id) {
   await ensureAdminMediaScriptsSchema(env);
@@ -6168,11 +6183,13 @@ async function saveAdminMediaScript(req, env, scriptId, id) {
     if(!actor.permissions.includes('*')&&!actor.permissions.includes('media_scripts.manage')&&!actor.permissions.includes('media_scripts.edit')&&current.authorId!==actor.id)return fail(req,env,'FORBIDDEN','Este roteiro está disponível somente para leitura',403,id);
     await env.DB.prepare(`UPDATE admin_media_scripts SET title=?,content=?,notes=?,status=?,updated_by_id=?,updated_by_name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(title,content,notes,status,actor.id,actor.name,current.id).run();
     await replaceAdminMediaScriptAnnotations(env,current.id,annotations);
+    await createAdminMediaScriptVersion(env,{id:current.id,title,content,notes,status},annotations,actor);
     return ok(req,env,{id:current.id,updated:true},id);
   }
   const newId=crypto.randomUUID();
   await env.DB.prepare(`INSERT INTO admin_media_scripts(id,title,content,notes,status,author_id,author_name,updated_by_id,updated_by_name) VALUES(?,?,?,?,?,?,?,?,?)`).bind(newId,title,content,notes,status,actor.id,actor.name,actor.id,actor.name).run();
   await replaceAdminMediaScriptAnnotations(env,newId,annotations);
+  await createAdminMediaScriptVersion(env,{id:newId,title,content,notes,status},annotations,actor);
   return ok(req,env,{id:newId,created:true},id);
 }
 
@@ -6188,6 +6205,28 @@ async function deleteAdminMediaScript(req, env, scriptId, id) {
 const mediaScriptCanView=actor=>actor.permissions.includes("*")||["media_scripts.manage","media_scripts.view","media_scripts.edit","media_scripts.comment"].some(permission=>actor.permissions.includes(permission));
 const mediaScriptCanEditAll=actor=>actor.permissions.includes("*")||actor.permissions.includes("media_scripts.manage")||actor.permissions.includes("media_scripts.edit");
 const mediaScriptCanComment=actor=>actor.permissions.includes("*")||actor.permissions.includes("media_scripts.manage")||actor.permissions.includes("media_scripts.comment");
+async function listAdminMediaScriptVersions(req,env,scriptId,id){
+  await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env),safeId=String(scriptId).slice(0,100);
+  if(!mediaScriptCanView(actor))return fail(req,env,"FORBIDDEN","Sem acesso aos roteiros",403,id);
+  const script=await env.DB.prepare(`SELECT id,title,content,notes,status,author_id authorId,author_name authorName FROM admin_media_scripts WHERE id=?`).bind(safeId).first();
+  if(!script)return fail(req,env,"SCRIPT_NOT_FOUND","Roteiro não encontrado",404,id);
+  let rows=(await env.DB.prepare(`SELECT id,version_number versionNumber,title,content,notes,status,annotations_json annotationsJson,actor_id actorId,actor_name actorName,created_at createdAt FROM admin_media_script_versions WHERE script_id=? ORDER BY version_number DESC`).bind(safeId).all()).results||[];
+  if(!rows.length){const annotations=(await env.DB.prepare(`SELECT id,start_offset start,end_offset end,note,kind FROM admin_media_script_annotations WHERE script_id=? ORDER BY start_offset`).bind(safeId).all()).results||[];await createAdminMediaScriptVersion(env,script,annotations,{id:script.authorId,name:script.authorName});rows=(await env.DB.prepare(`SELECT id,version_number versionNumber,title,content,notes,status,annotations_json annotationsJson,actor_id actorId,actor_name actorName,created_at createdAt FROM admin_media_script_versions WHERE script_id=? ORDER BY version_number DESC`).bind(safeId).all()).results||[]}
+  return ok(req,env,{items:rows.map(({annotationsJson,...version})=>({...version,annotations:safeJson(annotationsJson,[])})),canRestore:mediaScriptCanEditAll(actor)||script.authorId===actor.id},id);
+}
+async function restoreAdminMediaScriptVersion(req,env,scriptId,versionId,id){
+  await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env),safeId=String(scriptId).slice(0,100);
+  const script=await env.DB.prepare(`SELECT id,author_id authorId FROM admin_media_scripts WHERE id=?`).bind(safeId).first();
+  if(!script)return fail(req,env,"SCRIPT_NOT_FOUND","Roteiro não encontrado",404,id);
+  if(!mediaScriptCanEditAll(actor)&&script.authorId!==actor.id)return fail(req,env,"FORBIDDEN","Sem permissão para restaurar este roteiro",403,id);
+  const version=await env.DB.prepare(`SELECT title,content,notes,status,annotations_json annotationsJson FROM admin_media_script_versions WHERE id=? AND script_id=?`).bind(String(versionId).slice(0,100),safeId).first();
+  if(!version)return fail(req,env,"VERSION_NOT_FOUND","Versão não encontrada",404,id);
+  const annotations=safeJson(version.annotationsJson,[]);
+  await env.DB.prepare(`UPDATE admin_media_scripts SET title=?,content=?,notes=?,status=?,updated_by_id=?,updated_by_name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(version.title,version.content,version.notes,version.status,actor.id,actor.name,safeId).run();
+  await replaceAdminMediaScriptAnnotations(env,safeId,annotations);
+  await createAdminMediaScriptVersion(env,{id:safeId,title:version.title,content:version.content,notes:version.notes,status:version.status},annotations,actor);
+  return ok(req,env,{id:safeId,restored:true},id);
+}
 async function listAdminMediaScriptComments(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanView(actor))return fail(req,env,"FORBIDDEN","Sem acesso aos roteiros",403,id);const {results}=await env.DB.prepare("SELECT id,author_id authorId,author_name authorName,comment_text commentText,created_at createdAt FROM admin_media_script_comments WHERE script_id=? ORDER BY datetime(created_at)").bind(String(scriptId).slice(0,100)).all();return ok(req,env,{items:(results||[]).map(comment=>({...comment,canDelete:mediaScriptCanEditAll(actor)||comment.authorId===actor.id})),canComment:mediaScriptCanComment(actor)},id)}
 async function createAdminMediaScriptComment(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanComment(actor))return fail(req,env,"FORBIDDEN","Sem permissão para comentar",403,id);const body=await req.json(),text=String(body.comment||"").trim().slice(0,4000);if(!text)return fail(req,env,"VALIDATION_ERROR","Escreva um comentário",422,id);const script=await env.DB.prepare("SELECT id FROM admin_media_scripts WHERE id=?").bind(String(scriptId).slice(0,100)).first();if(!script)return fail(req,env,"SCRIPT_NOT_FOUND","Roteiro não encontrado",404,id);const commentId=crypto.randomUUID();await env.DB.prepare("INSERT INTO admin_media_script_comments(id,script_id,author_id,author_name,comment_text) VALUES(?,?,?,?,?)").bind(commentId,script.id,actor.id,actor.name,text).run();return ok(req,env,{id:commentId},id)}
 async function deleteAdminMediaScriptComment(req,env,commentId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env),comment=await env.DB.prepare("SELECT id,author_id authorId FROM admin_media_script_comments WHERE id=?").bind(String(commentId).slice(0,100)).first();if(!comment)return fail(req,env,"COMMENT_NOT_FOUND","Comentário não encontrado",404,id);if(!mediaScriptCanEditAll(actor)&&comment.authorId!==actor.id)return fail(req,env,"FORBIDDEN","Sem permissão para excluir este comentário",403,id);await env.DB.prepare("DELETE FROM admin_media_script_comments WHERE id=?").bind(comment.id).run();return ok(req,env,{id:comment.id},id)}

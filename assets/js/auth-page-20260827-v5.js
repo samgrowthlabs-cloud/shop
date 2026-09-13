@@ -1,3 +1,4 @@
+import'./image-priority.js?v=20260913-all-images-high-1';
 import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,session,currentUser,apiProfile,userApi,startPresence}from'./auth-20260827-v5.js';
 import'./search-ui.js?v=20260803-media-domain-38';
 import{syncAccountLibrary,setCart}from'./user-library-20260827-v5.js';
