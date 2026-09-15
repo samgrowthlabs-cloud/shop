@@ -1,4 +1,4 @@
-import'./image-priority.js?v=20260913-all-images-high-1';
+
 import{initSiteHeader}from'./site-header.js?v=20260911-unified-header-1';
 import{session,userApi,currentUser}from'./auth.js';
 import{localLibrary,syncAccountLibrary}from'./user-library.js';
