@@ -1,4 +1,7 @@
 import { newsRoute, NewsAnalyticsDO } from "./news.js";
+import { sendEmail } from "./services/email/provider.js";
+import { newsletterPreferences, unsubscribe, consumeNewsletterQueue, adminNewsletterStats, recordInterest } from "./services/email/newsletter.js";
+import { sesEventWebhook } from "./services/email/events.js";
 export { NewsAnalyticsDO };
 
 const TEAM_CALL_MAX_PARTICIPANTS = 4;
@@ -583,6 +586,11 @@ export default {
     message.setReject("Endereço de e-mail não encontrado.");
   },
 
+  async queue(batch, env) {
+    env = { ...env, DB: databaseFor(env) };
+    await consumeNewsletterQueue(batch, env);
+  },
+
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(Promise.all([sendPremiumPassExpiryReminders(env), purgeExpiredSharedFiles(env), purgeExpiredTeamChatMessages(env)]));
   },
@@ -769,6 +777,12 @@ async function route(request, env, ctx, requestId) {
     return serveMedia(request, env, decodeURIComponent(path.slice(7)), ctx);
   if (request.method === "POST" && path === "/api/v1/events")
     return recordEvent(request, env, ctx, requestId);
+  if (path === '/api/v1/email/events/ses' && request.method === 'POST')
+    return sesEventWebhook(request, env);
+  if (path === '/api/v1/newsletter/unsubscribe' && ['GET','POST'].includes(request.method))
+    return unsubscribe(request, env, url);
+  if (path === '/api/v1/user/newsletter' && ['GET','PUT'].includes(request.method))
+    return cors(request, env, await newsletterPreferences(request, env, await authenticatedUser(request)));
   if (path === "/api/v1/auth/account-exists" && request.method === "POST")
     return publicAccountExists(request, env, requestId);
   if (path === "/api/v1/user/profile" && request.method === "GET")
@@ -833,6 +847,8 @@ async function route(request, env, ctx, requestId) {
     if (permission && !actor.permissions.includes("*") && !actor.permissions.includes(permission) && !allowedByFeatureDependency && !allowedByMediaScripts)
       return fail(request, env, "FORBIDDEN", "Seu cargo não permite realizar esta ação", 403, requestId);
   }
+  if (path === '/api/v1/admin/newsletter' && request.method === 'GET')
+    return ok(request, env, await adminNewsletterStats(env), requestId);
   const newsResponse = await newsRoute(request, env, url, authenticatedAdminActor);
   if (newsResponse) return cors(request, env, newsResponse);
   if (/^\/api\/v1\/admin\/products\/[^/]+\/classification$/.test(path))
@@ -3337,7 +3353,14 @@ async function recordEvent(req, env, ctx, id) {
         `UPDATE products SET view_count=view_count+1 WHERE slug=? AND status='published'`,
       ).bind(slug),
     );
-  ctx.waitUntil(env.DB.batch(statements));
+  ctx.waitUntil((async()=>{
+    await env.DB.batch(statements);
+    if(user)for(const event of inputEvents){
+      if(event.type==='product_view'&&event.slug)await recordInterest(env,user.id,'product',event.slug,'PRODUCT_VIEW');
+      if(event.type==='offer_click'&&event.slug)await recordInterest(env,user.id,'product',event.slug,'AFFILIATE_CLICK');
+      if(event.type==='search_result_click'&&event.query)await recordInterest(env,user.id,'topic',event.query,'SEARCH_TOPIC');
+    }
+  })());
   return ok(req, env, { accepted: inputEvents.length }, id);
 }
 async function publicRatingSummaries(req, env, url, id) {
@@ -5849,17 +5872,14 @@ async function deliverReferralGiftCard(req,env,rewardId,id){
   return ok(req,env,{id:rewardId,status:"delivered"},id);
 }
 
-async function sendRewardNotificationEmail(apiKey,from,accountUrl,reward,recipient){
+async function sendRewardNotificationEmail(env,accountUrl,reward,recipient){
   const safeName=htmlAttribute(recipient.displayName||"cliente"),safeTitle=htmlAttribute(reward.title),safeReason=htmlAttribute(reward.reason),safeValue=(reward.valueCents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}),safeAccountUrl=htmlAttribute(accountUrl);
   const reasonBlock=safeReason?`<tr><td style="padding:0 32px 24px"><div style="background:#f4f8f7;border-left:4px solid #0a7b6f;border-radius:8px;padding:16px 18px"><p style="margin:0 0 6px;color:#526963;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Motivo da recompensa</p><p style="margin:0;color:#173b34;font-size:15px;line-height:1.6">${safeReason}</p></div></td></tr>`:"";
   const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Você recebeu uma recompensa da SHOPLAB</title></head><body style="margin:0;padding:0;background:#eef4f2;font-family:Arial,Helvetica,sans-serif;color:#173b34"><div style="display:none;max-height:0;overflow:hidden;opacity:0">Sua recompensa já está disponível na sua conta SHOPLAB.</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eef4f2"><tr><td align="center" style="padding:32px 16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #dfe9e6;border-radius:18px;overflow:hidden"><tr><td style="background:#0a5148;padding:24px 32px"><p style="margin:0;color:#ffffff;font-size:24px;font-weight:800;letter-spacing:.04em">SHOPLAB</p><p style="margin:5px 0 0;color:#cce7e1;font-size:13px">Recompensas</p></td></tr><tr><td style="padding:34px 32px 16px"><p style="margin:0 0 10px;color:#0a7b6f;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">Uma surpresa para você</p><h1 style="margin:0 0 18px;color:#173b34;font-size:28px;line-height:1.2">Você recebeu uma recompensa!</h1><p style="margin:0 0 14px;color:#405951;font-size:16px;line-height:1.65">Olá, ${safeName}.</p><p style="margin:0;color:#405951;font-size:16px;line-height:1.65">A SHOPLAB enviou <strong style="color:#173b34">${safeTitle}</strong>, no valor de <strong style="color:#0a7b6f">${safeValue}</strong>.</p></td></tr>${reasonBlock}<tr><td align="center" style="padding:4px 32px 28px"><a href="${safeAccountUrl}" style="display:inline-block;background:#0a7b6f;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:15px 24px;border-radius:10px">Acessar e resgatar recompensa</a></td></tr><tr><td style="padding:0 32px 30px"><div style="border-top:1px solid #e4ecea;padding-top:20px"><p style="margin:0 0 8px;color:#526963;font-size:13px;line-height:1.6"><strong>Importante:</strong> por segurança, o código da recompensa fica disponível somente na sua conta. A SHOPLAB nunca solicitará sua senha por e-mail.</p><p style="margin:0;color:#71837e;font-size:12px;line-height:1.6">Se o botão não funcionar, acesse: <a href="${safeAccountUrl}" style="color:#0a7b6f;word-break:break-all">${safeAccountUrl}</a></p></div></td></tr><tr><td style="background:#f7faf9;padding:20px 32px;text-align:center"><p style="margin:0;color:#71837e;font-size:12px;line-height:1.5">Esta é uma mensagem automática da SHOPLAB. Não responda a este e-mail.</p></td></tr></table></td></tr></table></body></html>`;
   const text=`Você recebeu uma recompensa da SHOPLAB\n\nOlá, ${recipient.displayName||"cliente"}.\n\nRecompensa: ${reward.title}\nValor: ${safeValue}${reward.reason?`\nMotivo: ${reward.reason}`:""}\n\nAcesse sua conta para visualizar e resgatar com segurança: ${accountUrl}\n\nA SHOPLAB nunca solicitará sua senha por e-mail.`;
-  const payload={from,to:[recipient.email],subject:"Você recebeu uma recompensa da SHOPLAB",html,text,tags:[{name:"category",value:"manual_reward"},{name:"reward_id",value:reward.id.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,256)}]};
   try{
-    const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{authorization:`Bearer ${apiKey}`,"content-type":"application/json","user-agent":"SHOPLAB-Worker/1.0","idempotency-key":`manual-reward-${reward.id}`},body:JSON.stringify(payload)});
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(String(result.message||result.name||`Resend ${response.status}`).slice(0,500));
-    return {status:"sent",id:String(result.id||"").slice(0,200)||null,error:""};
+    const result=await sendEmail(env,{kind:"transactional",to:recipient.email,subject:"Você recebeu uma recompensa da SHOPLAB",html,text,userId:recipient.userId,tags:{category:"manual_reward",reward_id:reward.id}});
+    return {status:"sent",id:result.id||null,error:""};
   }catch(error){
     const detail=String(error?.message||error).slice(0,500);
     console.error(JSON.stringify({event:"manual_reward_email_failed",rewardId:reward.id,recipient:recipient.email,error:detail}));
@@ -5868,10 +5888,8 @@ async function sendRewardNotificationEmail(apiKey,from,accountUrl,reward,recipie
 }
 
 async function sendManualRewardEmail(env,reward,recipient){
-  const apiKey=String(env.RESEND_API_KEY||""),from=String(env.REWARD_EMAIL_FROM||"");
-  if(!apiKey||!from)return {status:"skipped",id:null,error:"RESEND_API_KEY ou REWARD_EMAIL_FROM não configurado"};
   const accountUrl=`${String(env.PUBLIC_SITE_URL||allowedOrigins(env)[0]||"").replace(/\/+$/,"")}/conta.html?aba=convites`;
-  return sendRewardNotificationEmail(apiKey,from,accountUrl,reward,recipient);
+  return sendRewardNotificationEmail(env,accountUrl,reward,recipient);
 }
 
 async function createManualUserReward(req,env,userId,id){
@@ -8921,58 +8939,13 @@ function premiumEmailContent(kind, context = {}) {
 }
 
 async function sendPremiumNotification(env, { eventKey, userId, kind, amountCents = 0, accessExpiresAt = null, claimExpiresAt = null, days = 0 }) {
-  const key = String(eventKey || "").replace(/[^a-zA-Z0-9:_-]/g, "").slice(0, 240);
-  if (!key || !userId) return;
-  const profile = await env.DB.prepare(
-    `SELECT email,display_name displayName FROM user_profiles WHERE user_id=?`,
-  ).bind(userId).first();
-  if (!profile?.email) return;
-  const reserved = await env.DB.prepare(
-    `INSERT OR IGNORE INTO premium_notification_log(event_key,user_id,kind,recipient,status) VALUES(?,?,?,?,'skipped')`,
-  ).bind(key, userId, kind, profile.email).run();
-  if (!reserved.meta.changes) return;
-  const apiKey = String(env.RESEND_API_KEY || "");
-  const from = String(env.PREMIUM_EMAIL_FROM || env.REWARD_EMAIL_FROM || "");
-  if (!apiKey || !from) {
-    await env.DB.prepare(`UPDATE premium_notification_log SET error='RESEND_NOT_CONFIGURED' WHERE event_key=?`).bind(key).run();
-    return;
-  }
-  const plan = await resolvedPremiumPlan(env);
-  const content = premiumEmailContent(kind, { planName: plan.name, amountCents, accessExpiresAt, claimExpiresAt, days });
-  const accountUrl = `${String(env.PUBLIC_SITE_URL || allowedOrigins(env)[0] || "").replace(/\/+$/, "")}/conta.html?aba=plus`;
-  const safeName = htmlAttribute(profile.displayName || "cliente");
-  const safeMessage = htmlAttribute(content.message);
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        "user-agent": "SHOPLAB-Worker/1.0",
-        "idempotency-key": `premium-${key}`.slice(0, 256),
-      },
-      body: JSON.stringify({
-        from,
-        to: [profile.email],
-        subject: content.subject,
-        html: `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlAttribute(content.subject)}</title></head><body style="margin:0;background:#eff7f5;font-family:Arial,sans-serif;color:#173b34"><div style="max-width:600px;margin:0 auto;padding:32px 18px"><div style="padding:32px;border-radius:18px;background:#fff"><p style="margin:0 0 8px;color:#087c70;font-weight:800">SHOPLAB+</p><h1 style="font-size:26px">${htmlAttribute(content.subject)}</h1><p>Olá, ${safeName}.</p><p style="line-height:1.6">${safeMessage}</p><p style="margin-top:26px"><a href="${htmlAttribute(accountUrl)}" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#087c70;color:#fff;text-decoration:none;font-weight:700">Ver meu SHOPLAB+</a></p><p style="margin-top:28px;color:#667b76;font-size:12px">Mensagem automática de segurança da SHOPLAB.</p></div></div></body></html>`,
-        text: `Olá, ${profile.displayName || "cliente"}. ${content.message} Acesse: ${accountUrl}`,
-        tags: [{ name: "category", value: "premium" }],
-      }),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(String(result.message || result.name || `Resend ${response.status}`).slice(0, 500));
-    await env.DB.prepare(
-      `UPDATE premium_notification_log SET status='sent',provider_message_id=?,error=NULL WHERE event_key=?`,
-    ).bind(String(result.id || "").slice(0, 200) || null, key).run();
-  } catch (error) {
-    await env.DB.prepare(
-      `UPDATE premium_notification_log SET status='failed',error=? WHERE event_key=?`,
-    ).bind(String(error?.message || error).slice(0, 500), key).run();
-    console.error(JSON.stringify({ event: "premium_email_failed", eventKey: key, userId, error: String(error?.message || error) }));
-  }
+  const key=String(eventKey||"").replace(/[^a-zA-Z0-9:_-]/g,"").slice(0,240);if(!key||!userId)return;
+  const profile=await env.DB.prepare(`SELECT email,display_name displayName FROM user_profiles WHERE user_id=?`).bind(userId).first();if(!profile?.email)return;
+  const reserved=await env.DB.prepare(`INSERT OR IGNORE INTO premium_notification_log(event_key,user_id,kind,recipient,status) VALUES(?,?,?,?,'skipped')`).bind(key,userId,kind,profile.email).run();if(!reserved.meta.changes)return;
+  const plan=await resolvedPremiumPlan(env),content=premiumEmailContent(kind,{planName:plan.name,amountCents,accessExpiresAt,claimExpiresAt,days}),accountUrl=`${String(env.PUBLIC_SITE_URL||allowedOrigins(env)[0]||"").replace(/\/+$/,"")}/conta.html?aba=plus`,safeName=htmlAttribute(profile.displayName||"cliente"),safeMessage=htmlAttribute(content.message);
+  try { const result=await sendEmail(env,{kind:"transactional",to:profile.email,subject:content.subject,html:`<!doctype html><html lang="pt-BR"><body style="margin:0;background:#eff7f5;font-family:Arial,sans-serif;color:#173b34"><div style="max-width:600px;margin:0 auto;padding:32px 18px"><div style="padding:32px;border-radius:18px;background:#fff"><p style="color:#087c70;font-weight:800">SHOPLAB+</p><h1>${htmlAttribute(content.subject)}</h1><p>Olá, ${safeName}.</p><p style="line-height:1.6">${safeMessage}</p><p><a href="${htmlAttribute(accountUrl)}" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#087c70;color:#fff;text-decoration:none;font-weight:700">Ver meu SHOPLAB+</a></p></div></div></body></html>`,text:`Olá, ${profile.displayName||"cliente"}. ${content.message} Acesse: ${accountUrl}`,userId,tags:{category:"premium",event_key:key}}); await env.DB.prepare(`UPDATE premium_notification_log SET status='sent',provider_message_id=?,error=NULL WHERE event_key=?`).bind(result.id||null,key).run(); }
+  catch(error){await env.DB.prepare(`UPDATE premium_notification_log SET status='failed',error=? WHERE event_key=?`).bind(String(error?.message||error).slice(0,500),key).run();console.error(JSON.stringify({event:"premium_email_failed",eventKey:key,userId,error:String(error?.message||error)}))}
 }
-
 async function sendPremiumPassExpiryReminders(env) {
   const { results } = await env.DB.prepare(
     `SELECT id,user_id userId,amount_cents amountCents,access_expires_at accessExpiresAt

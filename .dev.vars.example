@@ -1,0 +1,12 @@
+# Nunca commitar .dev.vars. Em devteste mantenha EMAIL_ENV=test.
+AWS_SES_ACCESS_KEY_ID=
+AWS_SES_SECRET_ACCESS_KEY=
+AWS_SES_FROM_TRANSACTIONAL=SHOPLAB <no-reply@shoplab.com.br>
+AWS_SES_FROM_NEWSLETTER=ShopLab Notícias <noticias@shoplab.com.br>
+AWS_SES_REPLY_TO_NEWSLETTER=suporte@shoplab.com.br
+AWS_SES_CONFIGURATION_SET=my-first-configuration-set
+# Opcional e normalmente sem open/click tracking:
+AWS_SES_TRANSACTIONAL_CONFIGURATION_SET=ShopLabTransactional
+EMAIL_TEST_RECIPIENT=
+NEWSLETTER_TOKEN_SECRET=
+SES_EVENT_WEBHOOK_SECRET=

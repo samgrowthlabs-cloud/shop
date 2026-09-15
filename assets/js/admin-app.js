@@ -11,6 +11,7 @@ const routes={
   parceiros:{label:'Lojas parceiras',group:'catalog',module:'v2',target:'partners',permission:'partners.manage'},
   promocoes:{label:'Promoções',group:'marketing',module:'v2',target:'promotions',permission:'promotions.manage'},
   noticias:{label:'Notícias',group:'marketing',module:'news',target:'news',permission:'news.view'},
+  newsletter:{label:'Newsletter',group:'marketing',module:'main',target:'newsletter',permission:'news.view'},
   banners:{label:'Banners',group:'marketing',module:'v2',target:'banners',permission:'banners.manage'},
   destaques:{label:'Destaques',group:'marketing',module:'v2',target:'header-spotlight',permission:'header_spotlights.manage'},
   anuncios:{label:'Abaixo do menu',group:'marketing',module:'v2',target:'header-ads',permission:'header_ads.manage'},

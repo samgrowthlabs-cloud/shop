@@ -140,8 +140,8 @@ O login administrativo é separado: sessão opaca em D1, cookie seguro e permiss
 
 - Stripe: assinatura e passe SHOPLAB+, com webhook validado pelo Worker.
 - Mercado Pago: checkout/webhooks e integrações relacionadas.
-- Resend: envio de e-mails de recompensas/Premium quando configurado.
-- A integração com o Resend é administrada pela conta `bidjorysamuel@gmail.com`.
+- Amazon SES v2: e-mails transacionais de recompensas/Premium e newsletter inteligente via camada central do Worker.
+- Em `devteste`, `EMAIL_ENV=test` redireciona todos os envios para `EMAIL_TEST_RECIPIENT`. Consulte `docs/EMAIL-SES-NEWSLETTER.md`.
 - Mercado Livre: importação e atualização manual de informações/preços quando configurado.
 
 ## Bindings, variáveis e secrets do Worker
@@ -161,10 +161,11 @@ Configure isto no dashboard do Worker. O projeto não possui `wrangler.toml` ver
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Secrets | Se Stripe ativo | Cobrança e webhook |
 | `MERCADOPAGO_*` | Secrets/variáveis | Se Mercado Pago ativo | Cobrança e webhook |
 | `MERCADOLIVRE_CLIENT_ID`, `MERCADOLIVRE_CLIENT_SECRET` | Secrets | Se importação ativa | API Mercado Livre |
-| `RESEND_API_KEY` | Secret | Se e-mail ativo | Disparo de e-mails |
+| `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY` | Secrets | Se e-mail ativo | Amazon SES v2 via Signature V4 |
+| `EMAIL_TEST_RECIPIENT`, `NEWSLETTER_TOKEN_SECRET`, `SES_EVENT_WEBHOOK_SECRET` | Secrets | Newsletter/SES | Segurança de testes, unsubscribe e eventos |
 | `GIFT_CARD_ENCRYPTION_KEY` | Secret | Se vale-presente ativo | Criptografia de códigos |
 | `REFERRAL_HASH_SECRET` | Secret | Se indicações ativas | Proteção de identificadores |
-| `PREMIUM_*`, `AI_GATEWAY_ID`, `REWARD_EMAIL_FROM`, `STRIPE_BRAND_LOGO_URL` | Variáveis | Opcionais | Regras de negócio e apresentação |
+| `PREMIUM_*`, `AI_GATEWAY_ID`, `AWS_SES_FROM_TRANSACTIONAL`, `AWS_SES_FROM_NEWSLETTER`, `AWS_SES_CONFIGURATION_SET`, `STRIPE_BRAND_LOGO_URL` | Variáveis | Opcionais | Regras de negócio, e-mail e apresentação |
 
 Nunca salve secrets em `worker.js`, HTML, CSS, arquivos `.env` commitados ou documentação com valores reais.
 

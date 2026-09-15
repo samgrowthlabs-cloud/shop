@@ -12,3 +12,4 @@ wrangler.jsonc
 assets/vendor/ffmpeg/core/ffmpeg-core.wasm
 
 tests/
+.dev.vars*

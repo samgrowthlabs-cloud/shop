@@ -5,6 +5,27 @@
   "compatibility_date": "2026-07-15",
   "keep_vars": true,
   "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": "https://shoplab.com.br,http://127.0.0.1:5500,http://localhost:5500",
+    "MERCADOLIVRE_CLIENT_ID": "6261942816253841",
+    "MERCADOPAGO_CHECKOUT_PUBLIC_KEY": "TEST-23181122-eb38-4602-8743-6802537add27",
+    "MERCADOPAGO_CHECKOUT_SANDBOX": "true",
+    "MERCADOPAGO_PUBLIC_KEY": "TEST-23181122-eb38-4602-8743-6802537add27",
+    "PREMIUM_MONTHLY_PRICE_CENTS": "300",
+    "REWARD_EMAIL_FROM": "SHOPLAB Recompensas <recompensas@auth.shoplab.com.br>",
+    "AWS_SES_REGION": "us-east-2",
+    "AWS_SES_FROM_TRANSACTIONAL": "ShopLab <no-reply@shoplab.com.br>",
+    "AWS_SES_FROM_NEWSLETTER": "ShopLab Notícias <noticias@shoplab.com.br>",
+    "AWS_SES_REPLY_TO_NEWSLETTER": "suporte@shoplab.com.br",
+    "AWS_SES_CONFIGURATION_SET": "my-first-configuration-set",
+    "EMAIL_ENV": "production",
+    "PUBLIC_SITE_URL": "https://shoplab.com.br",
+    "PUBLIC_MEDIA_URL": "https://shoplab.bidjorysamuel.workers.dev"
+  },
+  "queues": {
+    "producers": [{ "binding": "NEWSLETTER_QUEUE", "queue": "shoplab-newsletter-devteste" }],
+    "consumers": [{ "queue": "shoplab-newsletter-devteste", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 8, "dead_letter_queue": "shoplab-newsletter-devteste-dlq", "max_concurrency": 1, "retry_delay": 30 }]
+  },
   "observability": {
     "enabled": true
   },
@@ -15,6 +36,8 @@
     { "pattern": "noticias.shoplab.com.br", "custom_domain": true },
     { "pattern": "shoplab.com.br/noticias*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/api/v1/news*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/api/v1/user/newsletter*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/api/v1/email/events/ses*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/news-sitemap.xml", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/news.js*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/shoplab-ads-public.js*", "zone_name": "shoplab.com.br" },

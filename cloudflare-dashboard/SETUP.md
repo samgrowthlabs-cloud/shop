@@ -39,7 +39,7 @@ Este guia configura o ambiente de produção usando o Cloudflare Dashboard. O ma
 | `SUPABASE_SECRET_KEY` | Secret do Supabase usado somente pelo Worker para excluir usuários do Auth |
 | `PUBLIC_SITE_URL` | Variável, se pagamentos estiverem ativos |
 
-Os secrets opcionais são documentados na tabela do README: Stripe, Mercado Pago, Mercado Livre, Resend, vales-presente e indicações.
+Os secrets opcionais são documentados na tabela do README: Stripe, Mercado Pago, Mercado Livre, Amazon SES, newsletter, vales-presente e indicações.
 
 5. É recomendado adicionar um domínio próprio ao Worker, por exemplo `api.seudominio.com`.
 

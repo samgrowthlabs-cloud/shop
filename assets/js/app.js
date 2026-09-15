@@ -487,7 +487,7 @@ async function init(){
   try{
     const configPromise=page==='home'?Promise.resolve(siteConfig):getSiteConfig().catch(()=>siteConfig),contentPromise=page==='home'?Promise.resolve(null):Promise.resolve(renderPage());
     const configWait=page==='search'?400:0;
-    const configForInitialRender=page==='product'?Promise.resolve(siteConfig):configWait?Promise.race([configPromise,new Promise(resolve=>setTimeout(()=>resolve(siteConfig),configWait))]):configPromise;
+    const configForInitialRender=['home','product'].includes(page)?Promise.resolve(siteConfig):configWait?Promise.race([configPromise,new Promise(resolve=>setTimeout(()=>resolve(siteConfig),configWait))]):configPromise;
     const [freshConfig,initialBody]=await Promise.all([configForInitialRender,contentPromise]);
     siteConfig=freshConfig||siteConfig;
     applySiteTypography(siteConfig.typography);applySiteTheme(siteConfig.theme);applySeasonalPriceColors(siteConfig.theme);syncSeasonalMobileLogo(siteConfig.theme);
