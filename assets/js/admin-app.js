@@ -25,6 +25,7 @@ const routes={
   gravador:{label:'Gravador',group:'team',module:'recorder',target:'audio-recorder',permission:'media_recording.use'},
   mixer:{label:'Mixer',group:'team',module:'mixer',target:'audio-mixer',permission:'media_mixer.use'},
   aparencia:{label:'Identidade visual',group:'appearance',module:'v2',target:'themes',permission:'themes.manage'},
+  politicas:{label:'Políticas',group:'content',module:'v2',target:'policies',permission:'policies.manage'},
   'produto-formulario':{label:'Editor de produto',group:'catalog',module:'v2',target:'product-form',permission:'products.edit',secondary:true}
 };
 const icon=paths=>`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths}</svg>`;
@@ -42,11 +43,12 @@ const groups=[
   {id:'marketing',label:'Marketing',icon:icons.marketing},
   {id:'growth',label:'Clientes e crescimento',icon:icons.growth},
   {id:'team',label:'Equipe e acessos',icon:icons.team},
-  {id:'appearance',label:'Aparência',icon:icons.appearance}
+  {id:'appearance',label:'Aparência',icon:icons.appearance},
+  {id:'content',label:'Conteúdo institucional',icon:icons.overview}
 ];
 const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','call.html':'call','temas.html':'aparencia'};
 let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
-const moduleImports={taxonomy:()=>import('./admin-taxonomy.js?v=20260908-discovery-1'),main:()=>import('./admin.js?v=20260903-product-count-1'),v2:()=>import('./admin-v2.js?v=20260913-ai-product-tags-1'),news:()=>import('./admin-news.js?v=20260911-news-engagement-2'),ads:()=>import('./shoplab-ads.js?v=20260911-ads-delivery-fix-1'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
+const moduleImports={taxonomy:()=>import('./admin-taxonomy.js?v=20260908-discovery-1'),main:()=>import('./admin.js?v=20260914-dashboard-log-permission-1'),v2:()=>import('./admin-v2.js?v=20260914-policies-admin-1'),news:()=>import('./admin-news.js?v=20260911-news-engagement-2'),ads:()=>import('./shoplab-ads.js?v=20260911-ads-delivery-fix-1'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
 const loadedModules=new Map();
 const ensureModule=name=>{if(!loadedModules.has(name))loadedModules.set(name,moduleImports[name]().catch(error=>{loadedModules.delete(name);throw error}));return loadedModules.get(name)};
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();

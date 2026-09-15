@@ -141,6 +141,7 @@ const ACCOUNT_CHECK_ATTEMPTS = new Map();
 const ADMIN_PERMISSION_DEFINITIONS = [
   ["dashboard.view", "Painel", "Ver painel e métricas", true],
   ["logs.view", "Painel", "Ver logs e atividade recente", true],
+  ["policies.manage", "Conteúdo institucional", "Editar políticas e páginas institucionais", "Alterar textos, seções e data de atualização das páginas públicas", true],
   ["products.view", "Produtos", "Ver produtos e rascunhos", true],
   ["products.create", "Produtos", "Criar produtos em rascunho", true],
   ["products.edit", "Produtos", "Editar textos e dados dos produtos", true],
@@ -810,6 +811,8 @@ async function route(request, env, ctx, requestId) {
     return createUserShareLink(request, env, requestId);
   if (request.method === "PUT" && /^\/api\/v1\/user\/(favorites|ratings|cart|news-saves)\/[^/]+$/.test(path))
     return updateUserLibraryItem(request, env, path, requestId);
+  if (request.method === "GET" && /^\/api\/v1\/policies\/[^/]+$/.test(path))
+    return publicPolicy(request, env, decodeURIComponent(path.split("/").pop()), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/auth/login")
     return login(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/auth/logout")
@@ -901,6 +904,10 @@ async function route(request, env, ctx, requestId) {
     return deleteAdminMediaScriptComment(request, env, path.split("/").pop(), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/activity")
     return ok(request, env, { recorded: true }, requestId);
+  if (request.method === "GET" && path === "/api/v1/admin/policies")
+    return adminPolicies(request, env, requestId);
+  if (request.method === "PUT" && /^\/api\/v1\/admin\/policies\/[^/]+$/.test(path))
+    return saveAdminPolicy(request, env, decodeURIComponent(path.split("/").pop()), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/dashboard")
     return adminDashboard(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/logs")
@@ -5994,6 +6001,51 @@ async function recordAdminAudit(req, response, env, requestId, knownActor = null
   }
 }
 
+const POLICY_PAGE_KEYS = new Set(["privacy","cookies","ads","terms","plus-terms","referral-terms","review-guidelines","accessibility","security","about","contact","editorial","ai-policy","affiliates"]);
+let policyPagesSchemaReady = false;
+async function ensurePolicyPagesSchema(env) {
+  if (policyPagesSchemaReady) return;
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS policy_pages (
+    page_key TEXT PRIMARY KEY,title TEXT NOT NULL,intro TEXT NOT NULL DEFAULT '',updated_date TEXT NOT NULL,
+    sections_json TEXT NOT NULL DEFAULT '[]',updated_by TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+  policyPagesSchemaReady = true;
+}
+function policyDateLabel(value) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? new Date(`${value}T12:00:00Z`) : null;
+  return date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(date) : String(value || "");
+}
+function normalizePolicyRow(row) {
+  if (!row) return null;
+  const sections = safeJson(row.sectionsJson, []);
+  return { key: row.key, title: row.title, intro: row.intro, updatedDate: row.updatedDate, updated: policyDateLabel(row.updatedDate), sections: Array.isArray(sections) ? sections : [], updatedAt: row.updatedAt };
+}
+async function publicPolicy(req, env, key, id) {
+  if (!POLICY_PAGE_KEYS.has(key)) return fail(req, env, "POLICY_NOT_FOUND", "Página institucional não encontrada", 404, id);
+  await ensurePolicyPagesSchema(env);
+  const row = await env.DB.prepare(`SELECT page_key key,title,intro,updated_date updatedDate,sections_json sectionsJson,updated_at updatedAt FROM policy_pages WHERE page_key=?`).bind(key).first();
+  return ok(req, env, normalizePolicyRow(row), id);
+}
+async function adminPolicies(req, env, id) {
+  await ensurePolicyPagesSchema(env);
+  const { results } = await env.DB.prepare(`SELECT page_key key,title,intro,updated_date updatedDate,sections_json sectionsJson,updated_at updatedAt FROM policy_pages ORDER BY page_key`).all();
+  return ok(req, env, (results || []).map(normalizePolicyRow), id);
+}
+async function saveAdminPolicy(req, env, key, id) {
+  if (!POLICY_PAGE_KEYS.has(key)) return fail(req, env, "POLICY_NOT_FOUND", "Página institucional não encontrada", 404, id);
+  const actor = await adminActor(req, env);
+  const body = await readJson(req, 250000);
+  const title = String(body.title || "").trim().slice(0, 180), intro = String(body.intro || "").trim().slice(0, 4000);
+  const updatedDate = String(body.updatedDate || "");
+  const sections = (Array.isArray(body.sections) ? body.sections : []).slice(0, 80).map(section => [String(section?.[0] || section?.title || "").trim().slice(0, 240), String(section?.[1] || section?.text || "").trim().slice(0, 20000)]).filter(section => section[0] && section[1]);
+  if (!title || !intro || !/^\d{4}-\d{2}-\d{2}$/.test(updatedDate)) return fail(req, env, "VALIDATION_ERROR", "Preencha título, introdução e uma data de atualização válida", 422, id);
+  await ensurePolicyPagesSchema(env);
+  await env.DB.prepare(`INSERT INTO policy_pages(page_key,title,intro,updated_date,sections_json,updated_by,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(page_key) DO UPDATE SET title=excluded.title,intro=excluded.intro,updated_date=excluded.updated_date,sections_json=excluded.sections_json,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP`)
+    .bind(key, title, intro, updatedDate, JSON.stringify(sections), actor?.id || null).run();
+  const row = await env.DB.prepare(`SELECT page_key key,title,intro,updated_date updatedDate,sections_json sectionsJson,updated_at updatedAt FROM policy_pages WHERE page_key=?`).bind(key).first();
+  return ok(req, env, normalizePolicyRow(row), id);
+}
 async function adminDashboard(req, env, id) {
   await ensureAdminAuditSchema(env);
   const actor = await adminActor(req, env);
@@ -8055,6 +8107,7 @@ function adminPermissionForRequest(method, path) {
   if (/\/users\/[^/]+\/access$/.test(path)) return "users.access";
   if (/\/users\/[^/]+\/premium-access$/.test(path)) return "users.premium";
   if (path.startsWith("/api/v1/admin/users")) return "users.view";
+  if (path.startsWith("/api/v1/admin/policies")) return "policies.manage";
   if (path === "/api/v1/admin/dashboard") return "dashboard.view";
   if (path === "/api/v1/admin/logs") return "logs.view";
   if (path.includes("premium-settings")) return "premium.manage";
