@@ -1,4 +1,4 @@
-import {getDiscovery} from './api.js?v=20260908-discovery-1';
+import {getDiscovery} from './api.js?v=20260917-cache-swr-1';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let renderer, seo, bindCards;
 const options=(rows,selected)=>rows.map(row=>`<option value="${esc(row.id)}" ${row.id===selected?'selected':''}>${esc(row.name)}</option>`).join('');

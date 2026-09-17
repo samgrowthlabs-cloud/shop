@@ -39,9 +39,17 @@
     { "pattern": "shoplab.com.br/api/v1/user/newsletter*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/api/v1/email/events/ses*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/news-sitemap.xml", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/politica-de-privacidade*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/politica-de-cookies*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/termos-de-uso*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/news.js*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/shoplab-ads-public.js*", "zone_name": "shoplab.com.br" },
-    { "pattern": "shoplab.com.br/assets/css/news.css*", "zone_name": "shoplab.com.br" }
+{ "pattern": "shoplab.com.br/assets/css/news.css*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/css/shoplab-loader.css*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/css/main.css*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/js/app.js*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/js/app-20260827-v5.js*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/js/policy-defaults.js*", "zone_name": "shoplab.com.br" }
   ],
   "assets": {
     "directory": ".",

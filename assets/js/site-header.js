@@ -1,4 +1,4 @@
-import{getSiteConfig,cachedSiteConfig}from'./api.js?v=20260820-product-media-prefetch-1';
+import{getSiteConfig,cachedSiteConfig}from'./api.js?v=20260917-cache-swr-1';
 import{renderHeaderHighlight}from'./visual-renderers.js?v=20260821-header-spotlight-carousel-1';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));

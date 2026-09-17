@@ -95,6 +95,10 @@ function showInstallPrompt(){
 
 ensureHead();
 
+if('serviceWorker'in navigator&&location.protocol==='https:'){
+  addEventListener('load',()=>navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>null),{once:true});
+}
+
 
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installEvent=event;armInstallPrompt()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installMobileNavigation,{once:true});else installMobileNavigation();

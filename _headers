@@ -1,26 +1,34 @@
 /admin/*
   X-Robots-Tag: noindex, nofollow
+  Cache-Control: private, no-store, max-age=0
 
 /entrar*
   X-Robots-Tag: noindex, follow
+  Cache-Control: private, no-store, max-age=0
 
 /cadastro*
   X-Robots-Tag: noindex, follow
+  Cache-Control: private, no-store, max-age=0
 
 /conta*
   X-Robots-Tag: noindex, nofollow
+  Cache-Control: private, no-store, max-age=0
 
 /auth-callback*
   X-Robots-Tag: noindex, nofollow
+  Cache-Control: private, no-store, max-age=0
 
 /recuperar-senha*
   X-Robots-Tag: noindex, nofollow
+  Cache-Control: private, no-store, max-age=0
 
 /redefinir-senha*
   X-Robots-Tag: noindex, nofollow
+  Cache-Control: private, no-store, max-age=0
 
 /premium-checkout*
   X-Robots-Tag: noindex, nofollow
+  Cache-Control: private, no-store, max-age=0
 
 /busca*
   X-Robots-Tag: noindex, follow
@@ -38,7 +46,7 @@
   Content-Type: application/xml; charset=utf-8
 
 /assets/*
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: public, max-age=31536000, immutable
 
 /manifest.webmanifest
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
@@ -46,5 +54,5 @@
 /sw.js
   Cache-Control: no-cache, max-age=0, must-revalidate
 
-/*
-  Cache-Control: no-store, max-age=0, must-revalidate
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate

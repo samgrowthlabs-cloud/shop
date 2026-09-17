@@ -1,4 +1,4 @@
-import {adminCatalogRequest as api} from './api.js?v=20260908-discovery-1';
+import {adminCatalogRequest as api} from './api.js?v=20260917-cache-swr-1';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const field=(name,label,value='',type='text')=>`<label class="form-field">${label}<input name="${name}" type="${type}" value="${esc(value)}" ${type==='text'?'maxlength="160"':''}></label>`;
 const select=(name,label,rows,value='',empty='Nenhuma')=>`<label class="form-field">${label}<select name="${name}"><option value="">${empty}</option>${rows.map(row=>`<option value="${esc(row.id)}" ${row.id===value?'selected':''}>${esc(row.name)}</option>`).join('')}</select></label>`;

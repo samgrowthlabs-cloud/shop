@@ -1149,11 +1149,33 @@ async function route(request, env, ctx, requestId) {
 }
 
 async function publicHomeData(req, env, ctx, id) {
+const revisionSources = [
+    ["products", "updated_at"], ["offers", "updated_at"],
+    ["categories", "updated_at"], ["product_collections", "updated_at"],
+    ["banners", "updated_at"], ["seasonal_themes", "updated_at"],
+    ["shoplab_ads", "updated_at"], ["catalog_settings", "updated_at"],
+  ];
+  const revisions = [];
+  for (const [table, column] of revisionSources) {
+    try {
+      const row = await env.DB.prepare(`SELECT COALESCE(MAX(${column}), '') revision FROM ${table}`).first();
+      if (row?.revision) revisions.push(String(row.revision));
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "home_revision_source_unavailable", table, detail: String(error?.message || error) }));
+    }
+  }
+  const contentRevision = revisions.sort().at(-1) || "initial";
   const cacheUrl = new URL("/api/v1/home", req.url);
+  cacheUrl.searchParams.set("revision", contentRevision);
   const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
   const cache = caches.default;
-  const cached = await cache.match(cacheKey);
-  if (cached) return cors(req, env, new Response(cached.body, cached));
+const cached = await cache.match(cacheKey);
+  if (cached) {
+    const cachedResponse = new Response(cached.body, cached);
+    cachedResponse.headers.set("cache-control", "public, max-age=0, must-revalidate");
+    cachedResponse.headers.set("x-shoplab-content-revision", contentRevision);
+    return cors(req, env, cachedResponse);
+  }
 
   const internalHeaders = new Headers(req.headers);
   internalHeaders.delete("authorization");
@@ -1194,10 +1216,12 @@ async function publicHomeData(req, env, ctx, id) {
   }), {
     headers: {
       ...JSON_HEADERS,
-      "cache-control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "x-shoplab-content-revision": contentRevision,
     },
   });
-  ctx.waitUntil(cache.put(cacheKey, response.clone()));
+  const edgeCopy=response.clone(),edgeHeaders=new Headers(edgeCopy.headers);edgeHeaders.set("cache-control","public, max-age=31536000, immutable");
+  ctx.waitUntil(cache.put(cacheKey,new Response(edgeCopy.body,{status:edgeCopy.status,headers:edgeHeaders})));
   return cors(req, env, response);
 }
 async function listCategories(req, env, id) {
@@ -1458,7 +1482,7 @@ async function shareProductPage(req, env, slug) {
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": "public, max-age=300",
+      "cache-control": "public, max-age=0, must-revalidate",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
     },
@@ -1770,7 +1794,7 @@ async function relatedProducts(req, env, ctx, slug, id) {
     premiumRecommendations: relatedMode !== "standard" && Boolean(premiumRanked?.length),
     candidatesEvaluated: candidates.length,
   });
-  response.headers.set("cache-control", premium?.premium ? "private, max-age=60" : "public, max-age=300");
+  response.headers.set("cache-control", premium?.premium ? "private, no-store" : "public, max-age=0, must-revalidate");
   return response;
 }
 
@@ -5414,7 +5438,7 @@ async function serveMedia(req, env, key, ctx) {
   }
 
   headers.set("etag", object.httpEtag);
-  headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
+  headers.set("cache-control", "public, max-age=31536000, immutable");
   headers.set("accept-ranges", "bytes");
   if (width) headers.set("x-shoplab-image-width", String(width));
   if (rangeHeader && object.range) {
@@ -10316,5 +10340,5 @@ async function catalogPage(req,env,path) {
   breadcrumbs.push({'@type':'ListItem',position:breadcrumbs.length+1,name:entity.name,item:canonical});
   const schema = JSON.stringify({'@context':'https://schema.org','@type':'CollectionPage',name:entity.name,url:canonical,breadcrumb:{'@type':'BreadcrumbList',itemListElement:breadcrumbs},mainEntity:{'@type':'ItemList',numberOfItems:data.total,itemListElement:data.products.map((p,i)=>({'@type':'ListItem',position:i+1,url:new URL(`/produto?slug=${encodeURIComponent(p.slug)}`,req.url).href,name:p.name}))}}).replace(/</g,'\\u003c');
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/"><meta name="robots" content="${new URL(req.url).search?'noindex,follow':'index,follow'}"><title>${escape(title)}</title><meta name="description" content="${escape(description)}"><link rel="canonical" href="${escape(canonical)}"><link rel="stylesheet" href="/assets/css/main.css?v=20260908-discovery-1"><script type="application/ld+json">${schema}</script></head><body data-page="discovery"><div id="app"><main id="conteudo" class="container page-hero"><nav aria-label="Caminho"><a href="/">Início</a> / ${escape(entity.name)}</nav><h1>${escape(entity.name)}</h1><p>${escape(description)}</p><p>${data.total} produtos</p><ul>${data.products.map(p=>`<li><a href="/produto?slug=${encodeURIComponent(p.slug)}">${escape(p.name)}</a></li>`).join('')}</ul></main></div><script type="module" src="/assets/js/app.js?v=20260908-discovery-1"></script></body></html>`;
-  return new Response(html,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=60','x-content-type-options':'nosniff'}});
+  return new Response(html,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=0, must-revalidate','x-content-type-options':'nosniff'}});
 }

@@ -120,10 +120,14 @@ function enhanceProductCards(){
 
 function prioritizeMobileContent(){
   const images=[...document.querySelectorAll('main img:not([data-mobile-priority]),.home-banner img:not([data-mobile-priority]),.product-card img:not([data-mobile-priority])')];
-  images.forEach(image=>{
+  const positions=images.map(image=>({image,top:image.getBoundingClientRect().top}));
+  let criticalAssigned=false;
+  positions.forEach(({image,top})=>{
     image.dataset.mobilePriority='1';
-    image.loading='eager';
-    image.fetchPriority='high';
+    const visible=top<innerHeight*1.25;
+    image.loading=visible?'eager':'lazy';
+    image.fetchPriority=visible&&!criticalAssigned?'high':'auto';
+    if(visible&&!criticalAssigned)criticalAssigned=true;
     image.decoding='async';
   });
   document.querySelectorAll('main .home-section:not(.mobile-deferred-section),main .product-related-section:not(.mobile-deferred-section),main>section:not(.mobile-deferred-section)').forEach((section,index)=>{

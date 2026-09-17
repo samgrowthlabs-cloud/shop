@@ -1,4 +1,4 @@
-import { getComparisonAnalysis, getProductBySlug, getProducts } from './api.js?v=20260820-product-media-prefetch-1';
+import { getComparisonAnalysis, getProductBySlug, getProducts } from './api.js?v=20260917-cache-swr-1';
 import { selectAutomaticComparisons, automaticComparisonSection } from './automatic-comparisons.js?v=20260820-home-cards-1';
 import { SHOPLAB_CONFIG as C } from './config.js?v=20260803-media-domain-38';
 import { getPersonalizedRecommendations } from './user-library-20260827-v5.js';

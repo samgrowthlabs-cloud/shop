@@ -1,5 +1,5 @@
 import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
-import{getProductBySlug}from'./api.js?v=20260820-product-media-prefetch-1';
+import{getProductBySlug}from'./api.js?v=20260917-cache-swr-1';
 import{session,userApi}from'./auth.js';
 
 const cache=new Map();

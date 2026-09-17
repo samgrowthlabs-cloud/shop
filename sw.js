@@ -1,13 +1,10 @@
-self.addEventListener('install',event=>{
-  event.waitUntil(self.skipWaiting());
-});
-
-self.addEventListener('activate',event=>{
-  event.waitUntil((async()=>{
-    const keys=await caches.keys();
-    await Promise.all(keys.map(key=>caches.delete(key)));
-    await self.registration.unregister();
-    const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-    await Promise.all(clients.map(client=>client.navigate(client.url).catch(()=>undefined)));
-  })());
-});
+const VERSION='shoplab-v2';
+const STATIC_CACHE=`${VERSION}-static`,PUBLIC_CACHE=`${VERSION}-public`;
+const SHELL=['/offline.html','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png'];
+const PUBLIC_API=/^\/api\/v1\/(?:home|products(?:\/[^/]+)?|categories(?:\/weekly-highlights)?|promotions|collections(?:\/[^/]+)?|search|site-config)$/;
+self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(STATIC_CACHE);await cache.addAll(SHELL);await self.skipWaiting()})()));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(key=>key.startsWith('shoplab-')&&!key.startsWith(VERSION)).map(key=>caches.delete(key)));await self.clients.claim()})()));
+function isPrivate(request,url){return request.headers.has('authorization')||url.pathname.startsWith('/api/v1/admin/')||url.pathname.startsWith('/api/v1/user/')||url.pathname.startsWith('/conta')||url.pathname.startsWith('/entrar')||url.pathname.startsWith('/cadastro')}
+async function swr(request,event,cacheName){const cache=await caches.open(cacheName),cached=await cache.match(request,{ignoreVary:false});const update=fetch(request).then(response=>{if(response.ok&&!response.headers.has('set-cookie')&&!/private|no-store/i.test(response.headers.get('cache-control')||''))event.waitUntil(cache.put(request,response.clone()));return response});if(cached){event.waitUntil(update.catch(()=>undefined));return cached}return update}
+self.addEventListener('fetch',event=>{const request=event.request;if(request.method!=='GET')return;const url=new URL(request.url);if(isPrivate(request,url))return;if(url.origin===self.location.origin&&request.credentials==='omit'&&PUBLIC_API.test(url.pathname)){event.respondWith(swr(request,event,PUBLIC_CACHE));return}if(url.origin===self.location.origin&&url.pathname.startsWith('/assets/')){event.respondWith(swr(request,event,STATIC_CACHE));return}if(request.mode==='navigate')event.respondWith(fetch(request).catch(async()=>await caches.match(request)||await caches.match('/offline.html')))});
+self.addEventListener('message',event=>{if(event.data?.type!=='SHOPLAB_INVALIDATE')return;const match=String(event.data.match||'');event.waitUntil(caches.open(PUBLIC_CACHE).then(async cache=>{const keys=await cache.keys();await Promise.all(keys.filter(key=>!match||key.url.includes(match)).map(key=>cache.delete(key)))}) )});
