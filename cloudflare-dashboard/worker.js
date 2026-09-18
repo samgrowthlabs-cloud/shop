@@ -360,7 +360,7 @@ export default {
         await recordAdminAudit(auditRequest, response.clone(), env, requestId, auditActor);
       return response;
     } catch (error) {
-      const detail = String(error?.message || "unknown");
+      const detail = String(error?.message || "unknown"); await recordAdminFailure(request, env, requestId, detail);
       console.error(
         JSON.stringify({ requestId, error: detail, stack: error?.stack }),
       );
@@ -527,6 +527,14 @@ export default {
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_SUBSCRIPTIONS_MIGRATION_REQUIRED",message:"Execute premium-subscriptions-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
       if (/no such table:.*premium_settings/i.test(detail))
         return respond(request,env,{success:false,data:null,meta:null,error:{code:"PREMIUM_SETTINGS_MIGRATION_REQUIRED",message:"Execute premium-settings-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/no such (?:table|column):.*(?:news_articles|news_article_products|news_article_authorship|news_article_stats_daily|news_user_interests|news_article_likes|news_unique_views)/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"NEWS_MIGRATION_REQUIRED",message:"Execute cloudflare-dashboard/news-upgrade.sql no banco D1 e publique novamente.",requestId}},503);
+      if (/FOREIGN KEY constraint failed/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"RELATED_RECORD_MISSING",message:"Um registro relacionado não existe mais. Reabra o formulário e salve novamente.",requestId}},409);
+      if (/Unexpected token|Unexpected end of JSON input/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"INVALID_JSON",message:"O conteúdo enviado não é um JSON válido.",requestId}},422);
+      if (new URL(request.url).pathname.startsWith("/api/v1/admin/news") && !/UNIQUE constraint failed/i.test(detail))
+        return respond(request,env,{success:false,data:null,meta:null,error:{code:"NEWS_SAVE_FAILED",message:"Não foi possível salvar a notícia. O detalhe técnico ficou registrado com o requestId.",detail:detail.slice(0,500),requestId}},500);
       if (/UNIQUE constraint failed/i.test(detail))
         return respond(
           request,
@@ -6018,6 +6026,20 @@ function adminAuditTarget(method, path, body, responseData) {
   return { action, resourceType, resourceId: id, resourceLabel };
 }
 
+async function recordAdminFailure(request, env, requestId, detail) {
+  try {
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith("/api/v1/admin/")) return;
+    await ensureAdminAuditSchema(env);
+    const actor = await adminActor(request, env).catch(() => null);
+    const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+    await env.DB.prepare(`INSERT INTO admin_audit_logs(id,actor_id,actor_name,actor_email,actor_role,action,method,path,resource_type,resource_id,resource_label,details_json,request_id,ip_hash,user_agent,status_code,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(crypto.randomUUID(), actor?.id || null, actor?.name || "Administrador", actor?.email || "", actor?.roleLabel || actor?.role || "Admin", "admin_api_error", request.method, url.pathname, "admin_api", null, null, JSON.stringify({ event: "admin_api_error", error: String(detail).slice(0, 500) }), requestId, await sha256(ip), String(request.headers.get("user-agent") || "").slice(0, 300), 500).run();
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "admin_failure_audit_failed", requestId, error: String(error?.message || error) }));
+  }
+}
+
 async function recordAdminAudit(req, response, env, requestId, knownActor = null) {
   try {
     await ensureAdminAuditSchema(env);
@@ -6038,7 +6060,7 @@ async function recordAdminAudit(req, response, env, requestId, knownActor = null
       target.resourceLabel = actor?.email || "Própria conta";
     const ip = req.headers.get("CF-Connecting-IP") || "unknown";
     await env.DB.prepare(`INSERT INTO admin_audit_logs(id,actor_id,actor_name,actor_email,actor_role,action,method,path,resource_type,resource_id,resource_label,details_json,request_id,ip_hash,user_agent,status_code,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(crypto.randomUUID(), actor?.id || null, actor?.name || "Administrador", actor?.email || "", actor?.roleLabel || actor?.role || "Admin", target.action, req.method, url.pathname, target.resourceType, target.resourceId, target.resourceLabel, JSON.stringify(safeDetails), requestId, await sha256(ip), String(req.headers.get("user-agent") || "").slice(0, 300), response.status).run();
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(crypto.randomUUID(), actor?.id || null, actor?.name || "Administrador", actor?.email || "", actor?.roleLabel || actor?.role || "Admin", target.action, req.method, url.pathname, target.resourceType, target.resourceId, target.resourceLabel, JSON.stringify(safeDetails), requestId, await sha256(ip), String(req.headers.get("user-agent") || "").slice(0, 300), response.status).run();
   } catch (error) {
     console.warn(JSON.stringify({ event: "admin_audit_failed", requestId, error: String(error?.message || error) }));
   }
