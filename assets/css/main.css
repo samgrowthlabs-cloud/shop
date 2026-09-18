@@ -537,6 +537,8 @@ html,body,#app{max-width:100%;overflow-x:clip}
   .header-highlight.has-media::before{display:none}
   .header-highlight.has-media img{display:block;width:100%;height:100%;object-fit:contain;object-position:center right}
   .header-highlight.has-media:hover{box-shadow:none}
+.header-highlight:hover{transform:none;box-shadow:0 8px 24px rgba(4,32,27,.2)}
+.header-highlight.has-media:hover{transform:none;box-shadow:none}
   .header-highlight-carousel{position:relative}
   .header-highlight-slide{position:absolute;inset:0;display:block;opacity:0;pointer-events:none;transition:opacity .35s ease}
   .header-highlight-slide.is-active{z-index:1;opacity:1;pointer-events:auto}
@@ -3476,7 +3478,7 @@ body[data-page="home"] .home-banner-slide.is-active .home-banner-bleed{
     overflow:hidden;
     border-radius:22px;
     background:linear-gradient(120deg,#073e37 0%,#087c70 68%,#0ba894 135%);
-    color:#fff;
+    color:#fff!important;
     box-shadow:0 18px 42px rgba(7,84,73,.2);
   }
   body[data-auth-page="account"] .account-welcome::after{
@@ -3489,7 +3491,7 @@ body[data-page="home"] .home-banner-slide.is-active .home-banner-bleed{
     border:45px solid rgba(255,255,255,.07);
     border-radius:50%;
   }
-  body[data-auth-page="account"] .account-welcome .eyebrow{color:#8ff0df}
+  body[data-auth-page="account"] .account-welcome .eyebrow{color:#a9fff0!important}
   body[data-auth-page="account"] .account-welcome h1{font-size:34px;letter-spacing:-.035em}
   body[data-auth-page="account"] .account-welcome p{color:#d8f0eb}
   body[data-auth-page="account"] .account-profile-avatar{
@@ -7339,7 +7341,6 @@ body:not([data-admin-page]) :is(
   .premium-status,
   .premium-benefits article>span,
   .premium-payment-options article>span,
-  .account-profile-avatar,
   .product-tech-highlights span,
   .account-summary-grid a>img,
   .account-sidebar nav a.active,
@@ -9266,3 +9267,41 @@ body[data-page="product"] .detail-featured-thumbs button.video-thumb .video-thum
 
 /* shoplab-global-loader-1 */
 .shoplab-loader,.shoplab-loader-page{display:grid;place-items:center;width:100%;min-height:clamp(260px,52vh,520px);padding:32px}.shoplab-loader--compact{min-height:180px}.shoplab-loader>span,.shoplab-loader-page .shoplab-loader>span{position:relative;display:grid;place-items:center;width:76px;height:76px;border:1px solid rgba(8,124,112,.16);border-radius:50%;background:radial-gradient(circle at 42% 35%,#fff 0 30%,#eff8f5 75%,#e5f2ee 100%);color:#075f54;font-size:25px;font-weight:950;letter-spacing:-.12em;line-height:1;text-indent:-.08em;box-shadow:0 12px 34px rgba(4,76,66,.12)}.shoplab-loader>span::before,.shoplab-loader-page .shoplab-loader>span::before{position:absolute;inset:-7px;border:3px solid transparent;border-top-color:#087c70;border-right-color:rgba(8,124,112,.28);border-radius:50%;content:'';animation:shoplab-loader-spin .9s linear infinite}.shoplab-loader>span::after,.shoplab-loader-page .shoplab-loader>span::after{position:absolute;inset:8px;border:1px solid rgba(8,124,112,.1);border-radius:50%;content:'';animation:shoplab-loader-pulse 1.35s ease-in-out infinite}@keyframes shoplab-loader-spin{to{transform:rotate(360deg)}}@keyframes shoplab-loader-pulse{50%{opacity:.35;transform:scale(.88)}}@media(max-width:600px){.shoplab-loader,.shoplab-loader-page{min-height:42vh;padding:24px}.shoplab-loader>span,.shoplab-loader-page .shoplab-loader>span{width:66px;height:66px;font-size:22px}}@media(prefers-reduced-motion:reduce){.shoplab-loader>span::before,.shoplab-loader>span::after,.shoplab-loader-page .shoplab-loader>span::before,.shoplab-loader-page .shoplab-loader>span::after{animation:none}.shoplab-loader>span::before{border-color:rgba(8,124,112,.35)}}
+/* Destaque do cabeçalho com a proporção compacta e arredondada de marketplace. */
+@media(min-width:1025px){
+  body:not([data-admin-page]) .header>.header-row,
+  html[data-seasonal-theme] body:not([data-admin-page]) .header>.header-row{
+    grid-template-columns:minmax(130px,190px) minmax(220px,1fr) 320px!important;
+  }
+  body:not([data-admin-page]) .header .header-highlight,
+  body:not([data-admin-page]) .header .header-highlight.has-media,
+  html[data-seasonal-theme] body:not([data-admin-page]) .header .header-highlight,
+  html[data-seasonal-theme] body:not([data-admin-page]) .header .header-highlight.has-media{
+    width:320px!important;
+    height:40px!important;
+    min-height:40px!important;
+    max-height:40px!important;
+    overflow:hidden!important;
+    border:1px solid rgba(0,0,0,.08)!important;
+    border-radius:999px!important;
+    background:#fff!important;
+    box-shadow:0 1px 3px rgba(0,0,0,.14)!important;
+  }
+  body:not([data-admin-page]) .header .header-highlight-slide,
+  html[data-seasonal-theme] body:not([data-admin-page]) .header .header-highlight-slide{
+    overflow:hidden!important;
+    border-radius:inherit!important;
+  }
+  body:not([data-admin-page]) .header .header-highlight.has-media img,
+  body:not([data-admin-page]) .header .header-highlight-slide img,
+  html[data-seasonal-theme] body:not([data-admin-page]) .header .header-highlight.has-media img,
+  html[data-seasonal-theme] body:not([data-admin-page]) .header .header-highlight-slide img{
+    object-fit:contain!important;
+    object-position:var(--spotlight-x,50%) var(--spotlight-y,50%)!important;
+  }
+}
+.account-settings-card .account-password-recovery{display:flex;width:100%;min-height:42px;margin-top:2px!important;border:1px solid #8bbdb5!important;background:#fff!important;color:#06685d!important;font-size:13px;font-weight:800;text-decoration:none;box-shadow:none}.account-settings-card .account-password-recovery:hover{border-color:#087c70!important;background:#edf8f5!important;color:#054f47!important}
+
+/* Contraste do banner de boas-vindas da conta. */
+body[data-auth-page='account'] .account-welcome .eyebrow{color:#a9fff0!important}
+body[data-auth-page='account'] .account-welcome .account-profile-avatar,body[data-auth-page='account'] .account-welcome .account-profile-avatar b{color:#fff!important}

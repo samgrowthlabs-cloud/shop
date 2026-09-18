@@ -849,7 +849,7 @@ async function route(request, env, ctx, requestId) {
   }
   if (path === '/api/v1/admin/newsletter' && request.method === 'GET')
     return ok(request, env, await adminNewsletterStats(env), requestId);
-  const newsResponse = await newsRoute(request, env, url, authenticatedAdminActor);
+  const newsResponse = await newsRoute(request, env, url, authenticatedAdminActor, ctx);
   if (newsResponse) return cors(request, env, newsResponse);
   if (/^\/api\/v1\/admin\/products\/[^/]+\/classification$/.test(path))
     return catalogProduct(request,env,path.split('/').at(-2),requestId);
@@ -1153,18 +1153,19 @@ const revisionSources = [
     ["products", "updated_at"], ["offers", "updated_at"],
     ["categories", "updated_at"], ["product_collections", "updated_at"],
     ["banners", "updated_at"], ["seasonal_themes", "updated_at"],
+    ["header_spotlights", "updated_at"],
     ["shoplab_ads", "updated_at"], ["catalog_settings", "updated_at"],
   ];
   const revisions = [];
   for (const [table, column] of revisionSources) {
     try {
-      const row = await env.DB.prepare(`SELECT COALESCE(MAX(${column}), '') revision FROM ${table}`).first();
-      if (row?.revision) revisions.push(String(row.revision));
+      const row = await env.DB.prepare(`SELECT COUNT(*) total,COALESCE(MAX(${column}), '') revision FROM ${table}`).first();
+      revisions.push(`${table}:${Number(row?.total)||0}:${String(row?.revision||"")}`);
     } catch (error) {
       console.warn(JSON.stringify({ event: "home_revision_source_unavailable", table, detail: String(error?.message || error) }));
     }
   }
-  const contentRevision = revisions.sort().at(-1) || "initial";
+  const contentRevision = revisions.length ? await sha256(revisions.join("|")) : "initial";
   const cacheUrl = new URL("/api/v1/home", req.url);
   cacheUrl.searchParams.set("revision", contentRevision);
   const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
@@ -7787,7 +7788,7 @@ async function updateHeaderSpotlight(req, env, spotlightId, id) {
   const validation = validateHeaderSpotlight(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,spotlight_position_x=?,spotlight_position_y=?,spotlight_scale=?,spotlight_rotation=?,spotlight_animation=?,spotlight_animation_duration=?,spotlight_animation_delay=?,display_duration_ms=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE header_spotlights SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,spotlight_position_x=?,spotlight_position_y=?,spotlight_scale=?,spotlight_rotation=?,spotlight_animation=?,spotlight_animation_duration=?,spotlight_animation_delay=?,display_duration_ms=?,updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?`,
   ).bind(...headerSpotlightValues(body), spotlightId).run();
   if (!result.meta.changes)
     return fail(req, env, "HEADER_SPOTLIGHT_NOT_FOUND", "Destaque não encontrado", 404, id);
@@ -7817,7 +7818,7 @@ async function uploadHeaderSpotlightMedia(req, env, spotlightId, id) {
     return fail(req, env, "INVALID_FILE", error.message, 422, id);
   }
   await env.DB.prepare(
-    `UPDATE header_spotlights SET storage_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE header_spotlights SET storage_key=?,updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?`,
   ).bind(storageKey, spotlightId).run();
   if (current?.storageKey) await env.MEDIA.delete(current.storageKey);
   return ok(req, env, { storageKey }, id);
@@ -7851,7 +7852,7 @@ async function ensureShoplabAdsSchema(env){
   const placementMemberCount=await env.DB.prepare(`SELECT COUNT(*) total FROM shoplab_ad_placement_members`).first();
   if(!Number(placementMemberCount?.total))await env.DB.prepare(`INSERT OR IGNORE INTO shoplab_ad_placement_members(id,ad_id,device,page_kind,position_key,category_slug) SELECT lower(hex(randomblob(16))),a.id,x.device,x.page_kind,x.position_key,x.category_slug FROM shoplab_ad_assignments x CROSS JOIN shoplab_ads a WHERE a.status='active'`).run();
 }
-async function shoplabAdsSettings(env){await ensureShoplabAdsSchema(env);const row=await env.DB.prepare(`SELECT value FROM shoplab_ads_settings WHERE key='global_limits'`).first();return {...{home:2,search:1,category:1,product:1,products:2,news:2,minimumOrganicDesktop:6,minimumOrganicMobile:8},...parse(row?.value||'{}',{})}}
+async function shoplabAdsSettings(env,{ensureSchema=true}={}){if(ensureSchema)await ensureShoplabAdsSchema(env);const row=await env.DB.prepare(`SELECT value FROM shoplab_ads_settings WHERE key='global_limits'`).first();return {...{home:2,search:1,category:1,product:1,products:2,news:2,minimumOrganicDesktop:6,minimumOrganicMobile:8},...parse(row?.value||'{}',{})}}
 async function adminShoplabAdsSettings(req,env,id){return ok(req,env,await shoplabAdsSettings(env),id)}
 async function updateAdminShoplabAdsSettings(req,env,id){const b=await readJson(req,4000),v={home:clamp(b.home,0,10,2),search:clamp(b.search,0,10,1),category:clamp(b.category,0,10,1),product:clamp(b.product,0,10,1),products:clamp(b.products,0,10,2),news:clamp(b.news,0,2,2),minimumOrganicDesktop:clamp(b.minimumOrganicDesktop,2,20,6),minimumOrganicMobile:clamp(b.minimumOrganicMobile,2,24,8)};await ensureShoplabAdsSchema(env);await env.DB.prepare(`INSERT INTO shoplab_ads_settings(key,value,updated_at) VALUES('global_limits',?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP`).bind(JSON.stringify(v)).run();return ok(req,env,v,id)}function shoplabAdKeywords(form){return String(form.get('targetKeywords')||'').toLocaleLowerCase('pt-BR').split(/[,\n]/).map(normalizeSearch).filter(term=>term.length>=2).filter((term,index,items)=>items.indexOf(term)===index).slice(0,20).join(',')}
 function shoplabAdPresentation(form,name){ return{publicTitle:String(form.get('publicTitle')||name).trim().slice(0,140),adLabel:String(form.get('adLabel')||'PUBLICIDADE · SHOPLAB ADS').trim().slice(0,80),showHeader:form.get('showHeader')==='0'?0:1,dismissible:form.get('dismissible')==='0'?0:1,dismissMinutes:clamp(form.get('dismissMinutes'),1,10080,30),ctaText:String(form.get('ctaText')||'Saiba mais').trim().slice(0,40),ctaColor:/^#[0-9a-f]{6}$/i.test(String(form.get('ctaColor')||''))?String(form.get('ctaColor')):'#075fce',oldPriceText:String(form.get('oldPriceText')||'').trim().slice(0,32),currentPriceText:String(form.get('currentPriceText')||'').trim().slice(0,32),oldPriceColor:/^#[0-9a-f]{6}$/i.test(String(form.get('oldPriceColor')||''))?String(form.get('oldPriceColor')):'#71807c',currentPriceColor:/^#[0-9a-f]{6}$/i.test(String(form.get('currentPriceColor')||''))?String(form.get('currentPriceColor')):'#087c70'}}
@@ -7921,12 +7922,15 @@ async function saveShoplabAdAssignments(req,env,id){
   for(const item of valid){const adId=String(item.adId);statements.push(env.DB.prepare(`INSERT OR IGNORE INTO shoplab_ad_placement_members(id,ad_id,device,page_kind,position_key,category_slug) VALUES(?,?,?,?,?,?)`).bind(crypto.randomUUID(),adId,item.device,item.pageKind,String(item.positionKey).slice(0,80),String(item.categorySlug||'').slice(0,100)));statements.push(env.DB.prepare(`UPDATE shoplab_ads SET status='active',updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(adId))}
   await env.DB.batch(statements);return ok(req,env,{saved:valid.length},id)
 }async function publicShoplabAds(req,env,id){
-  await ensureShoplabAdsSchema(env);
-  const url=new URL(req.url),device=url.searchParams.get('device')==='mobile'?'mobile':'desktop',pageKind=['home','search','products','category','product','news'].includes(url.searchParams.get('page'))?url.searchParams.get('page'):'home',pageTarget=pageKind==='search'?'products':pageKind,category=normalizeSearch(String(url.searchParams.get('category')||'').slice(0,100)),product=normalizeSearch(String(url.searchParams.get('product')||'').slice(0,140)),queryText=normalizeSearch(String(url.searchParams.get('q')||'').slice(0,140)),newsPosition=pageKind==='news'&&url.searchParams.get('surface')==='article'?'news_article':pageKind==='news'?'news_feed':'',origin=url.origin,user=req.headers.has('authorization')?await activeUser(req,env):null;
+  const url=new URL(req.url),device=url.searchParams.get('device')==='mobile'?'mobile':'desktop',pageKind=['home','search','products','category','product','news'].includes(url.searchParams.get('page'))?url.searchParams.get('page'):'home',pageTarget=pageKind==='search'?'products':pageKind,category=normalizeSearch(String(url.searchParams.get('category')||'').slice(0,100)),product=normalizeSearch(String(url.searchParams.get('product')||'').slice(0,140)),queryText=normalizeSearch(String(url.searchParams.get('q')||'').slice(0,140)),newsPosition=pageKind==='news'&&url.searchParams.get('surface')==='article'?'news_article':pageKind==='news'?'news_feed':'',origin=url.origin;
   const seenAdIds=new Set(String(url.searchParams.get('seen')||'').split(',').map(value=>value.trim()).filter(Boolean).slice(-40));
   const adFields=`a.id,a.name,a.product_slug productSlug,a.target_keywords targetKeywords,a.public_title publicTitle,a.ad_label adLabel,a.show_header showHeader,a.dismissible,a.dismiss_minutes dismissMinutes,a.cta_text ctaText,a.cta_color ctaColor,a.old_price_text oldPriceText,a.current_price_text currentPriceText,a.old_price_color oldPriceColor,a.current_price_color currentPriceColor,a.media_type mediaType,a.storage_key storageKey,a.link_url linkUrl,a.priority,a.distribution_mode distributionMode,a.distribution_weight distributionWeight,a.featured,a.search_boost searchBoost,a.max_per_page maxPerPage,a.target_pages targetPages,a.category_slugs categorySlugs,a.related_product_slugs relatedProductSlugs,p.slug linkedProductSlug,(SELECT c.slug FROM categories c WHERE c.id=p.category_id) linkedCategorySlug,COALESCE(o.current_price_cents,p.base_price_cents) linkedCurrentPrice,COALESCE(o.previous_price_cents,p.compare_at_price_cents) linkedOldPrice`;
-  const manualResult=await env.DB.prepare(`SELECT ${adFields},x.position_key positionKey FROM shoplab_ad_placement_members x JOIN shoplab_ads a ON a.id=x.ad_id LEFT JOIN products p ON p.slug=a.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE x.device=? AND x.page_kind=? AND (x.category_slug='' OR x.category_slug=?) AND a.status='active' AND a.distribution_mode='manual' AND (a.starts_at IS NULL OR datetime(a.starts_at)<=CURRENT_TIMESTAMP) AND (a.ends_at IS NULL OR datetime(a.ends_at)>=CURRENT_TIMESTAMP)`).bind(device,pageTarget,category).all();
-  const automaticResult=await env.DB.prepare(`SELECT ${adFields} FROM shoplab_ads a LEFT JOIN products p ON p.slug=a.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE a.status='active' AND a.distribution_mode='weighted' AND instr(','||replace(a.target_pages,' ','')||',',','||?||',')>0 AND (a.starts_at IS NULL OR datetime(a.starts_at)<=CURRENT_TIMESTAMP) AND (a.ends_at IS NULL OR datetime(a.ends_at)>=CURRENT_TIMESTAMP)`).bind(pageTarget).all();
+  const [manualResult,automaticResult,settings,user]=await Promise.all([
+    env.DB.prepare(`SELECT ${adFields},x.position_key positionKey FROM shoplab_ad_placement_members x JOIN shoplab_ads a ON a.id=x.ad_id LEFT JOIN products p ON p.slug=a.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE x.device=? AND x.page_kind=? AND (x.category_slug='' OR x.category_slug=?) AND a.status='active' AND a.distribution_mode='manual' AND (a.starts_at IS NULL OR datetime(a.starts_at)<=CURRENT_TIMESTAMP) AND (a.ends_at IS NULL OR datetime(a.ends_at)>=CURRENT_TIMESTAMP)`).bind(device,pageTarget,category).all(),
+    env.DB.prepare(`SELECT ${adFields} FROM shoplab_ads a LEFT JOIN products p ON p.slug=a.product_slug LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1 WHERE a.status='active' AND a.distribution_mode='weighted' AND instr(','||replace(a.target_pages,' ','')||',',','||?||',')>0 AND (a.starts_at IS NULL OR datetime(a.starts_at)<=CURRENT_TIMESTAMP) AND (a.ends_at IS NULL OR datetime(a.ends_at)>=CURRENT_TIMESTAMP)`).bind(pageTarget).all(),
+    shoplabAdsSettings(env,{ensureSchema:false}),
+    req.headers.has('authorization')?activeUser(req,env):Promise.resolve(null)
+  ]);
   let searches=[];if(user){const history=await env.DB.prepare(`SELECT query_text FROM events WHERE user_id=? AND event_type IN ('search','search_no_results') AND query_text IS NOT NULL AND created_at>=datetime('now','-60 days') ORDER BY created_at DESC LIMIT 30`).bind(user.id).all();searches=(history.results||[]).map(row=>normalizeSearch(row.query_text)).filter(Boolean)}
   const matchesFor=row=>{const keywords=String(row.targetKeywords||'').split(',').filter(Boolean),current=queryText?keywords.filter(keyword=>queryText.includes(keyword)||keyword.includes(queryText)).length*Number(row.searchBoost||3):0;return current+keywords.reduce((total,keyword)=>total+searches.filter(query=>query.includes(keyword)).length,0)};
   let currentCategory=category;if(product&&!currentCategory){const contextProduct=await env.DB.prepare('SELECT c.slug categorySlug FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=?').bind(product).first();currentCategory=normalizeSearch(contextProduct?.categorySlug||'')}
@@ -7936,7 +7940,7 @@ async function saveShoplabAdAssignments(req,env,id){
   const slots={desktop:{home:['home_categories','home_sections','footer'],products:['top','grid_sidebar','footer'],category:['top','grid_sidebar','footer'],product:['top','product_top','product_middle','footer'],news:['news_feed','news_article']},mobile:{home:['products','sections','footer'],products:['menu','products','footer'],category:['menu','products','footer'],product:['menu','product_top','product_middle','product_footer'],news:['news_feed','news_article']}}[device][pageTarget].filter(position=>!usedPositions.has(position)&&(!newsPosition||position===newsPosition));
   const usedAdIds=new Set(winners.map(row=>row.id)),automaticAll=(automaticResult.results||[]).map(row=>{const context=contextualScore(row);return{...row,_matches:matchesFor(row),_context:context.score,_eligible:context.eligible}}).filter(row=>row._eligible),unseenAutomatic=automaticAll.filter(row=>!seenAdIds.has(row.id)),automatic=unseenAutomatic.length?unseenAutomatic:automaticAll;
   for(const positionKey of slots){const eligible=automatic.filter(row=>!usedAdIds.has(row.id));if(!eligible.length)break;const winner=eligible.map(row=>{const effectiveWeight=Math.max(1,Number(row.distributionWeight)||25)*(Number(row.featured)?1.5:1)*(1+row._matches*0.35+row._context*0.2);return{row,score:-Math.log(Math.max(Number.EPSILON,Math.random()))/effectiveWeight}}).sort((a,b)=>a.score-b.score)[0].row;usedAdIds.add(winner.id);winners.push({...winner,positionKey})}
-  const settings=await shoplabAdsSettings(env),limit=Number(settings[pageKind])||0,minimumOrganicItems=device==='mobile'?settings.minimumOrganicMobile:settings.minimumOrganicDesktop;winners.splice(limit);
+  const limit=Number(settings[pageKind])||0,minimumOrganicItems=device==='mobile'?settings.minimumOrganicMobile:settings.minimumOrganicDesktop;winners.splice(limit);
   const adPrice=value=>value==null?'':'R$ '+(Number(value)/100).toFixed(2).replace('.',',');
   return ok(req,env,winners.map(({targetKeywords,priority,distributionMode,distributionWeight,_matches,_random,_context,_eligible,...row})=>({...row,minimumOrganicItems,linkUrl:row.linkedProductSlug?'produto.html?slug='+encodeURIComponent(row.linkedProductSlug):row.linkUrl,oldPriceText:row.linkedProductSlug&&row.linkedOldPrice?adPrice(row.linkedOldPrice):row.oldPriceText,currentPriceText:row.linkedProductSlug&&row.linkedCurrentPrice?adPrice(row.linkedCurrentPrice):row.currentPriceText,personalized:Boolean(_matches),mediaUrl:row.storageKey?`${origin}/media/${encodeURIComponent(row.storageKey)}`:null,storageKey:undefined})),id)
 }async function adminHeaderAds(req, env, id) {
@@ -10339,6 +10343,6 @@ async function catalogPage(req,env,path) {
   if(rootSlug) breadcrumbs.push({'@type':'ListItem',position:2,name:rootSlug.replace(/-/g,' '),item:new URL('/'+rootSlug,req.url).href});
   breadcrumbs.push({'@type':'ListItem',position:breadcrumbs.length+1,name:entity.name,item:canonical});
   const schema = JSON.stringify({'@context':'https://schema.org','@type':'CollectionPage',name:entity.name,url:canonical,breadcrumb:{'@type':'BreadcrumbList',itemListElement:breadcrumbs},mainEntity:{'@type':'ItemList',numberOfItems:data.total,itemListElement:data.products.map((p,i)=>({'@type':'ListItem',position:i+1,url:new URL(`/produto?slug=${encodeURIComponent(p.slug)}`,req.url).href,name:p.name}))}}).replace(/</g,'\\u003c');
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/"><meta name="robots" content="${new URL(req.url).search?'noindex,follow':'index,follow'}"><title>${escape(title)}</title><meta name="description" content="${escape(description)}"><link rel="canonical" href="${escape(canonical)}"><link rel="stylesheet" href="/assets/css/main.css?v=20260908-discovery-1"><script type="application/ld+json">${schema}</script></head><body data-page="discovery"><div id="app"><main id="conteudo" class="container page-hero"><nav aria-label="Caminho"><a href="/">Início</a> / ${escape(entity.name)}</nav><h1>${escape(entity.name)}</h1><p>${escape(description)}</p><p>${data.total} produtos</p><ul>${data.products.map(p=>`<li><a href="/produto?slug=${encodeURIComponent(p.slug)}">${escape(p.name)}</a></li>`).join('')}</ul></main></div><script type="module" src="/assets/js/app.js?v=20260908-discovery-1"></script></body></html>`;
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/"><meta name="robots" content="${new URL(req.url).search?'noindex,follow':'index,follow'}"><title>${escape(title)}</title><meta name="description" content="${escape(description)}"><link rel="canonical" href="${escape(canonical)}"><link rel="stylesheet" href="/assets/css/main.css?v=20260918-header-cache-2"><script type="application/ld+json">${schema}</script></head><body data-page="discovery"><div id="app"><main id="conteudo" class="container page-hero"><nav aria-label="Caminho"><a href="/">Início</a> / ${escape(entity.name)}</nav><h1>${escape(entity.name)}</h1><p>${escape(description)}</p><p>${data.total} produtos</p><ul>${data.products.map(p=>`<li><a href="/produto?slug=${encodeURIComponent(p.slug)}">${escape(p.name)}</a></li>`).join('')}</ul></main></div><script type="module" src="/assets/js/app.js?v=20260908-discovery-1"></script></body></html>`;
   return new Response(html,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=0, must-revalidate','x-content-type-options':'nosniff'}});
 }

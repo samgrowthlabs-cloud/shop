@@ -1,5 +1,5 @@
-import{getSiteConfig,cachedSiteConfig}from'./api.js?v=20260917-cache-swr-1';
-import{renderHeaderHighlight}from'./visual-renderers.js?v=20260821-header-spotlight-carousel-1';
+import{getSiteConfig,cachedSiteConfig}from'./api.js?v=20260918-mobile-perf-1';
+import{renderHeaderHighlight}from'./visual-renderers.js?v=20260918-header-cache-2';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const PREMIUM_BRAND_KEY='shoplab:premium-brand';

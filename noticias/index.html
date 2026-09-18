@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Abrindo Notícias | SHOPLAB</title>
+  <script>
+    const target = new URL('../noticias.html', location.href);
+    target.search = location.search;
+    target.hash = location.hash;
+    location.replace(target.href);
+  </script>
+</head>
+<body>
+  <p><a href="../noticias.html">Abrir Notícias</a></p>
+</body>
+</html>

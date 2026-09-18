@@ -49,19 +49,21 @@ export function cachedHomeData(){try{const value=JSON.parse(localStorage.getItem
 function cacheHomeData(value){try{if(value&&Array.isArray(value.products))localStorage.setItem(HOME_DATA_CACHE,JSON.stringify(value))}catch{}return value}
 export const getHomeData=async()=>{
   if(C.USE_MOCK_DATA)return cacheHomeData(await Promise.all([getProducts({limit:50}),getTrendingProducts(16),getPromotions(),getCategories(),getFeaturedCollections(),getSiteConfig()]).then(([products,trending,campaigns,categories,collections,siteConfig])=>({products,trending,campaigns,categories,collections,siteConfig})));
+  const cached=cachedHomeData(),prefetched=window.__SHOPLAB_HOME_PROMISE;
+  if(cached){
+    window.__SHOPLAB_HOME_PROMISE=null;
+    (prefetched||request('/api/v1/home')).then(value=>value&&cacheHomeData(value)).catch(()=>null);
+    return cached;
+  }
   try{
-    const prefetched=window.__SHOPLAB_HOME_PROMISE;
     if(prefetched){window.__SHOPLAB_HOME_PROMISE=null;const value=await prefetched;if(value)return cacheHomeData(value)}
     return cacheHomeData(await request('/api/v1/home'));
   }catch(error){
-    const cached=cachedHomeData();if(cached)return cached;
     return cacheHomeData(await Promise.all([getProducts({limit:50}),getTrendingProducts(16),getPromotions(),getCategories(),getFeaturedCollections(),getSiteConfig()]).then(([products,trending,campaigns,categories,collections,siteConfig])=>({products,trending,campaigns,categories,collections,siteConfig})));
   }
-};
-export const getRecommendations=async(slug,{standard=false}={})=>{if(C.USE_MOCK_DATA)return(await getProducts()).filter(p=>p.slug!==slug).slice(0,standard?8:4);const products=await request(`/api/v1/products/${encodeURIComponent(slug)}/related?audience=${userAuthorization().authorization?'member':'guest'}&mode=${standard?'standard':'all'}&v=12`);return withActivePromotions(products).catch(()=>products)};
+};export const getRecommendations=async(slug,{standard=false}={})=>{if(C.USE_MOCK_DATA)return(await getProducts()).filter(p=>p.slug!==slug).slice(0,standard?8:4);const products=await request(`/api/v1/products/${encodeURIComponent(slug)}/related?audience=${userAuthorization().authorization?'member':'guest'}&mode=${standard?'standard':'all'}&v=12`);return withActivePromotions(products).catch(()=>products)};
 export const getProductOffers=async slug=>(await getProductBySlug(slug))?.offers||[];
-export const getComparisonAnalysis=slugs=>request('/api/v1/comparisons/analyze',{method:'POST',body:{slugs},timeout:90000});
-export const trackEvent=event=>C.USE_MOCK_DATA?Promise.resolve({mock:true,event}):request('/api/v1/events',{method:'POST',body:event});
+export const getComparisonAnalysis=slugs=>request('/api/v1/comparisons/analyze',{method:'POST',body:{slugs},timeout:90000});export const trackEvent=event=>C.USE_MOCK_DATA?Promise.resolve({mock:true,event}):request('/api/v1/events',{method:'POST',body:event});
 export const loginAdmin=credentials=>request('/api/v1/admin/auth/login',{method:'POST',body:credentials});
 export const logoutAdmin=()=>request('/api/v1/admin/auth/logout',{method:'POST'});
 export const getAdminSession=()=>request('/api/v1/admin/auth/session');

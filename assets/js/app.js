@@ -7,7 +7,7 @@ import{session as authSession,currentUser,signOut,startPresence,userApi}from'./a
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library.js';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260726-mobile-plus-logo-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
-import{mountShoplabAds}from'./shoplab-ads-public.js?v=20260913-search-mobile-fullwidth-1';
+import{mountShoplabAds,preloadShoplabAds}from'./shoplab-ads-public.js?v=20260918-fast-load-1';
 import{renderHomeBanner,renderHeaderHighlight}from'./visual-renderers.js?v=20260821-header-spotlight-carousel-1';
 import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-comparisons.js?v=20260820-home-cards-1';
 const mediaVariant=(key,width)=>`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(key)}?w=${width}&q=78`;
@@ -468,6 +468,7 @@ detail=async()=>{
   return html;
 };
 async function waitForPageImages(root){const images=[...root.querySelectorAll('img')].filter(img=>img.getBoundingClientRect().top<innerHeight*1.5).slice(0,10);images.forEach(img=>img.loading='eager');await Promise.race([Promise.all(images.map(img=>img.complete?(img.decode?.().catch(()=>null)||Promise.resolve()):new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,5000))])}async function init(){
+  void preloadShoplabAds();
   let body;
   const app=$('#app'),renderPage=()=>page==='discovery'?discoveryPage(card,setSeo,bindComparisonUI):page==='home'?home():page==='product'?detail():page==='compare'?comparisonPage():page==='collection'?collectionPage():['catalog','search','promotions','new','category','brand','author'].includes(page)?listing():institutional();
   void getCategories().then(rows=>{
@@ -497,11 +498,10 @@ async function waitForPageImages(root){const images=[...root.querySelectorAll('i
   if(nextLogo&&currentLogo&&nextLogo.innerHTML!==currentLogo.innerHTML)currentLogo.innerHTML=nextLogo.innerHTML;
   if(nextHighlight&&currentHighlight)currentHighlight.replaceWith(nextHighlight);else if(nextHighlight&&!currentHighlight)currentHeader?.querySelector('.header-row')?.append(nextHighlight);else currentHighlight?.remove();
   if(nextHeaderAd&&currentHeaderAd)currentHeaderAd.replaceWith(nextHeaderAd);else if(nextHeaderAd&&!currentHeaderAd)currentHeader?.append(nextHeaderAd);else currentHeaderAd?.remove();
-  const pendingContent=app.querySelector('.page-content-pending'),stage=document.createElement('div');stage.className='page-content-stage';stage.style.visibility='hidden';stage.innerHTML=body+footer();if(pendingContent)pendingContent.replaceWith(stage);else app.append(stage);await waitForPageImages(stage);stage.style.visibility='';stage.classList.add('is-ready');const pageLoader=app.querySelector('.shoplab-page-loader');pageLoader?.classList.add('is-leaving');setTimeout(()=>pageLoader?.remove(),240);
+  const pendingContent=app.querySelector('.page-content-pending'),stage=document.createElement('div');stage.className='page-content-stage';stage.style.visibility='hidden';stage.innerHTML=body+footer();if(pendingContent)pendingContent.replaceWith(stage);else app.append(stage);void mountShoplabAds();await waitForPageImages(stage);stage.style.visibility='';stage.classList.add('is-ready');const pageLoader=app.querySelector('.shoplab-page-loader');pageLoader?.classList.add('is-leaving');setTimeout(()=>pageLoader?.remove(),240);
   if(page==='compare')initializeComparisonPage();
   bindHeaderSpotlights();
   bindHeaderAdStrip();
-  mountShoplabAds();
   bindListingFilters();bindPromotionsPagination();bindComparisonUI();
   if(page==='product')loadProductRecommendations();
   document.addEventListener('click',e=>{const a=e.target.closest('[data-offer]');if(a){e.preventDefault();trackEvent({type:'offer_click',slug:a.dataset.offer});alert('Oferta demonstrativa. O redirecionamento será ativado pela futura API.') }});
