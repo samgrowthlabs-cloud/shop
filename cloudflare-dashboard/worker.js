@@ -4003,6 +4003,36 @@ const SEARCH_STOP_WORDS = new Set([
   "o", "os", "para", "por", "pra", "quero", "reais", "um", "uma",
 ]);
 
+// Keep product searches from being dominated by accessories that mention them.
+const SEARCH_PRODUCT_FAMILIES = [
+  { id: "phone", terms: ["celular", "celulares", "smartphone", "smartphones", "telefone", "iphone"], identity: ["celular", "smartphone", "telefone", "iphone"], accessories: ["acessorio", "acessorios", "capa", "carregador", "pelicula", "suporte", "cabo"] },
+  { id: "notebook", terms: ["notebook", "notebooks", "laptop", "laptops", "macbook"], identity: ["notebook", "laptop", "macbook"], accessories: ["acessorio", "acessorios", "capa", "carregador", "mochila", "suporte", "cabo"] },
+  { id: "television", terms: ["tv", "televisao", "televisor", "smart tv"], identity: ["tv", "televisao", "televisor", "smart tv"], accessories: ["acessorio", "acessorios", "controle", "painel", "rack", "suporte", "cabo"] },
+  { id: "watch", terms: ["smartwatch", "relogio inteligente"], identity: ["smartwatch", "relogio inteligente", "smart band"], accessories: ["acessorio", "acessorios", "pulseira", "carregador", "capa", "pelicula"] },
+  { id: "headphone", terms: ["fone", "fones", "headphone", "headset", "earbud", "auricular"], identity: ["fone", "headphone", "headset", "earbud", "auricular"], accessories: ["acessorio", "acessorios", "case", "cabo", "adaptador", "suporte"] },
+];
+
+function includesSearchPhrase(text, phrase) { return (` ${text} `).includes(` ${phrase} `); }
+function inferSearchProductFamily(query) {
+  const normalized = normalizeSearch(query);
+  return SEARCH_PRODUCT_FAMILIES.find((family) => family.terms.some((term) => includesSearchPhrase(normalized, term))) || null;
+}
+function productFamilyScore(product, family) {
+  if (!family) return 0;
+  const name = normalizeSearch(product.name), category = normalizeSearch(product.category);
+  const identityInName = family.identity.some((term) => includesSearchPhrase(name, term));
+  const identityInCategory = family.identity.some((term) => includesSearchPhrase(category, term));
+  const accessory = family.accessories.some((term) => includesSearchPhrase(name, term) || includesSearchPhrase(category, term));
+  return (identityInCategory ? 18 : 0) + (identityInName ? 10 : 0) - (accessory ? 24 : 0);
+}
+function rankProductFamilyCandidates(products, query) {
+  const family = inferSearchProductFamily(query);
+  if (!family) return products;
+  const scored = products.map((product) => ({ product, familyScore: productFamilyScore(product, family) }));
+  const hasStrongMatches = scored.some((item) => item.familyScore >= 10);
+  return scored.filter((item) => !hasStrongMatches || item.familyScore > 0).sort((a, b) => b.familyScore - a.familyScore).map((item) => item.product);
+}
+
 function buildIntentFtsQuery(query) {
   const terms = correctedSearch(query)
     .split(" ")
@@ -4182,26 +4212,32 @@ function localSearchIntent(originalQuery) {
     .replace(/\s+/g, " ").trim()
     .replace(/\b(ate|menos de|no maximo|maximo)\s*(\d)/g, "$1 $2")
     .replace(/\b(acima de|mais de|a partir de|minimo)\s*(\d)/g, "$1 $2");
-  const number = (value) => {
-    const parsed = Number(String(value || "").replace(/\./g, "").replace(",", "."));
+  const number = (value, scale = "") => {
+    const raw = String(value || "").trim();
+    const normalized = /,/.test(raw) ? raw.replace(/\./g, "").replace(",", ".")
+      : /^\d{1,3}(?:\.\d{3})+$/.test(raw) ? raw.replace(/\./g, "") : raw;
+    const parsed = Number(normalized) * (/^(?:k|mil)$/.test(scale) ? 1000 : 1);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   };
   let minPrice = null, maxPrice = null;
-  const between = query.match(/\bentre\s+(\d[\d.,]*)\s+(?:e|a)\s+(\d[\d.,]*)/);
+  const money = "(\\d[\\d.,]*)(?:\\s*(k|mil))?";
+  const between = query.match(new RegExp(`\\bentre\\s+${money}\\s+(?:e|a)\\s+${money}`));
   if (between) {
-    minPrice = number(between[1]); maxPrice = number(between[2]);
+    minPrice = number(between[1], between[2]); maxPrice = number(between[3], between[4]);
     if (minPrice != null && maxPrice != null && minPrice > maxPrice)
       [minPrice, maxPrice] = [maxPrice, minPrice];
   } else {
-    maxPrice = number(query.match(/\b(?:ate|menos de|no maximo|maximo)\s*(\d[\d.,]*)/)?.[1]);
-    minPrice = number(query.match(/\b(?:acima de|mais de|a partir de|minimo)\s*(\d[\d.,]*)/)?.[1]);
+    const maximum = query.match(new RegExp(`\\b(?:ate|abaixo(?: de)?|por menos de|menos(?: de)?|no maximo|maximo)\\s*(?:uns?\\s*)?${money}`));
+    const minimum = query.match(new RegExp(`\\b(?:acima(?: de)?|por mais de|mais(?: de)?|a partir de|minimo)\\s*${money}`));
+    maxPrice = number(maximum?.[1], maximum?.[2]);
+    minPrice = number(minimum?.[1], minimum?.[2]);
   }
   const searchTerms = query
-    .replace(/\bentre\s+\d[\d.,]*\s+(?:e|a)\s+\d[\d.,]*/g, " ")
-    .replace(/\b(?:ate|menos de|no maximo|maximo|acima de|mais de|a partir de|minimo)\s*\d[\d.,]*/g, " ")
-    .replace(/\b\d[\d.,]*\s*(?:reais|real)\b/g, " ")
+    .replace(/\bentre\s+\d[\d.,]*(?:\s*(?:k|mil))?\s+(?:e|a)\s+\d[\d.,]*(?:\s*(?:k|mil))?/g, " ")
+    .replace(/\b(?:ate|abaixo(?: de)?|por menos de|menos(?: de)?|no maximo|maximo|acima(?: de)?|por mais de|mais(?: de)?|a partir de|minimo)\s*(?:uns?\s*)?\d[\d.,]*(?:\s*(?:k|mil))?/g, " ")
+    .replace(/\b\d[\d.,]*\s*(?:k|mil|reais|real|conto|contos)\b/g, " ")
     .replace(/\b(?:mais barato|menor preco|barato primeiro|mais caro|maior preco|maior desconto|mais desconto)\b/g, " ")
-    .replace(/\b(?:por|de|com|quero|procuro|busco|reais|real)\b/g, " ")
+    .replace(/\b(?:por|de|com|quero|queria|preciso|procuro|busco|reais|real|conto|contos)\b/g, " ")
     .replace(/\s+/g, " ").trim();
   return { searchTerms: searchTerms || normalizeSearch(originalQuery), minPrice, maxPrice,
     sort: /\b(?:mais barato|menor preco|barato primeiro)\b/.test(query) ? "price-asc"
@@ -4211,7 +4247,8 @@ function localSearchIntent(originalQuery) {
 
 function mergeSearchIntent(local, ai) {
   if (!ai) return { ...local, category: null, brand: null, explanation: "Produto e filtros identificados." };
-  return { ...ai, searchTerms: ai.searchTerms || local.searchTerms,
+  const hasLocalFilters = local.minPrice != null || local.maxPrice != null || local.sort;
+  return { ...ai, searchTerms: hasLocalFilters ? local.searchTerms : ai.searchTerms || local.searchTerms,
     minPrice: local.minPrice ?? ai.minPrice, maxPrice: local.maxPrice ?? ai.maxPrice,
     sort: local.sort || ai.sort };
 }
@@ -4333,6 +4370,7 @@ async function searchV2(req, env, url, ctx, id) {
       .slice(0, 20);
   }
   if (intent && results.length && !sort) results = rankContextualCandidates(results, intent.searchTerms);
+  results = rankProductFamilyCandidates(results, intent?.searchTerms || correctedQuery);
   const smartSearch = url.searchParams.get("smart") === "1" && premiumEnabled;
   const personalContext = smartSearch ? await premiumPersonalSearchContext(env, searchUser.id) : null;
   let premiumRanking = null;
@@ -5100,7 +5138,7 @@ async function suggestionProducts(env, ftsQuery) {
   if (!ftsQuery) return [];
   const { results } = await env.DB.prepare(
     `
-    SELECT p.name,p.slug,c.name category,b.name brand,p.view_count viewCount,
+    SELECT p.name,p.slug,c.name category,b.name brand,p.view_count viewCount,COALESCE(o.current_price_cents,p.base_price_cents) price,
       (SELECT pm.storage_key FROM product_media pm WHERE pm.product_id=p.id AND pm.type='image' ORDER BY pm.is_primary DESC,pm.sort_order,pm.created_at LIMIT 1) storageKey,
       (SELECT pm.external_url FROM product_media pm WHERE pm.product_id=p.id AND pm.type='image' ORDER BY pm.is_primary DESC,pm.sort_order,pm.created_at LIMIT 1) externalUrl,
       (SELECT pm.alt_text FROM product_media pm WHERE pm.product_id=p.id AND pm.type='image' ORDER BY pm.is_primary DESC,pm.sort_order,pm.created_at LIMIT 1) altText
@@ -5108,6 +5146,7 @@ async function suggestionProducts(env, ftsQuery) {
     JOIN products p ON p.id=products_fts.product_id
     LEFT JOIN categories c ON c.id=p.category_id
     LEFT JOIN brands b ON b.id=p.brand_id
+    LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
     WHERE products_fts MATCH ? AND p.status='published'
     ORDER BY bm25(products_fts,0,8.0,3.0,2.0,1.0),p.view_count DESC
     LIMIT 8
@@ -5119,29 +5158,27 @@ async function suggestionProducts(env, ftsQuery) {
 async function suggestionsV2(req, env, url, ctx, id) {
   const query = normalizeSearch(url.searchParams.get("q"));
   if (query.length < 2) return ok(req, env, [], id);
-  const correctedQuery = correctedSearch(query),
-    ftsQuery = buildFtsQuery(correctedQuery);
-  const regular = await suggestionProducts(env, ftsQuery);
+  const localIntent = localSearchIntent(query);
+  const applyIntent = (items, intent = localIntent) => {
+    const min = toPriceCents(intent?.minPrice), max = toPriceCents(intent?.maxPrice);
+    const withinBudget = items.filter((item) => (min == null || Number(item.price || 0) >= min) && (max == null || Number(item.price || 0) <= max));
+    return rankProductFamilyCandidates(withinBudget, intent?.searchTerms || query);
+  };
+  const correctedQuery = correctedSearch(localIntent.searchTerms || query);
+  const regular = applyIntent(await suggestionProducts(env, buildFtsQuery(correctedQuery)));
   const aiRequested = url.searchParams.get("ai") === "1";
   if (!aiRequested || !shouldEnhanceSuggestions(query))
-    return ok(req, env, regular, id, { aiUsed: false });
-  const intent = await cachedSearchIntent(env, query, ctx);
+    return ok(req, env, regular.slice(0, 8), id, { aiUsed: false, intent: localIntent });
+  const intent = mergeSearchIntent(localIntent, await cachedSearchIntent(env, query, ctx));
   if (!intent?.searchTerms)
-    return ok(req, env, regular, id, { aiUsed: false });
+    return ok(req, env, regular.slice(0, 8), id, { aiUsed: false, intent: localIntent });
   const interpretedQuery = correctedSearch(intent.searchTerms);
-  const intelligent = interpretedQuery === correctedQuery
-    ? []
-    : await suggestionProducts(env, buildIntentFtsQuery(interpretedQuery));
-  const merged = [...intelligent, ...regular]
+  const intelligent = interpretedQuery === correctedQuery ? [] : applyIntent(await suggestionProducts(env, buildFtsQuery(interpretedQuery)), intent);
+  const merged = applyIntent([...intelligent, ...regular], intent)
     .filter((item, index, items) => items.findIndex((other) => other.slug === item.slug) === index)
     .slice(0, 8);
-  return ok(req, env, merged, id, {
-    aiUsed: true,
-    interpretedQuery,
-    explanation: intent.explanation,
-  });
+  return ok(req, env, merged, id, { aiUsed: true, interpretedQuery, explanation: intent.explanation, intent });
 }
-
 async function trendingSearches(req, env, id) {
   const { results } = await env.DB.prepare(
     `

@@ -151,13 +151,13 @@ function arrangeMobileOffer(){
 
 async function renderPremiumProductInsight(data,insightPromise,force=false){
   if(!data||document.querySelector('.premium-product-insight')||document.querySelector('.product-ai-trigger'))return;
-  const offerBox=document.querySelector('.product-page-hero .offer'),priceBox=offerBox?.querySelector('.price');
+  const offerBox=document.querySelector('.product-page-hero .offer');
   if(!force&&matchMedia('(min-width:761px)').matches){
-    if(!offerBox||!priceBox)return;
+    if(!offerBox)return;
     const trigger=document.createElement('section');
     trigger.className='product-ai-trigger premium-product-insight is-ready';
     trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><button class="btn primary ai-insight-generate" type="button" disabled>${aiAnalyzeIcon()}<span>Analisar com IA</span></button><span class="ai-credit-pill">Créditos disponíveis</span></div>`;
-    priceBox.insertAdjacentElement('afterend',trigger);
+    offerBox.insertAdjacentElement('afterend',trigger);
     if(!session()){
       trigger.className='product-ai-trigger premium-product-insight is-ready free-ai-login';
       trigger.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><a class="btn primary ai-insight-generate" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">${aiAnalyzeIcon()}<span>Analisar grátis</span></a><span class="ai-credit-pill is-free">5 análises grátis</span></div>`;
