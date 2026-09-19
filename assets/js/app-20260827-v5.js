@@ -506,7 +506,7 @@ async function init(){
     }
   }
   if(page==='search')import('./universal-search.js?v=20260919-smart-pt-1').then(module=>module.initUniversalSearch()).catch(()=>{});
-  if(page==='product')import('./public-media-20260827-v5.js?v=20260919-product-logos-1').catch(()=>{});
+  if(page==='product')import('./public-media-20260827-v5.js?v=20260919-insight-v11-1').catch(()=>{});
   void shoplabAdsModule.then(module=>module.mountShoplabAds()).catch(()=>{});
   if(page==='product')loadProductRecommendations();
   document.addEventListener('click',e=>{const a=e.target.closest('[data-offer]');if(a){e.preventDefault();trackEvent({type:'offer_click',slug:a.dataset.offer});alert('Oferta demonstrativa. O redirecionamento será ativado pela futura API.') }});

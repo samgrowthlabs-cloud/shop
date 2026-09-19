@@ -10,13 +10,33 @@ const setInsightAutoEnabled=enabled=>{try{localStorage.setItem(insightPreference
 const aiToggleIcon=enabled=>enabled?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3m0 12v3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12M3 12h3m12 0h3M5.64 18.36l2.12-2.12m8.48-8.48 2.12-2.12"/><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M12 3v3m0 12v3M3 12h3m12 0h3M18.36 5.64l-2.12 2.12M5.64 18.36l2.12-2.12"/><path d="M8.8 8.8A3.5 3.5 0 0 0 15.2 15.2"/></svg>';
 const aiAnalyzeIcon=()=>'<svg class="ai-analyze-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.25 3.25L16.5 8l-3.25 1.25L12 12.5l-1.25-3.25L7.5 8l3.25-1.25L12 3.5Z"/><path d="M18.5 12.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/><path d="M6 14.5l.7 1.8 1.8.7-1.8.7L6 19.5l-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>';
 function cachedInsight(slug){
-  const key=`shoplab:product-insight:v6:${slug}`;
+  const key=`shoplab:product-insight:v10:${slug}`;
   try{const item=JSON.parse(sessionStorage.getItem(key)||'null');if(item&&Date.now()-item.savedAt<INSIGHT_CACHE_TTL)return Promise.resolve(item.value)}catch{}
   return userApi(`products/${encodeURIComponent(slug)}/plus-insight`).then(value=>{if(value?.conclusion?.length)try{sessionStorage.setItem(key,JSON.stringify({savedAt:Date.now(),value}))}catch{}return value});
 }
 async function getProduct(slug){if(cache.has(slug))return cache.get(slug);const promise=getProductBySlug(slug).catch(()=>null);cache.set(slug,promise);return promise}
 const url=(m,width=0)=>m?.storageKey?`${C.API_BASE_URL}/media/${encodeURIComponent(m.storageKey)}${width?`?w=${width}&q=78`:''}`:m?.externalUrl||'';
 const safe=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+function startInsightTyping(section){
+  const target=section.querySelector('[data-insight-typing]');
+  if(!target)return()=>{};
+  const phrases=['Lendo a ficha técnica','Cruzando os dados com seu perfil','Separando vantagens de promessas','Identificando pontos de atenção','Preparando seu veredito'];
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let phrase=0,index=0,deleting=false,active=true,timer=0;
+  if(reduced){target.textContent=phrases.at(-1);return()=>{active=false}};
+  const tick=()=>{
+    if(!active)return;
+    const text=phrases[phrase];
+    index+=deleting?-1:1;
+    target.textContent=text.slice(0,index);
+    let delay=deleting?24:42;
+    if(!deleting&&index===text.length){deleting=true;delay=650}
+    else if(deleting&&index===0){deleting=false;phrase=(phrase+1)%phrases.length;delay=140}
+    timer=setTimeout(tick,delay);
+  };
+  tick();
+  return()=>{active=false;clearTimeout(timer)};
+}
 
 async function cardMedia(card){
   if(card.dataset.mediaSwapReady||card.dataset.mediaSwapLoading)return;
@@ -205,24 +225,32 @@ if(!force){
     section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Este produto combina com você?</h2><p>Veja pontos fortes, limitações e alternativas considerando o seu tipo de uso.</p></div></div><button class="btn primary ai-insight-generate" type="button" data-ai-insight-generate>${aiAnalyzeIcon()}<span>${buttonLabel}</span></button><span class="ai-credit-pill${freeUser?' is-free':''}">${creditLabel}</span></div>`;
     section.querySelector('[data-ai-insight-generate]').onclick=()=>{if(freeUser&&!remaining){location.href='conta.html?aba=plus';return}section.remove();renderPremiumProductInsight(data,null,true)};return;
   }
-  section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';
+  section.innerHTML='<div class="container"><div class="premium-insight-thinking" role="status" aria-live="polite"><span class="premium-insight-thinking-mark" aria-hidden="true">✦</span><div><span class="eyebrow">SHOPLAB+ · ANALISANDO PARA VOCÊ</span><h2><span data-insight-typing></span><span class="premium-insight-caret" aria-hidden="true"></span></h2><p>Isso leva só alguns instantes. Estamos usando apenas os dados disponíveis do produto.</p></div></div></div>';
+  const stopInsightTyping=startInsightTyping(section);
   try{
     const insight=await(insightPromise||cachedInsight(data.slug));
+    stopInsightTyping();
     if(insight.disabled){const text=safe(insight.comingSoonMessage||'Em breve');section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">SHOPLAB+ · EM BREVE</span><h2>${text}</h2><p>A análise inteligente deste produto ainda não está disponível.</p><button class="btn primary" type="button" disabled>${text}</button></div>`;return}
     if(insight.freeCreditsExhausted){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SEUS 5 CRÉDITOS FORAM USADOS</span><h2>Continue analisando com SHOPLAB+</h2><p>Você já aproveitou suas análises gratuitas. Assine para receber novas análises inteligentes todos os meses.</p><a class="btn primary" href="conta.html?aba=plus">Desbloquear análise</a></div>';return}
     if(insight.premiumRequired){section.className='section premium-product-insight is-locked';section.innerHTML=`<div class="container"><span class="eyebrow">EXCLUSIVO SHOPLAB+</span><h2>Descubra se este produto é para você</h2><p>Receba uma conclusão personalizada, veja para quem o produto é indicado e como ele pode ajudar no seu uso.</p><a class="btn primary" href="conta.html?aba=plus">Desbloquear análise</a></div>`;return}
-    if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';return}
+    if(insight.quotaExceeded){section.className='section premium-product-insight is-locked';section.innerHTML='<div class="container"><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Sua decisão de compra, sem rodeios</h2><p>Interpretando ficha técnica e seus interesses…</p><div class="premium-insight-progress" role="status" aria-label="Preparando análise personalizada"><span></span></div><small class="premium-insight-progress-label">Encontrando os pontos que realmente importam</small></div>';return}
     if(insight.generationFailed){section.className='section premium-product-insight is-unavailable';section.innerHTML='<div class="container"><span class="eyebrow">ANÁLISE INDISPONÍVEL</span><h2>Não foi possível gerar a análise agora</h2><p>A análise personalizada não ficou pronta desta vez. Tente novamente em alguns instantes ou confira os dados do produto abaixo.</p></div>';return}
     if(!insight.conclusion?.length){section.remove();return}
     const lines=value=>`<div>${(value||[]).map(item=>`<p>${safe(item)}</p>`).join('')}</div>`;
-    section.className='section premium-product-insight';
-    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Como este produto combina com seu perfil</h2></div><small>${insight.cacheHit?'Análise personalizada salva':'Nova análise personalizada'}</small></div><article class="premium-insight-conclusion"><h3>Conclusão da IA</h3>${lines(insight.conclusion)}</article><div class="premium-insight-grid"><article><span>01</span><h3>Para quem é este produto</h3>${lines(insight.bestFor)}</article><article><span>02</span><h3>Como ele pode ajudar</h3>${lines(insight.howItHelps)}</article></div><small class="premium-insight-disclaimer">Análise baseada nos dados cadastrados do produto e nas suas preferências de uso. Confirme informações importantes com o fabricante.</small></div>`;
+    section.className='section premium-product-insight is-result-ready';
+    const fit=String(insight.fit||'incerto').toLocaleLowerCase('pt-BR'),fitLabel={alto:'Combina com você',médio:'Vale considerar com ressalvas',baixo:'Provavelmente não é para você',incerto:'Faltam dados decisivos'}[fit]||'Faltam dados decisivos';
+    const verdict=safe(insight.verdict||insight.conclusion[0]||'');
+    const reasons=insight.verdict?insight.conclusion:(insight.conclusion||[]).slice(1);
+    const card=(number,title,value,extra='')=>(value?.length?`<article class="${extra}"><span>${number}</span><h3>${title}</h3>${lines(value)}</article>`:'');
+    const checks=insight.checkBeforeBuying?.length?`<aside class="premium-insight-check"><span class="premium-insight-check-icon" aria-hidden="true">✓</span><div class="premium-insight-check-copy"><strong>Antes de comprar</strong>${lines(insight.checkBeforeBuying)}</div></aside>`:'';
+    section.innerHTML=`<div class="container"><div class="premium-insight-head"><div><span class="eyebrow">SHOPLAB+ · ANÁLISE PARA VOCÊ</span><h2>Sua decisão de compra, sem rodeios</h2></div><small>${insight.cacheHit?'Análise personalizada salva':'Nova análise personalizada'}</small></div><article class="premium-insight-conclusion"><div class="premium-insight-verdict-head"><h3>Nossa leitura</h3><span class="premium-insight-fit is-${safe(fit)}">${fitLabel}</span></div><strong class="premium-insight-verdict">${verdict}</strong>${lines(reasons)}</article><div class="premium-insight-grid">${card('01','Por que considerar',insight.howItHelps)}${card('02','Para quem faz sentido',insight.bestFor)}${card('03','O que pesa contra',insight.caveats,'is-caution')}</div>${checks}<small class="premium-insight-disclaimer">Análise baseada nos dados cadastrados do produto e nas suas preferências de uso. Informações ausentes são sinalizadas para confirmação.</small></div>`;
     if(insight.freeAccess){
       const label=section.querySelector('.premium-insight-head .eyebrow'),status=section.querySelector('.premium-insight-head small');
       if(label)label.textContent='CRÉDITO GRÁTIS · ANÁLISE PARA VOCÊ';
       if(status){const remainingCredits=Math.max(0,Number(insight.freeCredits?.remaining||0));if(remainingCredits>0)status.textContent=remainingCredits+' '+(remainingCredits===1?'análise grátis':'análises grátis');else status.remove()}
     }
   }catch(error){
+    stopInsightTyping();
     if(/entre na sua conta/i.test(String(error?.message||''))){
       section.className='section premium-product-insight is-locked free-ai-login';
       section.innerHTML=`<div class="container"><span class="eyebrow">5 CRÉDITOS DE IA GRÁTIS</span><h2>Entre para analisar este produto com IA</h2><p>Sua sessão expirou. Entre novamente para usar seus créditos gratuitos.</p><a class="btn primary" href="entrar.html?next=${encodeURIComponent(location.pathname+location.search)}">Entrar na minha conta</a></div>`;

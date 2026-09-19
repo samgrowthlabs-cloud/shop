@@ -49,6 +49,8 @@
     { "pattern": "shoplab.com.br/assets/css/main.css*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/app.js*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/app-20260827-v5.js*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/js/public-media-20260827-v5.js*", "zone_name": "shoplab.com.br" },
+    { "pattern": "shoplab.com.br/assets/js/public-media.js*", "zone_name": "shoplab.com.br" },
     { "pattern": "shoplab.com.br/assets/js/policy-defaults.js*", "zone_name": "shoplab.com.br" }
   ],
   "assets": {

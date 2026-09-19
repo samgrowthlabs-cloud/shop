@@ -2484,7 +2484,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
   const product = await env.DB.prepare(
     `SELECT p.id,p.slug,p.name,p.product_type productType,p.short_description shortDescription,
       p.full_description fullDescription,p.editorial_review editorialReview,p.editorial_score editorialScore,
-      p.specifications_json specificationsJson,p.updated_at updatedAt,c.name category,b.name brand,
+      p.specifications_json specificationsJson,p.updated_at updatedAt,p.category_id categoryId,c.name category,b.name brand,
       COALESCE(o.current_price_cents,p.base_price_cents) price
      FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
      LEFT JOIN offers o ON o.product_id=p.id AND o.is_primary=1
@@ -2499,7 +2499,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     if (!freeAccess.allowed)
       return ok(req, env, { premium: false, premiumRequired: true, freeCreditsExhausted: true, freeCredits: freeAccess, plan: premium.plan }, id);
   }
-  const version = await sha256(`premium-product-insight-v7|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
+  const version = await sha256(`premium-product-insight-v11|${insightAiSetting.modelId}|${user.id}|${product.id}|${product.updatedAt}`);
   const cached = await env.DB.prepare(
     `SELECT insight_json insightJson FROM premium_product_insight_cache WHERE cache_key=? AND user_id=? AND datetime(updated_at)>=datetime('now','-30 days')`,
   ).bind(version, user.id).first();
@@ -2529,8 +2529,8 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
   ]);
   const context = {
     displayName: profileResult.results?.[0]?.displayName || "",
-    topCategories: (categoryResult.results || []).map((item) => item.name).filter(Boolean),
-    searches: (searchResult.results || []).map((item) => item.queryText).filter(Boolean),
+    topCategories: (categoryResult.results || []).map((item) => ({ name: item.name, score: Number(item.score || 0) })).filter((item) => item.name),
+    searches: (searchResult.results || []).map((item) => ({ query: item.queryText, score: Number(item.score || 0) })).filter((item) => item.query),
     recentlyViewed: (viewedResult.results || []).map((item) => ({ name: item.name, category: item.category })),
   };
   if (!env.AI) {
@@ -2543,7 +2543,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     const aiSetting = insightAiSetting;
     if (!aiSetting.isEnabled) throw new Error("AI_PRODUCT_INSIGHT_DISABLED");
     const messages = [
-      { role: "system", content: "Você é o especialista SHOPLAB+ que transforma ficha técnica em decisão de compra. Escreva em português brasileiro com clareza, energia e precisão. Use apenas fatos presentes nos dados; se algo importante não estiver informado, diga isso como incerteza, nunca invente nem trate como defeito. Gere uma análise que valha a leitura: em conclusion, comece com um hook de decisão — uma frase curta que responda se este produto faz sentido para esta pessoa agora — e depois explique os dois fatos que mais mudam a compra. Em bestFor, descreva perfis de uso concretos, ligados ao histórico e às características cadastradas; não escreva “para quem busca qualidade”. Em howItHelps, conecte cada benefício diretamente a uma especificação, preço ou característica real, explicando o impacto prático no dia a dia. Se os dados apontarem uma limitação, mencione-a com honestidade na conclusão. Nunca invente testes, desempenho, autonomia, compatibilidade, câmeras, resistência ou promessas. Gere APENAS JSON: {\"conclusion\":[\"frases de decisão\"],\"bestFor\":[\"perfil específico\"],\"howItHelps\":[\"fato e impacto prático\"]}. Cada frase deve ser específica, útil e sem marketing vazio. Quando userContext.displayName estiver preenchido, abra a primeira frase de conclusion chamando a pessoa pelo primeiro nome exatamente uma vez; trate o nome como uma saudação, nunca como fato sobre preferências. Use histórico, pesquisas e visualizações apenas para personalizar se forem relevantes ao produto; caso contrário, não os force na recomendação." },
+      { role: "system", content: "Você é o conselheiro de compra da SHOPLAB. Faça uma análise profunda, honesta e autocontida EXCLUSIVAMENTE do produto aberto, para a pessoa decidir se ele serve ao seu uso e ao seu bolso. O produto atual deve ser o assunto de todas as seções. NÃO compare com, recomende nem cite outro produto, marca ou modelo. O histórico não é uma lista de concorrentes: use searches, topCategories e recentlyViewed somente para inferir sinais concretos de intenção, necessidade e faixa de preço. Exemplo: uma busca por 'celular abaixo de 900' permite avaliar explicitamente se o preço do produto cabe no teto de R$ 900 e quanto sobra ou excede. Quando o histórico trouxer um sinal acionável, mencione esse sinal e conecte-o aos dados do produto. Quando for curto, genérico, conflitante ou irrelevante, ignore-o e analise profundamente o produto sem fingir conhecer preferências. Examine preço/custo-benefício, adequação aos usos demonstráveis, pontos fortes, limitações, riscos e o que precisa ser confirmado. Não resuma a ficha e não elogie por educação. Use somente fatos enviados. Se houver preço, escreva o valor em reais no verdict ou em conclusion e diga objetivamente se faz sentido para o bolso inferido; sem histórico de orçamento, avalie o preço sem atribuir renda ou limite ao usuário. É proibido escrever pode oferecer, pode proporcionar, pode ser adequada, boa qualidade, excelente escolha, ideal para, robusto, resistente ou duração razoável sem evidência explícita. Transforme números em consequências práticas apenas quando a relação for segura; capacidade nominal de bateria não prova autonomia e megapixels não provam qualidade fotográfica. Se faltarem dados, ainda dê orientação concreta e concentre cada ausência em apenas uma seção. Retorne APENAS JSON válido: {\"fit\":\"alto|médio|baixo|incerto\",\"verdict\":\"decisão direta sobre este produto em uma frase\",\"conclusion\":[\"3 ou 4 evidências aprofundadas que sustentam a decisão, incluindo bolso quando houver base\"],\"bestFor\":[\"2 ou 3 situações concretas de uso ou perfil para as quais este produto faz sentido\"],\"howItHelps\":[\"2 ou 3 vantagens comprovadas deste produto — efeito prático\"],\"caveats\":[\"2 ou 3 limitações, perdas ou riscos concretos deste produto\"],\"checkBeforeBuying\":[\"1 ou 2 verificações decisivas antes de pagar\"]}. Se o produto não tiver vantagem demonstrável, diga isso. Não invente benchmark, qualidade, resistência, autonomia, suporte, atualização ou desempenho. Fale sempre diretamente com a pessoa em segunda pessoa: escreva “você buscou”, “seu limite” e “para você”; nunca use as expressões “o usuário”, “do usuário”, “pelo usuário”, “a pessoa” ou “o cliente” na resposta. Quando displayName existir, use apenas o primeiro nome no início do verdict, uma vez." },
       { role: "user", content: JSON.stringify({
         product: {
           name: product.name, category: product.category, brand: product.brand, priceCents: product.price,
@@ -2555,7 +2555,7 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
         userContext: context,
       }) },
     ];
-    const result = await runAiWithFallback(env, aiSetting, { messages, temperature: 0.3, max_tokens: 1024 });
+    const result = await runAiWithFallback(env, aiSetting, { messages, temperature: 0.1, max_tokens: 1800 });
     let raw = null;
     const responseText = String(result?.response || "");
     if (result?.response && typeof result.response === "object") {
@@ -2575,19 +2575,27 @@ async function premiumProductInsight(req, env, ctx, slug, id) {
     if (!Array.isArray(raw.conclusion)) raw.conclusion = typeof raw.conclusion === "string" ? raw.conclusion.split(/[.;!?]\s*/).filter(Boolean).slice(0, 5) : [];
     if (!Array.isArray(raw.bestFor)) raw.bestFor = typeof raw.bestFor === "string" ? raw.bestFor.split(/[.;!?]\s*/).filter(Boolean).slice(0, 4) : [];
     if (!Array.isArray(raw.howItHelps)) raw.howItHelps = typeof raw.howItHelps === "string" ? raw.howItHelps.split(/[.;!?]\s*/).filter(Boolean).slice(0, 4) : [];
+    if (!Array.isArray(raw.caveats)) raw.caveats = typeof raw.caveats === "string" ? [raw.caveats] : [];
+    if (!Array.isArray(raw.checkBeforeBuying)) raw.checkBeforeBuying = typeof raw.checkBeforeBuying === "string" ? [raw.checkBeforeBuying] : [];
+    const directVoice = (value) => String(value || "").replace(/\b[pP]elo usuário\b/g, "por você").replace(/\b[dD]o usuário\b/g, "seu").replace(/\b[oO] usuário\b/g, "você").replace(/\b[uU]suários que\b/g, "Se você").replace(/\b[pP]essoas que\b/g, "Se você").replace(/\b[aA] pessoa\b/g, "você").replace(/\b[oO] cliente\b/g, "você");
     const lines = (value, minimum, maximum) => (Array.isArray(value) ? value : [])
-      .map((item) => String(item || "").trim().slice(0, 260)).filter(Boolean).slice(0, maximum);
+      .map((item) => directVoice(item).trim().slice(0, 260)).filter(Boolean).slice(0, maximum);
     const insight = {
+      fit: ["alto", "médio", "baixo", "incerto"].includes(String(raw.fit || "").toLocaleLowerCase("pt-BR")) ? String(raw.fit).toLocaleLowerCase("pt-BR") : "incerto",
+      verdict: directVoice(raw.verdict).trim().slice(0, 300),
       conclusion: lines(raw.conclusion, 1, 4),
       bestFor: lines(raw.bestFor, 1, 3),
       howItHelps: lines(raw.howItHelps, 1, 3),
+      caveats: lines(raw.caveats, 0, 3),
+      checkBeforeBuying: lines(raw.checkBeforeBuying, 0, 2),
     };
     const firstName = String(context.displayName || "").trim().split(/\s+/)[0].slice(0, 40);
     // Guarantee one respectful personal greeting even when the model omits it.
-    if (firstName && insight.conclusion.length && !insight.conclusion[0].toLocaleLowerCase("pt-BR").includes(firstName.toLocaleLowerCase("pt-BR")))
-      insight.conclusion[0] = `${firstName}, ${insight.conclusion[0]}`;
+    if (firstName && insight.verdict && !insight.verdict.toLocaleLowerCase("pt-BR").includes(firstName.toLocaleLowerCase("pt-BR")))
+      insight.verdict = `${firstName}, ${insight.verdict}`;
     // Preencher campos vazios com fallback (aplicar sempre, antes de qualquer validação)
     if (!insight.conclusion.length) insight.conclusion = [`Com base nos dados, ${product.name} parece atender ao que você procura.`];
+    if (!insight.verdict) insight.verdict = insight.conclusion.shift() || `Ainda faltam dados para decidir se ${product.name} combina com você.`;
     if (!insight.bestFor.length) insight.bestFor = ["Público alinhado ao uso sugerido pela descrição do produto."];
     if (!insight.howItHelps.length) insight.howItHelps = ["Contribui com os recursos e características descritos na ficha técnica."];
     await env.DB.prepare(
