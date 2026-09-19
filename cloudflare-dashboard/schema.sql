@@ -498,6 +498,8 @@ CREATE TABLE IF NOT EXISTS shoplab_ads (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
+  product_slug TEXT,
+  target_keywords TEXT NOT NULL DEFAULT '',
   public_title TEXT,
   ad_label TEXT NOT NULL DEFAULT 'PUBLICIDADE · SHOPLAB ADS',
   show_header INTEGER NOT NULL DEFAULT 1,
@@ -505,6 +507,10 @@ CREATE TABLE IF NOT EXISTS shoplab_ads (
   dismiss_minutes INTEGER NOT NULL DEFAULT 30,
   cta_text TEXT NOT NULL DEFAULT 'Saiba mais',
   cta_color TEXT NOT NULL DEFAULT '#075fce',
+  old_price_text TEXT NOT NULL DEFAULT '',
+  current_price_text TEXT NOT NULL DEFAULT '',
+  old_price_color TEXT NOT NULL DEFAULT '#71807c',
+  current_price_color TEXT NOT NULL DEFAULT '#087c70',
   media_type TEXT NOT NULL DEFAULT 'image' CHECK(media_type IN ('image','video')),
   storage_key TEXT,
   link_url TEXT NOT NULL,
@@ -512,6 +518,13 @@ CREATE TABLE IF NOT EXISTS shoplab_ads (
   priority INTEGER NOT NULL DEFAULT 1,
   distribution_mode TEXT NOT NULL DEFAULT 'manual' CHECK(distribution_mode IN ('manual','weighted')),
   distribution_weight INTEGER NOT NULL DEFAULT 25 CHECK(distribution_weight BETWEEN 1 AND 100),
+  featured INTEGER NOT NULL DEFAULT 0,
+  search_boost INTEGER NOT NULL DEFAULT 3,
+  max_per_page INTEGER NOT NULL DEFAULT 1,
+  target_pages TEXT NOT NULL DEFAULT 'home,products,category,product,news',
+  no_end_date INTEGER NOT NULL DEFAULT 1,
+  category_slugs TEXT NOT NULL DEFAULT '',
+  related_product_slugs TEXT NOT NULL DEFAULT '',
   starts_at TEXT,
   ends_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -529,6 +542,22 @@ CREATE TABLE IF NOT EXISTS shoplab_ad_assignments (
 );
 CREATE INDEX IF NOT EXISTS idx_shoplab_ads_active ON shoplab_ads(status,starts_at,ends_at,priority);
 CREATE INDEX IF NOT EXISTS idx_shoplab_ad_assignments_target ON shoplab_ad_assignments(device,page_kind,category_slug,position_key);
+CREATE TABLE IF NOT EXISTS shoplab_ad_placement_members (
+  id TEXT PRIMARY KEY,
+  ad_id TEXT NOT NULL REFERENCES shoplab_ads(id) ON DELETE CASCADE,
+  device TEXT NOT NULL CHECK(device IN ('desktop','mobile')),
+  page_kind TEXT NOT NULL,
+  position_key TEXT NOT NULL,
+  category_slug TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(ad_id,device,page_kind,position_key,category_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_shoplab_ad_placement_members_target ON shoplab_ad_placement_members(device,page_kind,category_slug,position_key);
+CREATE TABLE IF NOT EXISTS shoplab_ads_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS shoplab_ad_events (
   id TEXT PRIMARY KEY,
   ad_id TEXT NOT NULL REFERENCES shoplab_ads(id) ON DELETE CASCADE,
