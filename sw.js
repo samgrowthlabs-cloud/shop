@@ -1,4 +1,4 @@
-const VERSION='shoplab-v2';
+const VERSION='shoplab-v3-mobile-header';
 const STATIC_CACHE=`${VERSION}-static`,PUBLIC_CACHE=`${VERSION}-public`;
 const SHELL=['/offline.html','/assets/img/favicon.svg','/assets/img/shoplab-wordmark.png'];
 const PUBLIC_API=/^\/api\/v1\/(?:home|products(?:\/[^/]+)?|categories(?:\/weekly-highlights)?|promotions|collections(?:\/[^/]+)?|search|site-config)$/;

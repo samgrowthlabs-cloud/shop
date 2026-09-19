@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260917-cache-swr-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260918-mobile-perf-1';
+import'./favicon.js?v=20260919-mobile-header-stable-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260918-mobile-perf-1';
 import'./search-ui.js?v=20260906-search-history-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth-20260827-v5.js?v=20260919-mobile-session-race-1';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library-20260827-v5.js';

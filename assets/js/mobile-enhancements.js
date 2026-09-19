@@ -153,10 +153,22 @@ function appToast(message,type='info'){
 }
 
 function compactHeaderOnScroll(){
-  let last=scrollY,frame=0,header=document.querySelector('.header');
-  const sync=()=>{if(frame)return;frame=requestAnimationFrame(()=>{frame=0;header=header?.isConnected?header:document.querySelector('.header');if(!header)return;const current=scrollY,compact=current>88;header.classList.toggle('is-app-compact',compact);header.classList.toggle('is-scrolling-up',current<last-4);last=current})};
+  const COLLAPSE_AT=80,EXPAND_AT=30;
+  let last=Math.max(0,scrollY),compact=last>COLLAPSE_AT,frame=0,header=document.querySelector('.header');
+  const sync=()=>{if(frame)return;frame=requestAnimationFrame(()=>{
+    frame=0;
+    header=header?.isConnected?header:document.querySelector('.header');
+    if(!header)return;
+    const current=Math.max(0,scrollY);
+    const nextCompact=compact?current>=EXPAND_AT:current>COLLAPSE_AT;
+    if(nextCompact!==compact)compact=nextCompact;
+    header.classList.toggle('is-app-compact',compact);
+    header.classList.toggle('is-scrolling-up',current<last-4);
+    last=current;
+  })};
   addEventListener('scroll',sync,{passive:true});
   new MutationObserver(()=>{if(!header?.isConnected)sync()}).observe(document.body,{childList:true});
+  if(header)header.classList.toggle('is-app-compact',compact);
   sync();
 }
 
