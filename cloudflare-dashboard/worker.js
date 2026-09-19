@@ -4546,6 +4546,42 @@ function normalizeAdminAiSpecifications(templateKey, value) {
   }
   return fields.filter((name) => values.has(name)).map((name) => ({ name, value: values.get(name) })).slice(0, 20);
 }
+function localAdminProductDraft(source, current, categories, specificationTemplate) {
+  const lines = String(source || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const currentName = String(current?.name || "").trim();
+  const name = (currentName || lines[0] || "Produto").slice(0, 160);
+  const fullDescription = String(current?.fullDescription || source || name).trim().slice(0, 10000);
+  const shortDescription = String(current?.shortDescription || lines.slice(1).join(" ") || name).trim().slice(0, 500);
+  const searchableText = normalizeSearch(`${name} ${source}`);
+  const category = (categories || []).find((item) => searchableText.includes(normalizeSearch(item.name)));
+  const fields = ADMIN_AI_SPECIFICATION_TEMPLATES[specificationTemplate] || ADMIN_AI_SPECIFICATION_TEMPLATES.technology;
+  const specifications = [];
+  for (const field of fields) {
+    const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = String(source || "").match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*(?::|[-–—]|\\t| {2,})\\s*([^\\n]+)`, "i"));
+    if (match?.[1]) specifications.push({ name: field, value: match[1].trim().slice(0, 300) });
+  }
+  const currentTags = Array.isArray(current?.tags) ? current.tags : [];
+  const sourceTags = searchableText.split(/\s+/).filter((word) => word.length >= 3 && !/^\d+$/.test(word));
+  const tags = [...new Set([...currentTags, ...sourceTags])].map((tag) => String(tag).trim()).filter(Boolean).slice(0, 12);
+  const productType = /\b(ebook|e-book|curso online|download|software|digital)\b/.test(searchableText)
+    ? "digital"
+    : /\b(livro|box de livros)\b/.test(searchableText) ? "book" : "affiliate";
+  return {
+    name,
+    slug: normalizeSearch(name).replace(/\s+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160),
+    shortDescription,
+    fullDescription,
+    categoryId: category?.id || null,
+    productType,
+    imageAlt: name.slice(0, 250),
+    tags,
+    specificationTemplate,
+    specifications,
+    generatedBy: "local-fallback",
+  };
+}
+
 const ADMIN_PRODUCT_DRAFT_SCHEMA = {
   type: "object",
   properties: {
@@ -5092,7 +5128,7 @@ async function adminAiProductDraft(req, env, id) {
     }, id);
   } catch (error) {
     console.error(JSON.stringify({ event: "admin_ai_product_draft_failed", requestId: id, error: String(error?.message || error) }));
-    return fail(req, env, "AI_GENERATION_FAILED", "Não foi possível gerar as sugestões agora", 502, id);
+    return ok(req, env, localAdminProductDraft(source, current, categories.results || [], specificationTemplate), id);
   }
 }
 
