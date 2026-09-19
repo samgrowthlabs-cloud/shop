@@ -281,6 +281,57 @@ async function runAiWithFallback(env, aiSetting, input, options = undefined) {
   }
   throw lastError || new Error("AI_MODEL_RUN_FAILED");
 }
+function parseAiJsonResponse(result) {
+  if (result?.response && typeof result.response === "object") return result.response;
+  const responseText = String(result?.response || "").trim();
+  if (!responseText) throw new Error("AI_EMPTY_RESPONSE");
+  const withoutFence = responseText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  try {
+    return JSON.parse(withoutFence);
+  } catch {
+    const start = withoutFence.indexOf("{");
+    const end = withoutFence.lastIndexOf("}");
+    if (start >= 0 && end > start) return JSON.parse(withoutFence.slice(start, end + 1));
+    throw new Error("AI_INVALID_JSON_RESPONSE");
+  }
+}
+
+async function runStructuredAiWithFallback(env, aiSetting, input, requestId, validate) {
+  const models = [...new Set([aiSetting.modelId, aiSetting.fallbackModelId].filter(Boolean))];
+  const { response_format: responseFormat, ...inputWithoutResponseFormat } = input;
+  const plainInput = responseFormat ? {
+    ...inputWithoutResponseFormat,
+    messages: [
+      ...(Array.isArray(input.messages) ? input.messages : []),
+      { role: "system", content: `Retorne somente JSON válido que siga este schema: ${JSON.stringify(responseFormat.json_schema || {})}` },
+    ],
+  } : inputWithoutResponseFormat;
+  let lastError = null;
+  for (const modelId of models) {
+    const attempts = responseFormat
+      ? [{ mode: "json_schema", input }, { mode: "plain_json", input: plainInput }]
+      : [{ mode: "plain_json", input }];
+    for (const attempt of attempts) {
+      try {
+        const result = await env.AI.run(modelId, attempt.input);
+        const value = parseAiJsonResponse(result);
+        if (!validate(value)) throw new Error("AI_RESPONSE_VALIDATION_FAILED");
+        return value;
+      } catch (error) {
+        lastError = error;
+        console.warn(JSON.stringify({
+          event: "ai_structured_attempt_failed",
+          feature: aiSetting.featureKey,
+          requestId,
+          modelId,
+          mode: attempt.mode,
+          error: String(error?.message || error),
+        }));
+      }
+    }
+  }
+  throw lastError || new Error("AI_STRUCTURED_RUN_FAILED");
+}
 async function aiFeatureSetting(env, featureKey) {
   const defaults = AI_FEATURES[featureKey];
   if (!defaults) throw new Error(`AI_FEATURE_UNKNOWN:${featureKey}`);
@@ -5019,7 +5070,7 @@ async function adminAiProductDraft(req, env, id) {
     const aiSetting = await aiFeatureSetting(env, "product_draft");
     if (!aiSetting.isEnabled)
       return fail(req, env, "AI_FEATURE_DISABLED", "O assistente de cadastro está desativado", 409, id);
-    const result = await runAiWithFallback(env, aiSetting, {
+    const raw = await runStructuredAiWithFallback(env, aiSetting, {
       messages: [
         { role: "system", content: `Padronização obrigatória: este produto usa o modelo '${specificationTemplate}'. Retorne especificações usando somente estes nomes de campo, nesta mesma grafia e ordem quando houver valor confirmado: ${ADMIN_AI_SPECIFICATION_TEMPLATES[specificationTemplate].join(", ")}. Não crie sinônimos ou campos equivalentes. Omitir valor desconhecido é obrigatório.` },
         { role: "system", content: `Você é o editor-chefe de catálogo e SEO da SHOPLAB. Transforme dados reais de produto em uma página que seja encontrada, entendida e confiável. Escreva em português brasileiro natural; SEO é precisão de intenção, não repetição de palavras-chave. Para name, crie um título de alta intenção: comece pelo tipo de produto que o comprador pesquisa, inclua marca e modelo, depois somente o principal diferencial verificável (capacidade, tamanho, padrão, compatibilidade ou uso). Prefira 55 a 90 caracteres, sem caixa-alta, emojis, hype, preço, frete ou termos vazios como “imperdível”, “premium” e “melhor”. Preserve exatamente marca, modelo, capacidade, medidas e padrões técnicos fornecidos. Para shortDescription, entregue uma síntese convincente de 2 frases: o que é, para quem serve e o diferencial concreto; inclua naturalmente termos de busca relevantes. Para fullDescription, escreva uma descrição escaneável com abertura clara, benefícios ancorados em fatos e características úteis; não invente avaliações, desempenho, garantias, certificações, compatibilidade, preço ou benefícios. Especificações só podem conter dados explícitos na entrada. Se um dado não estiver na entrada, omita-o. O slug deve usar somente a-z, 0-9 e hífen e refletir o título. imageAlt deve ser descritivo e acessível, sem SEO forçado. Para tags, gere de 6 a 12 termos de busca úteis, específicos e não repetidos, combinando categoria, marca, modelo, características confirmadas, compatibilidade e intenção de uso; não inclua preço, promoção nem alegações não fornecidas. categoryId deve ser exatamente um ID desta lista ou null: ${categoryList || "nenhuma categoria"}. productType deve ser book para livro físico, digital para produto digital e affiliate nos demais casos. Retorne somente o JSON solicitado.` },
@@ -5027,9 +5078,7 @@ async function adminAiProductDraft(req, env, id) {
       ],
       response_format: { type: "json_schema", json_schema: ADMIN_PRODUCT_DRAFT_SCHEMA },
       temperature: 0.2, max_tokens: 1200,
-    });
-    const raw = typeof result?.response === "string" ? JSON.parse(result.response) : result?.response;
-    if (!raw || typeof raw.name !== "string") throw new Error("Resposta estruturada inválida");
+    }, id, value => Boolean(value && typeof value.name === "string"));
     const validCategories = new Set((categories.results || []).map((item) => item.id));
     const slug = normalizeSearch(raw.slug || raw.name).replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
     const specifications = normalizeAdminAiSpecifications(specificationTemplate, raw.specifications);
@@ -5042,7 +5091,7 @@ async function adminAiProductDraft(req, env, id) {
       imageAlt: String(raw.imageAlt || "").trim().slice(0, 250), tags: normalizeProductTags(raw.tags).slice(0, 20), specificationTemplate, specifications,
     }, id);
   } catch (error) {
-    console.warn(JSON.stringify({ event: "admin_ai_product_draft_failed", requestId: id, error: String(error?.message || error) }));
+    console.error(JSON.stringify({ event: "admin_ai_product_draft_failed", requestId: id, error: String(error?.message || error) }));
     return fail(req, env, "AI_GENERATION_FAILED", "Não foi possível gerar as sugestões agora", 502, id);
   }
 }
