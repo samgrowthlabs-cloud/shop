@@ -1,6 +1,6 @@
 import{SHOPLAB_CONFIG as C}from'./config.js?v=20260803-media-domain-38';
 import{getProductBySlug}from'./api.js?v=20260917-cache-swr-1';
-import{session,userApi}from'./auth-20260827-v5.js';
+import{session,userApi}from'./auth-20260827-v5.js?v=20260919-mobile-session-race-1';
 
 const cache=new Map();
 const INSIGHT_CACHE_TTL=1000*60*60*24*30;

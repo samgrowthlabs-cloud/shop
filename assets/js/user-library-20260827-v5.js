@@ -1,4 +1,4 @@
-import { session, userApi } from "./auth-20260827-v5.js";
+import { session, userApi } from "./auth-20260827-v5.js?v=20260919-mobile-session-race-1";
 
 const LEGACY_KEYS = {
   favorites: "shoplab:favorites",
