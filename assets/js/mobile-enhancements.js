@@ -153,7 +153,9 @@ function appToast(message,type='info'){
 }
 
 function compactHeaderOnScroll(){
-  const COLLAPSE_AT=80,EXPAND_AT=30;
+  // The expanded header is 72px taller. Keep the hysteresis wider than that
+  // layout shift, otherwise collapsing changes scrollY enough to reopen it.
+  const COLLAPSE_AT=140,EXPAND_AT=40;
   let last=Math.max(0,scrollY),compact=last>COLLAPSE_AT,frame=0,header=document.querySelector('.header');
   const sync=()=>{if(frame)return;frame=requestAnimationFrame(()=>{
     frame=0;
