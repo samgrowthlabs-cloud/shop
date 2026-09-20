@@ -52,7 +52,7 @@ async function cardMedia(card){
     currentImage.classList.add('product-image-primary');
   }
   const mainUrl=primary?new URL(url(primary),location.href).href:currentUrl;
-  const featuredVideo=items.find(item=>item.type==='video'&&item.isHover),alternate=featuredVideo||items.find(item=>item.type!=='video'&&item.isHover&&new URL(url(item),location.href).href!==mainUrl)||items.find(item=>item.type!=='video'&&new URL(url(item),location.href).href!==mainUrl);
+  const featuredVideo=items.find(item=>item.type==='video'&&item.isHover),alternate=featuredVideo||items.find(item=>item.type!=='video'&&item.isHover&&new URL(url(item),location.href).href!==mainUrl);
   if(alternate){
     const alternateMedia=alternate.type==='video'?`<video class="product-image-alternate product-video-preview" src="${safe(url(alternate))}" data-preview-start="${Math.max(0,Number(alternate.previewStartSeconds)||0)}" ${currentUrl?`poster="${safe(currentUrl)}"`:''} muted playsinline preload="metadata" aria-label="${safe(alternate.altText||`V\u00eddeo de ${data.name||'produto'}`)}"></video>`:`<img class="product-image-alternate" src="${safe(url(alternate,320))}" alt="${safe(alternate.altText||`${data.name||'Produto'} em outro \u00e2ngulo`)}" loading="lazy" decoding="async">`;
     link.insertAdjacentHTML('beforeend',alternateMedia);

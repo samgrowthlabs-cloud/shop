@@ -52,7 +52,7 @@ async function cardMedia(card){
     currentImage.classList.add('product-image-primary');
   }
   const mainUrl=primary?new URL(url(primary),location.href).href:currentUrl;
-  const alternate=items.find(item=>item.isHover&&new URL(url(item),location.href).href!==mainUrl)||items.find(item=>new URL(url(item),location.href).href!==mainUrl);
+  const alternate=items.find(item=>item.isHover&&new URL(url(item),location.href).href!==mainUrl);
   if(alternate){
     link.insertAdjacentHTML('beforeend',`<img class="product-image-alternate" src="${safe(url(alternate,320))}" alt="${safe(alternate.altText||`${data.name||'Produto'} em outro ângulo`)}" loading="lazy" decoding="async">`);
     card.classList.add('has-alternate-image');

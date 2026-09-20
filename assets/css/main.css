@@ -679,10 +679,10 @@ html,body,#app{max-width:100%;overflow-x:clip}
   padding:inherit;
   object-fit:contain;
   object-position:center;
-  transition:opacity .28s ease,transform .38s ease;
+  transition:opacity .28s ease;
 }
 .product-card.has-alternate-image .product-media .product-image-primary{opacity:1;transform:scale(1)}
-.product-card.has-alternate-image .product-media .product-image-alternate{opacity:0;transform:scale(1.035)}
+.product-card.has-alternate-image .product-media .product-image-alternate{opacity:0;transform:none}
 .product-card.has-alternate-image .badge{z-index:3}
 @media(hover:hover) and (pointer:fine){
   .product-card.has-alternate-image:hover .product-image-primary,
@@ -8960,7 +8960,7 @@ html body[data-page="home"] .product-rail .product-card .price > .old{
     transform-origin:50% 50%!important;
   }
   html body:not([data-admin-page]) .product-card.has-alternate-image.show-alternate-image .product-media .product-image-alternate{
-    transform:scale(1.65)!important;
+    transform:none!important;
   }
 }
 /* ShopLab Ads — card patrocinado nativo do feed (mídia 9:6 / 3:2) */
