@@ -70,17 +70,7 @@ document.addEventListener('pointerover',event=>{if(!matchMedia('(hover:hover) an
 document.addEventListener('pointerout',event=>{const card=event.target.closest?.('.product-card.has-video-preview');if(card&&!card.contains(event.relatedTarget))stopCardVideo(card)},{passive:true});
 document.addEventListener('timeupdate',event=>{const video=event.target;if(video?.classList?.contains('product-video-preview')&&video.currentTime>=cardVideoStart(video)+6)stopCardVideo(video.closest('.product-card'))},true);
 
-document.addEventListener('click',event=>{
-  const media=event.target.closest('.product-card.has-alternate-image .product-media');
-  if(!media||!matchMedia('(hover: none), (pointer: coarse)').matches)return;
-  const card=media.closest('.product-card');
-  if(card.classList.contains('show-alternate-image'))return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  document.querySelectorAll('.product-card.show-alternate-image').forEach(item=>item.classList.remove('show-alternate-image'));
-  card.classList.add('show-alternate-image');
-  startCardVideo(card.querySelector('.product-video-preview'));
-},true);
+
 
 function renderPromotion(data){const promotion=data?.promotion,host=document.querySelector('.detail > div:last-child');if(!promotion||!host||host.querySelector('.product-promotion'))return;const percent=Number(data.campaignDiscountPercent||data.discount||0),coupon=promotion.couponCode?`<span class="promotion-coupon">Cupom: <b>${safe(promotion.couponCode)}</b></span>`:'';host.querySelector('.offer')?.insertAdjacentHTML('beforebegin',`<aside class="product-promotion"><span class="promotion-kicker">PROMOÇÃO ATIVA · ${percent}% OFF</span><strong>${safe(promotion.name)}</strong>${coupon}<span>Termina em <b class="promotion-countdown" data-ends="${safe(promotion.endsAt)}">calculando...</b></span></aside>`);const counter=host.querySelector('.promotion-countdown');let timer;const update=()=>{const remaining=Math.max(0,new Date(counter.dataset.ends).getTime()-Date.now()),seconds=Math.floor(remaining/1000)%60,minutes=Math.floor(remaining/60000)%60,hours=Math.floor(remaining/3600000)%24,days=Math.floor(remaining/86400000);counter.textContent=remaining?`${days}d ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`:'Promoção encerrada';if(!remaining&&timer)clearInterval(timer)};update();timer=setInterval(update,1000)}
 
@@ -339,7 +329,7 @@ document.addEventListener('click',async event=>{
 },true);
 
 /* Prepara a imagem alternativa antes do primeiro hover dos cards visiveis. */
-if('IntersectionObserver'in window){
+if('IntersectionObserver'in window&&matchMedia('(hover:hover) and (pointer:fine)').matches){
   const mediaObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{
     if(!entry.isIntersecting)return;
     mediaObserver.unobserve(entry.target);
@@ -354,16 +344,7 @@ document.addEventListener('pointerover',event=>{
   if(card)cardMedia(card);
 },{passive:true});
 
-document.addEventListener('click',async event=>{
-  const media=event.target.closest?.('.product-card .product-media');
-  if(!media||!matchMedia('(hover:none),(pointer:coarse)').matches)return;
-  const card=media.closest('.product-card');
-  if(card.dataset.mediaSwapReady||card.dataset.mediaSwapLoading)return;
-  event.preventDefault();event.stopImmediatePropagation();
-  await cardMedia(card);
-  if(card.classList.contains('has-alternate-image')){card.classList.add('show-alternate-image');startCardVideo(card.querySelector('.product-video-preview'))}
-  else location.href=media.href;
-},true);
+
 let detailScanQueued=false;
 const detailObserver=new MutationObserver(()=>{
   if(detailScanQueued)return;detailScanQueued=true;
