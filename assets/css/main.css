@@ -8999,6 +8999,20 @@ html body[data-page="home"] .product-rail .product-card .price > .old{
 .product-card.has-video-preview .product-media .product-video-preview,
 .home-price-drop-card.has-video-preview .home-product-thumb .product-video-preview{object-fit:cover!important;background:#071b18}
 @media(max-width:760px){html body:not([data-admin-page]) .product-card.has-video-preview.show-alternate-image .product-media .product-video-preview{transform:none!important}}
+/* Mobile: mantem a capa proporcional ao card; a altura fixa de 200px criava grandes vazios. */
+@media(max-width:760px){
+  html body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .product-media{
+    flex-basis:auto!important;
+    width:100%!important;
+    height:auto!important;
+    min-height:0!important;
+    aspect-ratio:1/1!important;
+    padding:8px!important;
+  }
+  html body:not([data-admin-page]) :is(.products:not(.promotion-products),.product-carousel-track,.home-product-rail)>.product-card .product-media img{
+    max-height:none!important;
+  }
+}
 .detail-media.has-featured-video{display:grid;gap:10px;align-content:start}
 .detail-featured-video{width:100%;overflow:hidden;border-radius:16px;background:#071b18;aspect-ratio:1/1;box-shadow:var(--shadow)}
 .detail-featured-video video{display:block;width:100%;height:100%;object-fit:contain;background:#071b18}
