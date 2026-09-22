@@ -679,7 +679,7 @@ html,body,#app{max-width:100%;overflow-x:clip}
   padding:inherit;
   object-fit:contain;
   object-position:center;
-  transition:opacity .28s ease;
+  transition:none;
 }
 .product-card.has-alternate-image .product-media .product-image-primary{opacity:1;transform:scale(1)}
 .product-card.has-alternate-image .product-media .product-image-alternate{opacity:0;transform:none}

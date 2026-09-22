@@ -940,6 +940,8 @@ async function route(request, env, ctx, requestId) {
     return deleteAdminCollaborator(request, env, path.split("/").pop(), requestId);
   if (request.method === "GET" && path === "/api/v1/admin/shared-files")
     return adminSharedFiles(request, env, requestId);
+  if (request.method === "PUT" && path === "/api/v1/admin/shared-files/settings")
+    return updateAdminSharedFilesSettings(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/shared-files")
     return createAdminSharedFile(request, env, requestId);
   if (request.method === "GET" && path === "/api/v1/admin/team-chat/socket") {
@@ -1039,6 +1041,8 @@ async function route(request, env, ctx, requestId) {
     return updateReferralReward(request, env, path.split("/").pop(), requestId);
   if (request.method === "POST" && path === "/api/v1/admin/ai/product-draft")
     return adminAiProductDraft(request, env, requestId);
+  if (request.method === "POST" && path === "/api/v1/admin/products/autodraft")
+    return saveProductAutodraft(request, env, requestId);
   if (request.method === "POST" && path === "/api/v1/admin/products/import-link")
     return adminImportProductLink(request, env, requestId);
   if (request.method === "POST" && /^\/api\/v1\/admin\/products\/[^/]+\/sync-price$/.test(path))
@@ -3809,6 +3813,43 @@ function insertOfferStatements(env, productId, offers) {
   );
 }
 
+async function saveProductAutodraft(req, env, requestId) {
+  const actor = await adminActor(req, env);
+  if (!actor) return fail(req, env, "UNAUTHORIZED", "Não autorizado", 401, requestId);
+  const body = await readJson(req, 100000);
+  const requestedId = String(body.productId || "").trim();
+  const name = String(body.name || "").trim().slice(0, 160) || "Rascunho sem título";
+  const suppliedSlug = String(body.slug || "").trim().toLowerCase();
+  const productType = ["affiliate", "book", "digital"].includes(body.productType) ? body.productType : "affiliate";
+  const score = body.editorialScore === "" || body.editorialScore == null ? null : Math.max(0, Math.min(100, Number(body.editorialScore) || 0));
+  const basePrice = nullableCents(body.basePriceCents) ?? 0;
+  const comparePrice = nullableCents(body.compareAtPriceCents);
+  const specifications = JSON.stringify(Array.isArray(body.specificationGroups) ? body.specificationGroups : []);
+  const tags = JSON.stringify(normalizeProductTags(body.tags));
+  const sourceProduct = originalProductUrlInput(body);
+  if (sourceProduct.error) return fail(req, env, "VALIDATION_ERROR", sourceProduct.error, 422, requestId);
+  if (requestedId) {
+    const current = await env.DB.prepare("SELECT id,slug FROM products WHERE id=?").bind(requestedId).first();
+    if (!current) return fail(req, env, "PRODUCT_NOT_FOUND", "Produto não encontrado", 404, requestId);
+    const slug = /^[a-z0-9-]{2,160}$/.test(suppliedSlug) ? suppliedSlug : current.slug;
+    try {
+      await env.DB.prepare(`UPDATE products SET name=?,slug=?,cta_code=?,product_type=?,status='draft',category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,tags_json=?,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(name,slug,shoplabCtaCode(body.ctaCode),productType,body.categoryId||null,body.brandId||null,String(body.shortDescription||""),String(body.fullDescription||""),score,basePrice,comparePrice!==null&&comparePrice>=basePrice?comparePrice:null,body.isFeatured?1:0,specifications,tags,sourceProduct.supplied?1:0,sourceProduct.url,requestedId).run();
+    } catch (error) {
+      if (/unique/i.test(String(error?.message || ""))) return fail(req, env, "SLUG_IN_USE", "Este slug já está em uso", 409, requestId);
+      throw error;
+    }
+    return ok(req, env, { id: requestedId, saved: true }, requestId);
+  }
+  const productId = crypto.randomUUID();
+  const slug = /^[a-z0-9-]{2,160}$/.test(suppliedSlug) ? suppliedSlug : `rascunho-${productId}`;
+  try {
+    await env.DB.prepare(`INSERT INTO products(id,name,slug,cta_code,product_type,status,category_id,brand_id,short_description,full_description,editorial_score,base_price_cents,compare_at_price_cents,is_featured,specifications_json,tags_json,price_source_url) VALUES(?,?,?,?,?,'draft',?,?,?,?,?,?,?,?,?,?,?)`).bind(productId,name,slug,shoplabCtaCode(body.ctaCode),productType,body.categoryId||null,body.brandId||null,String(body.shortDescription||""),String(body.fullDescription||""),score,basePrice,comparePrice!==null&&comparePrice>=basePrice?comparePrice:null,body.isFeatured?1:0,specifications,tags,sourceProduct.supplied?sourceProduct.url:null).run();
+  } catch (error) {
+    if (/unique/i.test(String(error?.message || ""))) return fail(req, env, "SLUG_IN_USE", "Este slug já está em uso", 409, requestId);
+    throw error;
+  }
+  return respond(req, env, { success: true, data: { id: productId, created: true, saved: true }, meta: { requestId }, error: null }, 201);
+}
 async function createProductV2(req, env, id) {
   const actor = await adminActor(req, env);
   if (!actor)
@@ -6550,7 +6591,7 @@ async function restoreAdminMediaScriptVersion(req,env,scriptId,versionId,id){
 async function listAdminMediaScriptComments(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanView(actor))return fail(req,env,"FORBIDDEN","Sem acesso aos roteiros",403,id);const {results}=await env.DB.prepare("SELECT id,author_id authorId,author_name authorName,comment_text commentText,created_at createdAt FROM admin_media_script_comments WHERE script_id=? ORDER BY datetime(created_at)").bind(String(scriptId).slice(0,100)).all();return ok(req,env,{items:(results||[]).map(comment=>({...comment,canDelete:mediaScriptCanEditAll(actor)||comment.authorId===actor.id})),canComment:mediaScriptCanComment(actor)},id)}
 async function createAdminMediaScriptComment(req,env,scriptId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env);if(!mediaScriptCanComment(actor))return fail(req,env,"FORBIDDEN","Sem permissão para comentar",403,id);const body=await req.json(),text=String(body.comment||"").trim().slice(0,4000);if(!text)return fail(req,env,"VALIDATION_ERROR","Escreva um comentário",422,id);const script=await env.DB.prepare("SELECT id FROM admin_media_scripts WHERE id=?").bind(String(scriptId).slice(0,100)).first();if(!script)return fail(req,env,"SCRIPT_NOT_FOUND","Roteiro não encontrado",404,id);const commentId=crypto.randomUUID();await env.DB.prepare("INSERT INTO admin_media_script_comments(id,script_id,author_id,author_name,comment_text) VALUES(?,?,?,?,?)").bind(commentId,script.id,actor.id,actor.name,text).run();return ok(req,env,{id:commentId},id)}
 async function deleteAdminMediaScriptComment(req,env,commentId,id){await ensureAdminMediaScriptsSchema(env);const actor=await adminActor(req,env),comment=await env.DB.prepare("SELECT id,author_id authorId FROM admin_media_script_comments WHERE id=?").bind(String(commentId).slice(0,100)).first();if(!comment)return fail(req,env,"COMMENT_NOT_FOUND","Comentário não encontrado",404,id);if(!mediaScriptCanEditAll(actor)&&comment.authorId!==actor.id)return fail(req,env,"FORBIDDEN","Sem permissão para excluir este comentário",403,id);await env.DB.prepare("DELETE FROM admin_media_script_comments WHERE id=?").bind(comment.id).run();return ok(req,env,{id:comment.id},id)}
-const ADMIN_SHARED_FILE_MAX_BYTES = 50 * 1024 * 1024;
+const ADMIN_SHARED_FILE_DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
 const ADMIN_SHARED_FILE_RETENTION_DAYS = 7;
 
 async function ensureAdminSharedFilesSchema(env) {
@@ -6560,12 +6601,31 @@ async function ensureAdminSharedFilesSchema(env) {
     sender_id TEXT NOT NULL,sender_name TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_shared_files_expiry ON admin_shared_files(expires_at,created_at)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_shared_file_settings (
+    id TEXT PRIMARY KEY CHECK(id='default'),max_bytes INTEGER NOT NULL CHECK(max_bytes>0),updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+  await env.DB.prepare(`INSERT OR IGNORE INTO admin_shared_file_settings(id,max_bytes) VALUES('default',?)`).bind(ADMIN_SHARED_FILE_DEFAULT_MAX_BYTES).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_shared_file_downloads (
     file_id TEXT NOT NULL REFERENCES admin_shared_files(id) ON DELETE CASCADE,actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,
     downloaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(file_id,actor_id)
   )`).run();
 }
 
+async function adminSharedFileMaxBytes(env) {
+  const row=await env.DB.prepare(`SELECT max_bytes maxBytes FROM admin_shared_file_settings WHERE id='default'`).first();
+  const value=Number(row?.maxBytes);
+  return Number.isSafeInteger(value)&&value>0?value:ADMIN_SHARED_FILE_DEFAULT_MAX_BYTES;
+}
+
+async function updateAdminSharedFilesSettings(req,env,id) {
+  await ensureAdminSharedFilesSchema(env);
+  const actor=await adminActor(req,env);
+  if (actor?.role!=="owner") return fail(req,env,"FORBIDDEN","Somente o proprietário pode alterar o limite de arquivos",403,id);
+  const body=await readJson(req,2000),maxBytes=Number(body.maxBytes);
+  if (!Number.isSafeInteger(maxBytes)||maxBytes<1) return fail(req,env,"VALIDATION_ERROR","Informe um limite maior que zero",422,id);
+  await env.DB.prepare(`INSERT INTO admin_shared_file_settings(id,max_bytes,updated_at) VALUES('default',?,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET max_bytes=excluded.max_bytes,updated_at=CURRENT_TIMESTAMP`).bind(maxBytes).run();
+  return ok(req,env,{maxBytes},id);
+}
 async function purgeExpiredSharedFiles(env) {
   if (!env.DB || !env.MEDIA) return;
   await ensureAdminSharedFilesSchema(env);
@@ -6581,9 +6641,10 @@ async function adminSharedFiles(req, env, id) {
   await ensureAdminSharedFilesSchema(env);
   await purgeExpiredSharedFiles(env);
   const actor = await adminActor(req,env);
-  const [fileQuery,downloadQuery] = await env.DB.batch([
-    env.DB.prepare(`SELECT id,title,comment,original_name originalName,content_type contentType,size_bytes sizeBytes,sender_id senderId,sender_name senderName,expires_at expiresAt,created_at createdAt FROM admin_shared_files WHERE datetime(expires_at)>CURRENT_TIMESTAMP ORDER BY datetime(created_at) DESC`),
-    env.DB.prepare(`SELECT file_id fileId,actor_id actorId,actor_name actorName,downloaded_at downloadedAt FROM admin_shared_file_downloads ORDER BY datetime(downloaded_at) DESC`)
+  const [fileQuery,downloadQuery,maxBytes] = await Promise.all([
+    env.DB.prepare(`SELECT id,title,comment,original_name originalName,content_type contentType,size_bytes sizeBytes,sender_id senderId,sender_name senderName,expires_at expiresAt,created_at createdAt FROM admin_shared_files WHERE datetime(expires_at)>CURRENT_TIMESTAMP ORDER BY datetime(created_at) DESC`).all(),
+    env.DB.prepare(`SELECT file_id fileId,actor_id actorId,actor_name actorName,downloaded_at downloadedAt FROM admin_shared_file_downloads ORDER BY datetime(downloaded_at) DESC`).all(),
+    adminSharedFileMaxBytes(env)
   ]);
   const downloads = downloadQuery.results || [];
   const items = (fileQuery.results || []).map(file => ({
@@ -6592,19 +6653,20 @@ async function adminSharedFiles(req, env, id) {
     downloads: downloads.filter(row => row.fileId === file.id),
     canDelete: actor.permissions.includes("*") || file.senderId === actor.id
   }));
-  return ok(req,env,{items,maxBytes:ADMIN_SHARED_FILE_MAX_BYTES,retentionDays:ADMIN_SHARED_FILE_RETENTION_DAYS},id);
+  return ok(req,env,{items,maxBytes,retentionDays:ADMIN_SHARED_FILE_RETENTION_DAYS,isOwner:actor.role==="owner"},id);
 }
 
 async function createAdminSharedFile(req, env, id) {
   if (!env.MEDIA) return fail(req,env,"R2_NOT_CONFIGURED","O armazenamento R2 não foi configurado",503,id);
   await ensureAdminSharedFilesSchema(env);
   const actor = await adminActor(req,env), form = await req.formData();
+  const maxBytes=await adminSharedFileMaxBytes(env);
   const title = String(form.get("title") || "").trim().slice(0,140);
   const comment = String(form.get("comment") || "").trim().slice(0,2000);
   const file = form.get("file");
   if (!title) return fail(req,env,"VALIDATION_ERROR","Informe um título",422,id);
-  if (!(file instanceof File) || !file.size || file.size > ADMIN_SHARED_FILE_MAX_BYTES)
-    return fail(req,env,"INVALID_FILE","Envie um arquivo de até 50 MB",422,id);
+  if (!(file instanceof File) || !file.size || file.size > maxBytes)
+    return fail(req,env,"INVALID_FILE",`Envie um arquivo de até ${formatFileSize(maxBytes)}`,422,id);
   const fileId=crypto.randomUUID();
   const extension=(file.name.split(".").pop()||"bin").toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,12)||"bin";
   const storageKey=`admin-shared/${fileId}.${extension}`;
@@ -6619,6 +6681,13 @@ async function createAdminSharedFile(req, env, id) {
   return ok(req,env,{id:fileId,title,originalName:file.name.slice(0,180),expiresAt},id);
 }
 
+function formatFileSize(value) {
+  const bytes=Number(value)||0;
+  if(bytes>=1024*1024*1024)return `${Number((bytes/(1024*1024*1024)).toFixed(2))} GB`;
+  if(bytes>=1024*1024)return `${Number((bytes/(1024*1024)).toFixed(2))} MB`;
+  if(bytes>=1024)return `${Number((bytes/1024).toFixed(2))} KB`;
+  return `${bytes} B`;
+}
 function safeDownloadName(value) {
   return String(value||"arquivo").replace(/[\r\n"\\/]/g,"_").slice(0,180) || "arquivo";
 }

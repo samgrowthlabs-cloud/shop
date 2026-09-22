@@ -20,3 +20,9 @@ CREATE TABLE IF NOT EXISTS admin_shared_file_downloads (
   PRIMARY KEY (file_id, actor_id)
 );
 CREATE INDEX IF NOT EXISTS idx_admin_shared_file_downloads_file ON admin_shared_file_downloads(file_id, downloaded_at);
+CREATE TABLE IF NOT EXISTS admin_shared_file_settings (
+  id TEXT PRIMARY KEY CHECK (id = 'default'),
+  max_bytes INTEGER NOT NULL CHECK (max_bytes > 0),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT OR IGNORE INTO admin_shared_file_settings(id, max_bytes) VALUES ('default', 52428800);

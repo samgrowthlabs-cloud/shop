@@ -54,7 +54,7 @@ async function cardMedia(card){
   const mainUrl=primary?new URL(url(primary),location.href).href:currentUrl;
   const featuredVideo=items.find(item=>item.type==='video'&&item.isHover),alternate=featuredVideo||items.find(item=>item.type!=='video'&&item.isHover&&new URL(url(item),location.href).href!==mainUrl);
   if(alternate){
-    const alternateMedia=alternate.type==='video'?`<video class="product-image-alternate product-video-preview" src="${safe(url(alternate))}" data-preview-start="${Math.max(0,Number(alternate.previewStartSeconds)||0)}" ${currentUrl?`poster="${safe(currentUrl)}"`:''} muted playsinline preload="metadata" aria-label="${safe(alternate.altText||`V\u00eddeo de ${data.name||'produto'}`)}"></video>`:`<img class="product-image-alternate" src="${safe(url(alternate,320))}" alt="${safe(alternate.altText||`${data.name||'Produto'} em outro \u00e2ngulo`)}" loading="lazy" decoding="async">`;
+    const alternateMedia=alternate.type==='video'?`<video class="product-image-alternate product-video-preview" src="${safe(url(alternate))}" data-preview-start="${Math.max(0,Number(alternate.previewStartSeconds)||0)}" ${currentUrl?`poster="${safe(currentUrl)}"`:''} muted playsinline preload="metadata" aria-label="${safe(alternate.altText||`V\u00eddeo de ${data.name||'produto'}`)}"></video>`:`<img class="product-image-alternate" src="${safe(url(alternate,320))}" alt="${safe(alternate.altText||`${data.name||'Produto'} em outro \u00e2ngulo`)}" loading="eager" decoding="async">`;
     link.insertAdjacentHTML('beforeend',alternateMedia);
     card.classList.add('has-alternate-image');
     if(featuredVideo)card.classList.add('has-video-preview');
@@ -312,7 +312,9 @@ async function detailMedia(){
   box.querySelector('.detail-thumbs')?.addEventListener('click',event=>{const button=event.target.closest('[data-index]');if(!button)return;const index=Number(button.dataset.index);if(button.classList.contains('more-images')){openGallery(items,index,data.name);return}showMain(index)});
 }
 
+
 document.addEventListener('click',async event=>{const link=event.target.closest('[data-offer]');if(!link)return;event.preventDefault();event.stopImmediatePropagation();const original=link.textContent;link.textContent='Abrindo oferta...';link.setAttribute('aria-busy','true');const product=await getProduct(link.dataset.offer);if(product?.offerId){location.href=`${C.API_BASE_URL}/go/${encodeURIComponent(product.slug)}/${encodeURIComponent(product.offerId)}`;return}link.textContent=original;link.removeAttribute('aria-busy');alert('Este produto ainda não possui um link afiliado ativo.')},true);
+
 
 document.addEventListener('click',async event=>{
   const button=event.target.closest('[data-share-product]');
@@ -336,12 +338,22 @@ document.addEventListener('click',async event=>{
   button.disabled=false;button.innerHTML=original;
 },true);
 
+/* Prepara a imagem alternativa antes do primeiro hover dos cards visiveis. */
+if('IntersectionObserver'in window){
+  const mediaObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{
+    if(!entry.isIntersecting)return;
+    mediaObserver.unobserve(entry.target);
+    cardMedia(entry.target);
+  }),{rootMargin:'400px'});
+  document.querySelectorAll('.product-card,.home-price-drop-card').forEach(card=>mediaObserver.observe(card));
+}
 /* Midia alternativa sob demanda: evita uma requisicao de produto para cada card no carregamento. */
 document.addEventListener('pointerover',event=>{
   if(matchMedia('(hover:none),(pointer:coarse)').matches)return;
   const card=event.target.closest?.('.product-card,.home-price-drop-card');
   if(card)cardMedia(card);
 },{passive:true});
+
 document.addEventListener('click',async event=>{
   const media=event.target.closest?.('.product-card .product-media');
   if(!media||!matchMedia('(hover:none),(pointer:coarse)').matches)return;
