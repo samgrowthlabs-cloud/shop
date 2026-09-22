@@ -1,5 +1,5 @@
 import'./image-priority.js?v=20260913-all-images-high-1';
-import'./favicon.js?v=20260803-media-domain-38';import{currentUser,userApi}from'./auth-20260827-v5.js?v=20260919-mobile-session-race-1';
+import'./favicon.js?v=20260803-media-domain-38';import{currentUser,userApi}from'./auth-20260827-v5.js?v=20260922-invalid-refresh-cleanup-2';
 
 const $=selector=>document.querySelector(selector);
 const money=value=>(Number(value||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});

@@ -1,5 +1,5 @@
 import'./image-priority.js?v=20260913-all-images-high-1';
-import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,session,currentUser,apiProfile,userApi,startPresence}from'./auth-20260827-v5.js?v=20260919-mobile-session-race-1';
+import'./favicon.js?v=20260803-media-domain-38';import{signUp,signIn,signOut,recover,updatePassword,updateAccountCredentials,acceptRedirectSession,session,currentUser,apiProfile,userApi,startPresence}from'./auth-20260827-v5.js?v=20260922-invalid-refresh-cleanup-2';
 import'./search-ui.js?v=20260803-media-domain-38';
 import{syncAccountLibrary,setCart}from'./user-library-20260827-v5.js';
 import{initSiteHeader,setPremiumBrand}from'./site-header.js?v=20260726-mobile-header-4';

@@ -3697,7 +3697,7 @@ async function updateProduct(req, env, productId, id) {
   if (validation)
     return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE products SET name=?,slug=?,product_type=?,status=?,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,is_featured=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE products SET name=?,slug=?,product_type=?,status=?,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,is_featured=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   )
     .bind(
       b.name,
@@ -3995,7 +3995,7 @@ async function updateProductV2(req, env, productId, id) {
     return fail(req, env, "VALIDATION_ERROR", offerResult.error, 422, id);
   const statements = [
     env.DB.prepare(
-      `UPDATE products SET name=?,slug=?,cta_code=?,product_type=?,status=CASE WHEN ?=1 THEN ? ELSE status END,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,tags_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?=1 AND ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE products SET name=?,slug=?,cta_code=?,product_type=?,status=CASE WHEN ?=1 THEN ? ELSE status END,category_id=?,brand_id=?,short_description=?,full_description=?,editorial_score=?,base_price_cents=?,compare_at_price_cents=?,is_featured=?,specifications_json=?,tags_json=?,price_source=CASE WHEN ?=1 THEN ? ELSE price_source END,price_source_item_id=CASE WHEN ?=1 THEN ? ELSE price_source_item_id END,price_source_offer_id=CASE WHEN ?=1 THEN ? ELSE price_source_offer_id END,price_source_url=CASE WHEN ?=1 THEN ? ELSE price_source_url END,price_sync_enabled=CASE WHEN ?=1 THEN ? ELSE price_sync_enabled END,price_synced_at=CASE WHEN ?=1 AND ?=1 THEN CURRENT_TIMESTAMP ELSE price_synced_at END,price_sync_status=CASE WHEN ?=1 AND ?=1 THEN 'ok' ELSE price_sync_status END,published_at=CASE WHEN ?=1 AND ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
     ).bind(
       String(body.name).trim(),
       body.slug,
@@ -6902,7 +6902,7 @@ async function saveAdminRole(req, env, roleId, id) {
   try {
     if (roleId) {
       const result = await env.DB.prepare(
-        `UPDATE admin_roles SET name=?,description=?,color=?,permissions_json=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        `UPDATE admin_roles SET name=?,description=?,color=?,permissions_json=?,is_active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
       ).bind(name, description, color, JSON.stringify(permissions), body.isActive === false ? 0 : 1, targetId).run();
       if (!result.meta.changes) return fail(req, env, "ROLE_NOT_FOUND", "Cargo não encontrado", 404, id);
       await env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id IN (SELECT id FROM admin_collaborators WHERE role_id=?)`).bind(targetId).run();
@@ -7000,11 +7000,11 @@ async function updateAdminCollaborator(req, env, collaboratorId, id) {
   if (password) {
     const credentials = await hashAdminPassword(password);
     statements.push(env.DB.prepare(
-      `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,password_salt=?,password_hash=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,password_salt=?,password_hash=?,is_active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
     ).bind(name, email, storedRole, roleId, JSON.stringify(permissions), credentials.passwordSalt, credentials.passwordHash, body.isActive === false ? 0 : 1, collaboratorId));
   } else {
     statements.push(env.DB.prepare(
-      `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE admin_collaborators SET name=?,email=?,role=?,role_id=?,permissions_json=?,is_active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
     ).bind(name, email, storedRole, roleId, JSON.stringify(permissions), body.isActive === false ? 0 : 1, collaboratorId));
   }
   statements.push(env.DB.prepare(`DELETE FROM admin_sessions WHERE collaborator_id=?`).bind(collaboratorId));
@@ -7309,7 +7309,7 @@ async function updatePartner(req, env, partnerId, id) {
   if (validation)
     return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE partners SET name=?,slug=?,website_url=?,logo_url=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE partners SET name=?,slug=?,website_url=?,logo_url=?,is_active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   )
     .bind(
       String(body.name).trim().slice(0, 140),
@@ -7631,7 +7631,7 @@ async function saveBanner(req, env, bannerId, id, creating) {
       .run();
   else
     await env.DB.prepare(
-      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,style_json=?,starts_at=?,ends_at=?,is_active=?,display_duration_ms=?,sort_order=?,desktop_position_x=?,desktop_position_y=?,desktop_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE banners SET name=?,eyebrow=?,title=?,message=?,button_text=?,link_url=?,desktop_storage_key=?,mobile_storage_key=?,alt_text=?,targeting_json=?,style_json=?,starts_at=?,ends_at=?,is_active=?,display_duration_ms=?,sort_order=?,desktop_position_x=?,desktop_position_y=?,desktop_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
     )
       .bind(...values, bannerId)
       .run();
@@ -7907,7 +7907,7 @@ async function updateTheme(req, env, themeId, id) {
     );
   statements.push(
     env.DB.prepare(
-`UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,icon_color=?,price_color=?,old_price_color=?,header_hover_color=?,footer_background=?,footer_text_color=?,footer_link_color=?,footer_hover_color=?,card_hover_background=?,card_hover_border_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+`UPDATE seasonal_themes SET name=?,holiday=?,header_background=?,header_background_end=?,header_gradient_enabled=?,header_gradient_angle=?,header_text_color=?,accent_color=?,page_text_color=?,muted_text_color=?,icon_color=?,price_color=?,old_price_color=?,header_hover_color=?,footer_background=?,footer_text_color=?,footer_link_color=?,footer_hover_color=?,card_hover_background=?,card_hover_border_color=?,logo_text=?,logo_text_color=?,logo_height=?,logo_storage_key=?,logo_hover_storage_key=?,header_media_storage_key=?,header_media_opacity=?,header_media_position=?,header_media_size=?,header_media_scale=?,header_media_repeat=?,starts_at=?,ends_at=?,is_active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
     ).bind(...themeValues(body), themeId),
   );
   await env.DB.batch(statements);
@@ -7971,7 +7971,7 @@ async function uploadThemeLogoMedia(req, env, themeId, id) {
   }
   const column = kind === "hover" ? "logo_hover_storage_key" : "logo_storage_key";
   await env.DB.prepare(
-    `UPDATE seasonal_themes SET ${column}=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE seasonal_themes SET ${column}=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(storageKey, themeId).run();
   const staleKey = kind === "hover" ? theme.logoHoverStorageKey : theme.logoStorageKey;
   if (staleKey) await env.MEDIA.delete(staleKey);
@@ -8298,7 +8298,7 @@ async function updateHeaderAd(req, env, adId, id) {
   const body = await readJson(req, 12000), validation = validateHeaderAd(body);
   if (validation) return fail(req, env, "VALIDATION_ERROR", validation, 422, id);
   const result = await env.DB.prepare(
-    `UPDATE header_ad_strips SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,image_position_x=?,image_position_y=?,image_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,image_rotation=?,animation_preset=?,animation_duration=?,animation_delay=?,placement=?,display_duration_ms=?,style_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE header_ad_strips SET name=?,link_url=?,alt_text=?,starts_at=?,ends_at=?,is_active=?,sort_order=?,image_position_x=?,image_position_y=?,image_scale=?,mobile_position_x=?,mobile_position_y=?,mobile_scale=?,image_rotation=?,animation_preset=?,animation_duration=?,animation_delay=?,placement=?,display_duration_ms=?,style_json=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(...headerAdValues(body), adId).run();
   if (!result.meta.changes) return fail(req, env, "HEADER_AD_NOT_FOUND", "Anúncio não encontrado", 404, id);
   return ok(req, env, { id: adId }, id);
@@ -9085,7 +9085,7 @@ async function applyStripePassSession(env, session, forcedStatus = "") {
     `UPDATE premium_pass_payments SET provider_preference_id=?,provider_payment_id=?,status=?,
        paid_at=CASE WHEN ?='approved' THEN COALESCE(paid_at,?) ELSE paid_at END,
        access_expires_at=CASE WHEN ?='approved' THEN COALESCE(access_expires_at,?) ELSE access_expires_at END,
-       provider_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+       provider_updated_at=CURRENT_TIMESTAMP,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(
     String(session.id || "").slice(0, 200), String(session.payment_intent || "").slice(0, 200) || null,
     status, status, paidAt, status, accessExpiresAt, purchase.id,
@@ -9300,7 +9300,7 @@ async function reconcileMercadoPagoSubscription(env, providerSubscriptionId, exp
   const status = normalizedMercadoPagoSubscriptionStatus(remote.status);
   const amountCents = Math.round(Number(remote.auto_recurring?.transaction_amount || 0) * 100);
   await env.DB.prepare(
-    `UPDATE premium_subscriptions SET status=?,payer_email=?,amount_cents=CASE WHEN ?>0 THEN ? ELSE amount_cents END,currency=?,checkout_url=COALESCE(?,checkout_url),next_payment_at=?,provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE premium_subscriptions SET status=?,payer_email=?,amount_cents=CASE WHEN ?>0 THEN ? ELSE amount_cents END,currency=?,checkout_url=COALESCE(?,checkout_url),next_payment_at=?,provider_updated_at=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(
     status,
     String(remote.payer_email || "").slice(0, 320),
@@ -9527,7 +9527,7 @@ async function createPremiumPassPayment(req, env, id) {
     });
   } catch (error) {
     await env.DB.prepare(
-      `UPDATE premium_pass_payments SET status='rejected',provider_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE premium_pass_payments SET status='rejected',provider_updated_at=CURRENT_TIMESTAMP,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
     ).bind(purchaseId).run();
     console.error(JSON.stringify({
       event: "premium_pass_payment_failed",
@@ -9573,7 +9573,7 @@ async function createPremiumPassPayment(req, env, id) {
     `UPDATE premium_pass_payments SET provider_payment_id=?,status=?,
        paid_at=CASE WHEN ?='approved' THEN ? ELSE paid_at END,
        access_expires_at=CASE WHEN ?='approved' THEN ? ELSE access_expires_at END,
-       provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+       provider_updated_at=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(
     providerPaymentId, status, status, approvedAt, status, accessExpiresAt,
     payment.date_last_updated || new Date().toISOString(), purchaseId,
@@ -9733,7 +9733,7 @@ async function createPremiumPassCheckout(req, env, id) {
   if (!/^cs_/.test(String(checkout.id || "")) || !/^https:\/\//i.test(checkoutUrl))
     return fail(req, env, "CHECKOUT_CREATION_FAILED", "O Stripe não retornou um checkout válido", 502, id);
   await env.DB.prepare(
-    `UPDATE premium_pass_payments SET provider_preference_id=?,checkout_url=?,provider_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE premium_pass_payments SET provider_preference_id=?,checkout_url=?,provider_updated_at=CURRENT_TIMESTAMP,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(String(checkout.id), checkoutUrl, purchaseId).run();
   return ok(req, env, { checkoutUrl, status: "pass_pending", provider: "stripe", plan }, id);
 }
@@ -9900,7 +9900,7 @@ async function reconcileMercadoPagoPassOrder(env, providerOrderId) {
   await env.DB.prepare(
     `UPDATE premium_pass_payments SET provider_payment_id=?,status=?,paid_at=CASE WHEN ?='approved' THEN COALESCE(paid_at,?) ELSE paid_at END,
        access_expires_at=CASE WHEN ?='approved' THEN COALESCE(access_expires_at,?) WHEN ?='refunded' THEN NULL ELSE access_expires_at END,
-       provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+       provider_updated_at=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(
     providerId, status, status, approvedAt, status, accessExpiresAt, status,
     remote.last_updated_date || new Date().toISOString(), purchase.id,
@@ -9949,7 +9949,7 @@ async function reconcileMercadoPagoPassPayment(env, providerPaymentId) {
   await env.DB.prepare(
     `UPDATE premium_pass_payments SET provider_payment_id=?,status=?,paid_at=CASE WHEN ?='approved' THEN COALESCE(paid_at,?) ELSE paid_at END,
        access_expires_at=CASE WHEN ?='approved' THEN COALESCE(access_expires_at,?) WHEN ?='refunded' THEN NULL ELSE access_expires_at END,
-       provider_updated_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+       provider_updated_at=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')||'-'||lower(hex(randomblob(4))) WHERE id=?`,
   ).bind(
     paymentId, status, status, approvedAt, status, accessExpiresAt, status,
     remote.date_last_updated || new Date().toISOString(), purchase.id,

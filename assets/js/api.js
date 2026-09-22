@@ -50,15 +50,11 @@ function cacheHomeData(value){try{if(value&&Array.isArray(value.products))localS
 export const getHomeData=async()=>{
   if(C.USE_MOCK_DATA)return cacheHomeData(await Promise.all([getProducts({limit:50}),getTrendingProducts(16),getPromotions(),getCategories(),getFeaturedCollections(),getSiteConfig()]).then(([products,trending,campaigns,categories,collections,siteConfig])=>({products,trending,campaigns,categories,collections,siteConfig})));
   const cached=cachedHomeData(),prefetched=window.__SHOPLAB_HOME_PROMISE;
-  if(cached){
-    window.__SHOPLAB_HOME_PROMISE=null;
-    (prefetched||request('/api/v1/home')).then(value=>value&&cacheHomeData(value)).catch(()=>null);
-    return cached;
-  }
   try{
     if(prefetched){window.__SHOPLAB_HOME_PROMISE=null;const value=await prefetched;if(value)return cacheHomeData(value)}
     return cacheHomeData(await request('/api/v1/home'));
   }catch(error){
+    if(cached)return cached;
     return cacheHomeData(await Promise.all([getProducts({limit:50}),getTrendingProducts(16),getPromotions(),getCategories(),getFeaturedCollections(),getSiteConfig()]).then(([products,trending,campaigns,categories,collections,siteConfig])=>({products,trending,campaigns,categories,collections,siteConfig})));
   }
 };export const getRecommendations=async(slug,{standard=false}={})=>{if(C.USE_MOCK_DATA)return(await getProducts()).filter(p=>p.slug!==slug).slice(0,standard?8:4);const products=await request(`/api/v1/products/${encodeURIComponent(slug)}/related?audience=${userAuthorization().authorization?'member':'guest'}&mode=${standard?'standard':'all'}&v=12`);return withActivePromotions(products).catch(()=>products)};

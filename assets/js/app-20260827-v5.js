@@ -1,6 +1,6 @@
-import'./favicon.js?v=20260920-mobile-header-stable-3';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260918-mobile-perf-1';
+import'./favicon.js?v=20260920-mobile-header-stable-3';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260922-banner-instant-1';
 import'./search-ui.js?v=20260906-search-history-1';
-import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth-20260827-v5.js?v=20260919-mobile-session-race-1';
+import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth-20260827-v5.js?v=20260922-invalid-refresh-cleanup-2';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library-20260827-v5.js';
 import{cachedPremiumBrand,setPremiumBrand}from'./site-header.js?v=20260916-performance-1';
 import{SHOPLAB_CONFIG}from'./config.js?v=20260803-media-domain-38';
@@ -517,7 +517,7 @@ function homeProductRail(items=[]){
 home = async function () {
   const homeData=await getHomeData(),personalized=[];
   let {products=[],trending=[],campaigns=[],categories=[],collections=[],siteConfig:homeSiteConfig}=homeData||{};
-  if(homeSiteConfig&&!siteConfig?.socialLinks){siteConfig=homeSiteConfig;applySiteTypography(siteConfig.typography);applySiteTheme(siteConfig.theme);applySeasonalPriceColors(siteConfig.theme);warmHeaderMedia(siteConfig)}
+  if(homeSiteConfig){siteConfig=homeSiteConfig;applySiteTypography(siteConfig.typography);applySiteTheme(siteConfig.theme);applySeasonalPriceColors(siteConfig.theme);warmHeaderMedia(siteConfig)}
   const promotedProducts=new Map(campaigns.flatMap(campaign=>campaign.products||[]).map(product=>[product.id,product]));
   products=products.map(product=>promotedProducts.has(product.id)?{...product,...promotedProducts.get(product.id)}:product);
   trending=trending.map(product=>promotedProducts.has(product.id)?{...product,...promotedProducts.get(product.id)}:product);
