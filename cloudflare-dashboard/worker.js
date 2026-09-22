@@ -396,6 +396,10 @@ export default {
     env = { ...env, DB: databaseFor(env) };
     try {
       const url = new URL(request.url);
+      const adminRedirect = redirectLegacyAdminUrl(request, url);
+      if (adminRedirect) return adminRedirect;
+      const normalizedAdminUrl = redirectAdminHostnameUrl(request, url);
+      if (normalizedAdminUrl) return normalizedAdminUrl;
       if((url.hostname==='noticias.shoplab.com.br'||url.hostname.endsWith('.workers.dev'))&&request.method==='GET'&&(url.pathname==='/noticias'||url.pathname.startsWith('/noticias/'))){const target=new URL(url.pathname+url.search,'https://shoplab.com.br');return Response.redirect(target.href,308)}
       // A 101 WebSocket response owns a live socket and cannot be cloned.
       // Keep HTTP admin requests in the audit trail, but let WebSocket
@@ -741,6 +745,8 @@ async function dynamicSitemap(env) {
 async function route(request, env, ctx, requestId) {
   const url = new URL(request.url),
     path = url.pathname.replace(/\/+$/, "") || "/";
+  const adminPage = await serveAdminHostname(request, env, url, path);
+  if (adminPage) return adminPage;
   if (request.method === "OPTIONS")
     return cors(request, env, new Response(null, { status: 204 }));
   if (path === "/api/v1/health")
@@ -1207,6 +1213,72 @@ async function route(request, env, ctx, requestId) {
   return fail(request, env, "NOT_FOUND", "Rota não encontrada", 404, requestId);
 }
 
+const ADMIN_HOSTNAME = "admin.shoplab.com.br";
+const ADMIN_ROUTES = new Set([
+  "painel", "usuarios", "produtos", "produto-formulario", "categorias",
+  "colecoes", "caracteristicas", "marcas", "parceiros", "promocoes",
+  "noticias", "newsletter", "banners", "destaques", "anuncios",
+  "shoplab-ads", "premium", "ia", "equipe", "arquivos", "call", "midia",
+  "conversor", "gravador", "mixer", "aparencia", "politicas"
+]);
+const ADMIN_LEGACY_ROUTES = new Map([
+  ["index", ""], ["login", "login"], ["usuarios", "usuarios"],
+  ["produtos", "produtos"], ["produto-formulario", "produto-formulario"],
+  ["categorias", "categorias"], ["colecoes", "colecoes"], ["marcas", "marcas"],
+  ["parceiros", "parceiros"], ["promocoes", "promocoes"], ["banners", "banners"],
+  ["destaque-cabecalho", "destaques"], ["anuncios-cabecalho", "shoplab-ads"],
+  ["premium", "premium"], ["ia", "ia"], ["colaboradores", "equipe"],
+  ["arquivos", "arquivos"], ["call", "call"], ["temas", "aparencia"]
+]);
+
+function redirectLegacyAdminUrl(request, url) {
+  if (url.hostname !== "shoplab.com.br" || !["GET", "HEAD"].includes(request.method)) return null;
+  if (url.pathname !== "/admin" && !url.pathname.startsWith("/admin/")) return null;
+  let route = url.pathname.slice("/admin".length).replace(/^\/+|\/+$/g, "");
+  route = route.replace(/\.html$/i, "");
+  route = ADMIN_LEGACY_ROUTES.get(route) ?? route;
+  const target = new URL(`https://${ADMIN_HOSTNAME}/${route}`);
+  target.search = url.search;
+  target.hash = url.hash;
+  return Response.redirect(target.href, 308);
+}
+
+function redirectAdminHostnameUrl(request, url) {
+  if (url.hostname !== ADMIN_HOSTNAME || !["GET", "HEAD"].includes(request.method)) return null;
+  const target = new URL(url);
+  let changed = false;
+  if (target.protocol !== "https:") {
+    target.protocol = "https:";
+    changed = true;
+  }
+  if (target.pathname === "/admin" || target.pathname.startsWith("/admin/")) {
+    let route = target.pathname.slice("/admin".length).replace(/^\/+|\/+$/g, "");
+    route = route.replace(/\.html$/i, "");
+    route = ADMIN_LEGACY_ROUTES.get(route) ?? route;
+    target.pathname = `/${route}`;
+    changed = true;
+  }
+  return changed ? Response.redirect(target.href, 308) : null;
+}
+async function serveAdminHostname(request, env, url, path) {
+  if (url.hostname !== ADMIN_HOSTNAME || !["GET", "HEAD"].includes(request.method) || !env.ASSETS) return null;
+  if (path.startsWith("/api/") || path.startsWith("/assets/")) return null;
+  let route = path.slice(1).replace(/\.html$/i, "");
+  route = ADMIN_LEGACY_ROUTES.get(route) ?? route;
+  if (route === "login") return adminAssetResponse(request, env, url, "/admin/login");
+  if (route && !ADMIN_ROUTES.has(route)) return null;
+  return adminAssetResponse(request, env, url, "/admin/");
+}
+
+async function adminAssetResponse(request, env, url, pathname) {
+  const assetUrl = new URL(url);
+  assetUrl.pathname = pathname;
+  const response = await env.ASSETS.fetch(new Request(assetUrl, request));
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "private, no-store, max-age=0");
+  headers.set("X-Robots-Tag", "noindex, nofollow");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 async function publicHomeData(req, env, ctx, id) {
 const revisionSources = [
     ["products", "updated_at"], ["offers", "updated_at"],

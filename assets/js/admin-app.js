@@ -61,12 +61,13 @@ window.clearInterval=id=>{routeTimers.delete(id);nativeClearInterval(id)};
 function cancelPreviousRoute(){window.dispatchEvent(new CustomEvent('shoplab:admin-route-leave',{detail:{route:currentRoute}}));routeRequests.abort();routeRequests=new AbortController();for(const id of routeTimers){nativeClearTimeout(id);nativeClearInterval(id)}routeTimers.clear()}
 const can=permission=>permission==='authenticated'&&Boolean(session?.actor)||session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission)||(permission==='media_scripts.view'&&['media_scripts.manage','media_scripts.edit','media_scripts.comment'].some(item=>session?.actor?.permissions?.includes(item)));
 const allowed=key=>routes[key]&&!deniedRoutes.has(key)&&can(routes[key].permission);
-const routeFromUrl=()=>new URL(location.href).searchParams.get('tab')||'painel';
-const routeUrl=(key,source)=>{const url=new URL('index.html',location.href),origin=new URL(source||location.href,location.href);url.searchParams.set('tab',key);if(key==='produto-formulario'&&origin.searchParams.get('id'))url.searchParams.set('id',origin.searchParams.get('id'));return url};
+const cleanAdminUrls=()=>location.hostname==='admin.shoplab.com.br';
+const routeFromUrl=()=>{const url=new URL(location.href),queryRoute=url.searchParams.get('tab');if(queryRoute)return queryRoute;if(!cleanAdminUrls())return'painel';const path=decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g,'').replace(/\.html$/i,'');return routes[path]?path:'painel'};
+const routeUrl=(key,source)=>{const origin=new URL(source||location.href,location.href),url=cleanAdminUrls()?new URL(key==='painel'?'/':'/'+key,location.origin):new URL('index.html',location.href);if(!cleanAdminUrls())url.searchParams.set('tab',key);if(key==='produto-formulario'&&origin.searchParams.get('id'))url.searchParams.set('id',origin.searchParams.get('id'));return url};
 
 function shellHtml(){
   return `<div class="admin-shell admin-app-shell">
-    <aside class="sidebar"><a class="logo" href="../index.html">SHOP<b>LAB</b></a><div class="admin-actor"><b></b><small></small></div><span class="admin-navigation-label">Navegação</span><nav id="admin-area-tabs" role="tablist" aria-label="Áreas do painel"></nav><a class="admin-site-link" href="../index.html">Ver site público ↗</a></aside>
+    <aside class="sidebar"><a class="logo admin-brand-logo" href="https://shoplab.com.br/"><img src="../assets/img/shoplab-wordmark.png?v=20260922-admin-logo-1" alt="SHOPLAB" width="1174" height="180"></a><div class="admin-actor"><b></b><small></small></div><span class="admin-navigation-label">Navegação</span><nav id="admin-area-tabs" role="tablist" aria-label="Áreas do painel"></nav><a class="admin-site-link" href="https://shoplab.com.br/">Ver site público ↗</a></aside>
     <main class="admin-main"><header class="admin-top admin-app-header"><div class="admin-heading"><span class="eyebrow"></span><h1>Administração</h1></div><div class="admin-actions"></div><div id="admin-page-tabs" class="admin-page-tabs" role="tablist" aria-label="Funções da área"></div></header><div id="message" class="admin-message"></div><div id="content" role="tabpanel" tabindex="-1"><div class="admin-loading">Preparando painel…</div></div></main>
   </div><div id="admin-overlays"></div>`;
 }
@@ -103,7 +104,7 @@ function renderNavigation(route){
   sidebar.querySelectorAll('.admin-navigation-label').forEach(node=>node.remove());
   document.querySelector('#admin-area-tabs').insertAdjacentHTML('beforebegin','<span class="admin-navigation-label">Navegação</span>');
   document.querySelectorAll('.sidebar .admin-site-link').forEach(link=>link.remove());
-  sidebar.insertAdjacentHTML('beforeend','<a class="admin-site-link" href="../index.html">Ver site público ↗</a>');
+  sidebar.insertAdjacentHTML('beforeend','<a class="admin-site-link" href="https://shoplab.com.br/">Ver site público ↗</a>');
   const areaTabs=document.querySelector('#admin-area-tabs');
   areaTabs.innerHTML=groups.map(group=>{const items=Object.keys(routes).filter(key=>routes[key].group===group.id&&!routes[key].secondary&&allowed(key));if(!items.length)return'';const target=items.includes(route)?route:items[0],selected=group.id===active.group;return `<button type="button" role="tab" aria-selected="${selected}" class="admin-area-tab ${selected?'active':''}" data-admin-route="${target}"><span>${group.icon}</span><b>${group.label}</b></button>`}).join('');
   const tabs=Object.keys(routes).filter(key=>routes[key].group===active.group&&!routes[key].secondary&&allowed(key));
@@ -115,12 +116,12 @@ function renderNavigation(route){
   document.querySelector('#content').setAttribute('aria-label',active.label);
 }
 
-async function api(path,options={}){const response=await fetch(C.API_BASE_URL+path,{...options,credentials:'include'});const json=await response.json();if(response.status===401){location.href='login.html';throw new Error('Sessão expirada')}if(!response.ok||!json.success){const error=new Error(json.error?.message||`Erro ${response.status}`);error.status=response.status;error.code=json.error?.code||'';throw error}return json.data}
+async function api(path,options={}){const response=await fetch(C.API_BASE_URL+path,{...options,credentials:'include'});const json=await response.json();if(response.status===401){location.href=cleanAdminUrls()?'/login':'login.html';throw new Error('Sessão expirada')}if(!response.ok||!json.success){const error=new Error(json.error?.message||`Erro ${response.status}`);error.status=response.status;error.code=json.error?.code||'';throw error}return json.data}
 
 async function navigate(requested,{push=true,source}={}){
   if(navigating)return;
   let route=allowed(requested)?requested:Object.keys(routes).find(allowed);
-  if(!route){location.href='login.html';return}
+  if(!route){location.href=cleanAdminUrls()?'/login':'login.html';return}
   cancelPreviousRoute();navigating=true;currentRoute=route;document.documentElement.classList.add('admin-is-navigating');
   if(push)history.pushState({route},'',routeUrl(route,source));
   document.body.dataset.adminPage=routes[route].target;
@@ -163,8 +164,10 @@ async function start(){
   const roleColor=/^#[0-9a-f]{6}$/i.test(String(session?.actor?.roleColor||''))?session.actor.roleColor:'';
   document.documentElement.toggleAttribute('data-admin-role-color',Boolean(roleColor));
   if(roleColor)document.documentElement.style.setProperty('--admin-role-color',roleColor);
-  await navigate(routeFromUrl(),{push:false});
+  const initialRoute=routeFromUrl();
+  await navigate(initialRoute,{push:false});
+  if(cleanAdminUrls())history.replaceState({route:initialRoute},'',routeUrl(initialRoute,location.href));
   const warmCatalog=()=>{if(routes[currentRoute]?.module!=='v2')ensureModule('v2').catch(()=>{})};
   if('requestIdleCallback' in window)requestIdleCallback(warmCatalog,{timeout:1800});else setTimeout(warmCatalog,700);
 }
-start().catch(error=>{document.body.innerHTML=`<main class="login-page"><section class="login-box"><h1>Não foi possível abrir o admin</h1><p>${error.message}</p><a class="btn primary" href="login.html">Entrar novamente</a></section></main>`});
+start().catch(error=>{document.body.innerHTML=`<main class="login-page"><section class="login-box"><h1>Não foi possível abrir o admin</h1><p>${error.message}</p><a class="btn primary" href="${cleanAdminUrls()?'/login':'login.html'}">Entrar novamente</a></section></main>`});
