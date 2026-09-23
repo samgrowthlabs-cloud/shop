@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260920-mobile-header-stable-3';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260922-home-swr-1';
+import'./favicon.js?v=20260920-mobile-header-stable-3';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260922-live-revalidate-1';
 import'./search-ui.js?v=20260906-search-history-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth-20260827-v5.js?v=20260922-invalid-refresh-cleanup-2';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library-20260827-v5.js';
@@ -9,7 +9,7 @@ import{selectAutomaticComparisons,automaticComparisonSection}from'./automatic-co
 let comparisonModule;
 const getComparisonModule=()=>comparisonModule??=import('./compare-20260827-v5.js?v=20260916-performance-1');
 const runWhenIdle=callback=>'requestIdleCallback'in window?requestIdleCallback(callback,{timeout:1200}):setTimeout(callback,250);
-const shoplabAdsModule=import('./shoplab-ads-public.js?v=20260918-fast-load-1');
+const shoplabAdsModule=import('./shoplab-ads-public.js?v=20260922-live-refresh-1');
 const mediaVariant=(key,width)=>`${SHOPLAB_CONFIG.API_BASE_URL}/media/${encodeURIComponent(key)}?w=${width}&q=78`;
 const responsiveMediaUrl=(value,width)=>{try{const url=new URL(value,location.href);if(!url.pathname.includes('/media/'))return value;url.searchParams.set('w',String(width));url.searchParams.set('q','78');return url.href}catch{return value}};
 const $=(s,r=document)=>r.querySelector(s)||(s==='#theme'?{}:null), money=v=>(v/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),parse=(value,fallback={})=>{try{return JSON.parse(value)||fallback}catch{return fallback}};
@@ -20,6 +20,8 @@ async function bindPremiumBrand(){
 }
 document.addEventListener('click',event=>{if(event.target.closest('.premium-grant-alert>button'))event.target.closest('.premium-grant-alert')?.remove()});
 const params=new URLSearchParams(location.search), page=document.body.dataset.page||'home';
+let cacheRefreshPending=false;
+addEventListener('shoplab:cache-update',event=>{if(cacheRefreshPending||!String(event.detail?.key||'').startsWith('GET/api/v1/'))return;cacheRefreshPending=true;setTimeout(()=>location.reload(),60)});
 const productSlugFromTarget=target=>{const direct=target.closest?.('a[href*="produto.html?slug="]')?.href,card=target.closest?.('.product-card,[data-product-slug]'),candidate=direct||card?.dataset.cardUrl||(card?.dataset.productSlug?`produto.html?slug=${encodeURIComponent(card.dataset.productSlug)}`:'');try{return candidate?new URL(candidate,location.href).searchParams.get('slug')||'':''}catch{return''}};
 let lastPrefetchedProduct='';
 const warmProductTarget=event=>{const slug=productSlugFromTarget(event.target);if(!slug||slug===lastPrefetchedProduct)return;lastPrefetchedProduct=slug;prefetchProductMedia(slug).catch(()=>{})};

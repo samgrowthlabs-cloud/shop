@@ -1,0 +1,10 @@
+import test from'node:test';import assert from'node:assert/strict';import{readFile}from'node:fs/promises';
+const worker=await readFile(new URL('../cloudflare-dashboard/worker.js',import.meta.url),'utf8'),migration=await readFile(new URL('../cloudflare-dashboard/admin-trusted-devices-upgrade.sql',import.meta.url),'utf8');
+test('migration keeps strict mode as the default',()=>{assert.match(migration,/DEFAULT 'strict'/);assert.match(migration,/VALUES\('global','strict'\)/)});
+test('device secrets are hashed and cookies are HttpOnly Secure',()=>{assert.match(worker,/token_hash/);assert.match(worker,/await sha256\(token\)/);assert.match(worker,/shoplab_trusted_device=.*HttpOnly; Secure; SameSite=None/)});
+test('hybrid API access binds IP, device, session and actor',()=>{for(const fragment of['g.network=?','g.session_hash=?','d.token_hash=?','datetime(g.expires_at)>CURRENT_TIMESTAMP','datetime(d.expires_at)>CURRENT_TIMESTAMP','datetime(s.expires_at)>CURRENT_TIMESTAMP'])assert.ok(worker.includes(fragment));assert.match(worker,/s\.collaborator_id=d\.actor_id/)});
+test('revocation also revokes temporary grants',()=>{assert.match(worker,/UPDATE admin_trusted_devices SET revoked_at=CURRENT_TIMESTAMP/);assert.match(worker,/UPDATE admin_temporary_network_access SET revoked_at=CURRENT_TIMESTAMP WHERE device_id=/)});
+test('tokens rotate after a successful new-network challenge',()=>{assert.match(worker,/UPDATE admin_trusted_devices SET token_hash=\?,rotated_at=CURRENT_TIMESTAMP/)});
+test('the isolated corridor does not bypass regular admin APIs',()=>{assert.match(worker,/isAdminAccessCorridor/);assert.match(worker,/validHybridGrant\(request,env,ip\)/);assert.ok(worker.includes('path.startsWith("/api/v1/admin/")'))});
+test('permanent authorization remains owner controlled by default',()=>{assert.match(migration,/allow_collaborator_permanent_network INTEGER NOT NULL DEFAULT 0/);assert.match(worker,/OWNER_APPROVAL_REQUIRED/)});
+test('temporary access is server-expiring and lasts two hours',()=>{assert.match(worker,/Date\.now\(\)\+2\*3600e3/);assert.match(worker,/datetime\(g\.expires_at\)>CURRENT_TIMESTAMP/)});

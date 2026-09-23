@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Validar nova rede | SHOPLAB</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="stylesheet" href="../assets/css/admin.css">
+  <link rel="stylesheet" href="../assets/css/admin-access.css?v=20260923-1">
+</head>
+<body class="admin-access-page">
+  <main class="access-shell">
+    <section class="access-panel" aria-labelledby="access-title">
+      <header class="access-header">
+        <a class="access-brand" href="https://shoplab.com.br" aria-label="SHOPLAB">
+          <img src="../assets/img/shoplab-wordmark.png" alt="SHOPLAB">
+        </a>
+        <span class="access-badge">Acesso protegido</span>
+      </header>
+
+      <div class="access-intro">
+        <span class="eyebrow">VALIDACAO DE SEGURANCA</span>
+        <h1 id="access-title">Nova rede detectada</h1>
+        <p id="access-summary">Verificando esta conexao...</p>
+      </div>
+
+      <div id="access-message" class="admin-message" role="status"></div>
+      <div id="request-status" class="access-waiting" hidden></div>
+
+      <form id="access-login" class="access-form" hidden>
+        <div class="access-form-heading"><b>Confirme sua identidade</b><small>Use as credenciais do seu acesso administrativo.</small></div>
+        <div class="access-fields two-columns">
+          <label>E-mail do colaborador<input id="access-email" type="email" autocomplete="username" required></label>
+          <label>Senha<input id="access-login-password" type="password" autocomplete="current-password" required></label>
+        </div>
+        <div class="access-submit-row">
+          <div class="cf-turnstile" data-sitekey="0x4AAAAAAD2MqLY11ZmacPGb" data-callback="shoplabAccessTurnstile" data-expired-callback="shoplabAccessTurnstileExpired" data-error-callback="shoplabAccessTurnstileError"></div>
+          <input id="access-turnstile" type="hidden">
+          <button class="btn primary" id="access-submit" type="submit">Continuar</button>
+        </div>
+      </form>
+
+      <form id="access-request" class="access-form" hidden>
+        <div class="access-form-heading"><b>Solicitar este dispositivo</b><small>O proprietario precisara aprovar antes da liberacao.</small></div>
+        <div class="access-fields two-columns">
+          <label>Nome do dispositivo<input id="request-name" required maxlength="120" placeholder="Ex.: Notebook Joao"></label>
+          <label>Descricao opcional<input id="request-description" maxlength="500" placeholder="Ex.: Notebook de trabalho"></label>
+        </div>
+        <div class="access-submit-row end"><button class="btn primary" type="submit">Enviar solicitacao</button></div>
+      </form>
+
+      <form id="access-grant" class="access-form" hidden>
+        <div class="access-form-heading"><b>Autorizar esta rede</b><small>O acesso temporario expira automaticamente.</small></div>
+        <div class="access-fields grant-grid">
+          <label>Confirme sua senha<input id="access-password" type="password" autocomplete="current-password" required></label>
+          <label class="access-check"><input id="access-permanent" type="checkbox"><span>Autorizar permanentemente</span></label>
+          <button class="btn primary" type="submit">Usar nesta rede</button>
+        </div>
+      </form>
+
+      <footer class="access-footer"><span>Protegido por Cloudflare e pelas politicas do Admin.</span><a href="https://shoplab.com.br">Voltar ao site</a></footer>
+    </section>
+  </main>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script type="module" src="../assets/js/admin-access.js?v=20260923-6"></script>
+</body>
+</html>

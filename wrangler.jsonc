@@ -58,7 +58,7 @@
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
-    "run_worker_first": ["/admin*", "/", "/login", "/login.html", "/painel", "/usuarios", "/produtos", "/produto-formulario", "/categorias", "/colecoes", "/caracteristicas", "/marcas", "/parceiros", "/promocoes", "/noticias", "/noticias/*", "/newsletter", "/banners", "/destaques", "/anuncios", "/shoplab-ads", "/premium", "/ia", "/equipe", "/arquivos", "/call", "/midia", "/conversor", "/gravador", "/mixer", "/aparencia", "/politicas", "/categoria", "/categoria.html", "/colecao", "/colecao.html", "/sitemap.xml"]
+    "run_worker_first": ["/admin*", "/", "/login", "/login.html", "/painel", "/seguranca", "/usuarios", "/produtos", "/produto-formulario", "/categorias", "/colecoes", "/caracteristicas", "/marcas", "/parceiros", "/promocoes", "/noticias", "/noticias/*", "/newsletter", "/banners", "/destaques", "/anuncios", "/shoplab-ads", "/premium", "/ia", "/equipe", "/arquivos", "/call", "/midia", "/conversor", "/gravador", "/mixer", "/aparencia", "/politicas", "/categoria", "/categoria.html", "/colecao", "/colecao.html", "/sitemap.xml"]
   },
   "d1_databases": [
     {

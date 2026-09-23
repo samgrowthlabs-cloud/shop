@@ -47,12 +47,13 @@ export const getFeaturedCollections=()=>C.USE_MOCK_DATA?Promise.resolve([]):requ
 const HOME_DATA_CACHE='shoplab:home-data-v1';
 export function cachedHomeData(){try{const value=JSON.parse(localStorage.getItem(HOME_DATA_CACHE)||'null');return value&&Array.isArray(value.products)?value:null}catch{return null}}
 function cacheHomeData(value){try{if(value&&Array.isArray(value.products))localStorage.setItem(HOME_DATA_CACHE,JSON.stringify(value))}catch{}return value}
+addEventListener('shoplab:cache-update',event=>{if(event.detail?.key==='GET/api/v1/home'&&event.detail.data)cacheHomeData(event.detail.data)});
 export const getHomeData=async()=>{
   if(C.USE_MOCK_DATA)return cacheHomeData(await Promise.all([getProducts({limit:50}),getTrendingProducts(16),getPromotions(),getCategories(),getFeaturedCollections(),getSiteConfig()]).then(([products,trending,campaigns,categories,collections,siteConfig])=>({products,trending,campaigns,categories,collections,siteConfig})));
   const cached=cachedHomeData(),prefetched=window.__SHOPLAB_HOME_PROMISE;
   if(cached){
     window.__SHOPLAB_HOME_PROMISE=null;
-    (prefetched||request('/api/v1/home')).then(value=>value&&cacheHomeData(value)).catch(()=>null);
+    (prefetched||request('/api/v1/home')).then(value=>{if(!value)return null;const changed=JSON.stringify(cached)!==JSON.stringify(value);cacheHomeData(value);if(changed)dispatchEvent(new CustomEvent('shoplab:cache-update',{detail:{key:'GET/api/v1/home',data:value}}));return value}).catch(()=>null);
     return cached;
   }
   try{

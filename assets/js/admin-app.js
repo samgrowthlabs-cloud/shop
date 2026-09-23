@@ -2,6 +2,7 @@ import {SHOPLAB_CONFIG as C} from './config.js?v=20260803-media-domain-38';
 
 const routes={
   painel:{label:'Resumo',group:'overview',module:'main',target:'dashboard',permission:'dashboard.view'},
+  seguranca:{label:'Seguran\u00e7a',group:'security',module:'security',target:'security',permission:'owner'},
   usuarios:{label:'Usuários',group:'growth',module:'main',target:'users',permission:'users.view'},
   produtos:{label:'Produtos',group:'catalog',module:'v2',target:'products',permission:'products.view'},
   categorias:{label:'Categorias e subcategorias',group:'catalog',module:'taxonomy',target:'categories',permission:'categories.manage'},
@@ -34,6 +35,7 @@ const icons={
   overview:icon('<path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-6h5v6"/>'),
   catalog:icon('<path d="m4 7 8-4 8 4-8 4-8-4Z"/><path d="m4 12 8 4 8-4"/><path d="m4 17 8 4 8-4"/>'),
   marketing:icon('<path d="M4 13v-2l12-5v12L4 13Z"/><path d="M16 9.5h2.5a2.5 2.5 0 0 1 0 5H16"/><path d="m6.5 13 1.3 6H11l-1.4-4.8"/>'),
+  security:icon('<path d="M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>'),
   growth:icon('<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="m4 7 5-4 5 4 6-5"/><path d="M16 2h4v4"/>'),
   team:icon('<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.2"/><path d="M15.5 14.5a4 4 0 0 1 5 4"/>'),
   appearance:icon('<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 1.3-2.1-.8-1.4.2-3.1 1.8-3.1H18a3 3 0 0 0 3-3C21 7.4 17 3 12 3Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>')
@@ -42,6 +44,7 @@ const groups=[
   {id:'overview',label:'Visão geral',icon:icons.overview},
   {id:'catalog',label:'Catálogo',icon:icons.catalog},
   {id:'marketing',label:'Marketing',icon:icons.marketing},
+  {id:'security',label:'Seguran\u00e7a',icon:icons.security},
   {id:'growth',label:'Clientes e crescimento',icon:icons.growth},
   {id:'team',label:'Equipe e acessos',icon:icons.team},
   {id:'appearance',label:'Aparência',icon:icons.appearance},
@@ -49,7 +52,7 @@ const groups=[
 ];
 const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','call.html':'call','temas.html':'aparencia'};
 let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
-const moduleImports={taxonomy:()=>import('./admin-taxonomy.js?v=20260922-product-editor-desktop-3'),main:()=>import('./admin.js?v=20260922-dashboard-help-3'),v2:()=>import('./admin-v2.js?v=20260922-shared-file-limit-1'),news:()=>import('./admin-news.js?v=20260911-news-engagement-2'),ads:()=>import('./shoplab-ads.js?v=20260911-ads-delivery-fix-1'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
+const moduleImports={taxonomy:()=>import('./admin-taxonomy.js?v=20260922-product-editor-desktop-3'),main:()=>import('./admin.js?v=20260922-dashboard-help-3'),v2:()=>import('./admin-v2.js?v=20260922-shared-file-limit-1'),security:()=>import('./admin-security.js?v=20260923-ip-allowlist-1'),news:()=>import('./admin-news.js?v=20260911-news-engagement-2'),ads:()=>import('./shoplab-ads.js?v=20260911-ads-delivery-fix-1'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260831-browser-ai-4'),mixer:()=>import('./audio-mixer.js?v=20260829-r2-ffmpeg-21'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
 const loadedModules=new Map();
 const ensureModule=name=>{if(!loadedModules.has(name))loadedModules.set(name,moduleImports[name]().catch(error=>{loadedModules.delete(name);throw error}));return loadedModules.get(name)};
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();
@@ -59,7 +62,7 @@ window.setInterval=(callback,delay,...args)=>{const id=nativeSetInterval(callbac
 window.clearTimeout=id=>{routeTimers.delete(id);nativeClearTimeout(id)};
 window.clearInterval=id=>{routeTimers.delete(id);nativeClearInterval(id)};
 function cancelPreviousRoute(){window.dispatchEvent(new CustomEvent('shoplab:admin-route-leave',{detail:{route:currentRoute}}));routeRequests.abort();routeRequests=new AbortController();for(const id of routeTimers){nativeClearTimeout(id);nativeClearInterval(id)}routeTimers.clear()}
-const can=permission=>permission==='authenticated'&&Boolean(session?.actor)||session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission)||(permission==='media_scripts.view'&&['media_scripts.manage','media_scripts.edit','media_scripts.comment'].some(item=>session?.actor?.permissions?.includes(item)));
+const can=permission=>permission==='owner'?session?.actor?.role==='owner':permission==='authenticated'&&Boolean(session?.actor)||session?.actor?.permissions?.includes('*')||session?.actor?.permissions?.includes(permission)||(permission==='media_scripts.view'&&['media_scripts.manage','media_scripts.edit','media_scripts.comment'].some(item=>session?.actor?.permissions?.includes(item)));
 const allowed=key=>routes[key]&&!deniedRoutes.has(key)&&can(routes[key].permission);
 const cleanAdminUrls=()=>location.hostname==='admin.shoplab.com.br';
 const routeFromUrl=()=>{const url=new URL(location.href),queryRoute=url.searchParams.get('tab');if(queryRoute)return queryRoute;if(!cleanAdminUrls())return'painel';const path=decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g,'').replace(/\.html$/i,'');return routes[path]?path:'painel'};
@@ -131,7 +134,7 @@ async function navigate(requested,{push=true,source}={}){
   try{
     document.querySelector('.admin-main')?.classList.remove('ads-editor');document.querySelector('.ads-view-tabs')?.remove();
     await ensureModule(routes[route].module);
-    const controller=routes[route].module==='taxonomy'?window.ShoplabTaxonomy:routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='news'?window.ShoplabAdminNews:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:routes[route].module==='call'?window.ShoplabTeamCall:window.ShoplabAdminV2;
+    const controller=routes[route].module==='taxonomy'?window.ShoplabTaxonomy:routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='security'?window.ShoplabAdminSecurity:routes[route].module==='news'?window.ShoplabAdminNews:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:routes[route].module==='call'?window.ShoplabTeamCall:window.ShoplabAdminV2;
     await controller.run(routes[route].target,session);
     if(routes[route].target==='product-form'){const taxonomy=await import('./admin-taxonomy.js?v=20260922-product-editor-desktop-3');await taxonomy.mountProductClassification();}
     await api('/api/v1/admin/auth/session?section='+encodeURIComponent(routes[route].label)).catch(error=>console.warn('Falha ao registrar atividade administrativa',error));

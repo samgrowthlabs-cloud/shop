@@ -205,6 +205,47 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(created_at DESC);
 
+CREATE TABLE IF NOT EXISTS admin_ip_allowlist (
+  id TEXT PRIMARY KEY,
+  network TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  access_type TEXT NOT NULL DEFAULT 'network' CHECK(access_type IN ('device','network','office','home','temporary','other')),
+  collaborator_id TEXT REFERENCES admin_collaborators(id) ON DELETE SET NULL,
+  expires_at TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_access_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_admin_ip_allowlist_active ON admin_ip_allowlist(is_active,expires_at);
+CREATE TABLE IF NOT EXISTS admin_security_events (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  actor_id TEXT,
+  actor_name TEXT,
+  source_ip TEXT,
+  affected_network TEXT,
+  result TEXT NOT NULL,
+  details_json TEXT NOT NULL DEFAULT '{}',
+  request_id TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_security_events_created ON admin_security_events(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_security_settings (id TEXT PRIMARY KEY CHECK(id='global'),access_mode TEXT NOT NULL DEFAULT 'strict' CHECK(access_mode IN ('strict','hybrid')),allow_collaborator_permanent_network INTEGER NOT NULL DEFAULT 0 CHECK(allow_collaborator_permanent_network IN (0,1)),updated_by TEXT,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+INSERT OR IGNORE INTO admin_security_settings(id,access_mode) VALUES('global','strict');
+CREATE TABLE IF NOT EXISTS admin_trusted_devices (id TEXT PRIMARY KEY,actor_id TEXT NOT NULL,actor_type TEXT NOT NULL CHECK(actor_type IN ('owner','collaborator')),token_hash TEXT NOT NULL UNIQUE,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',browser_label TEXT,os_label TEXT,created_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at TEXT NOT NULL,last_used_at TEXT,last_ip TEXT,rotated_at TEXT,revoked_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_admin_trusted_devices_actor ON admin_trusted_devices(actor_type,actor_id,revoked_at,expires_at);
+CREATE TABLE IF NOT EXISTS admin_temporary_network_access (id TEXT PRIMARY KEY,device_id TEXT NOT NULL REFERENCES admin_trusted_devices(id) ON DELETE CASCADE,actor_id TEXT NOT NULL,session_hash TEXT NOT NULL,network TEXT NOT NULL,granted_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at TEXT NOT NULL,revoked_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_admin_temp_access_network ON admin_temporary_network_access(network,expires_at,revoked_at);
+CREATE TABLE IF NOT EXISTS admin_trusted_device_history (id TEXT PRIMARY KEY,device_id TEXT NOT NULL,actor_id TEXT,ip TEXT,event TEXT NOT NULL,result TEXT NOT NULL,metadata_json TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_admin_device_history_device ON admin_trusted_device_history(device_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS admin_trusted_device_requests (id TEXT PRIMARY KEY,collaborator_id TEXT NOT NULL REFERENCES admin_collaborators(id) ON DELETE CASCADE,collaborator_email TEXT NOT NULL,challenge_hash TEXT NOT NULL UNIQUE,device_name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',request_ip TEXT NOT NULL,request_country TEXT,browser_label TEXT,os_label TEXT,status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','DENIED','EXPIRED','CONSUMED')),attempts INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at TEXT NOT NULL,decided_at TEXT,decided_by TEXT,consumed_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_admin_device_requests_pending ON admin_trusted_device_requests(status,expires_at,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_device_requests_collaborator ON admin_trusted_device_requests(collaborator_id,created_at DESC);
+
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id TEXT PRIMARY KEY, email TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','blocked')),
