@@ -456,6 +456,10 @@ function bind() {
       ),
       text = item?.content || "Escolha um roteiro para começar.";
     renderScript(text);
+    window.ShoplabAudioBridge = window.ShoplabAudioBridge || {};
+    window.ShoplabAudioBridge.selectedScript = item
+      ? { id: item.id, title: item.title }
+      : null;
     $("#recorder-prompter-stage").scrollTop = 0;
     updateProgress();
   };

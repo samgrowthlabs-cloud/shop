@@ -699,7 +699,7 @@ body[data-admin-page="media-converter"] #content{max-width:1180px;margin-inline:
 .mixer-icon-btn svg path[d$="Z"]{fill:currentColor;stroke:currentColor}
 .mixer-add-btn{min-height:48px;padding-inline:18px;cursor:pointer}.mixer-add-btn svg{width:21px;height:21px}
 .mixer-transport{padding:14px 18px;background:linear-gradient(180deg,#fff,#f8fbfa)}
-.mixer-transport-group,.mixer-transport-actions{display:flex;align-items:center;gap:9px}
+.mixer-transport-group,.mixer-transport-actions{display:flex;align-items:center;gap:9px}.mixer-share-actions{display:grid;gap:8px;min-width:250px}.mixer-share-actions .btn{width:100%}
 .mixer-clock{display:inline-flex;align-items:center;gap:7px;min-width:116px;padding:9px 11px;border:1px solid #d8e3e0;border-radius:9px;background:#f3f8f7;color:#274c45;font-variant-numeric:tabular-nums;font-size:12px}
 .mixer-clock svg{width:17px;height:17px;color:#07897a}
 .mixer-master-control{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #d8e3e0;border-radius:9px;background:#fff;color:#385851;font-size:12px;font-weight:800}

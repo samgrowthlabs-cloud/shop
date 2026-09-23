@@ -6703,6 +6703,15 @@ async function createAdminSharedFile(req, env, id) {
   const title = String(form.get("title") || "").trim().slice(0,140);
   const comment = String(form.get("comment") || "").trim().slice(0,2000);
   const file = form.get("file");
+  const finishScript=form.get("finishScript")==="1",scriptId=String(form.get("scriptId")||"").slice(0,100);
+  let scriptToFinish=null;
+  if(finishScript){
+    if(!scriptId)return fail(req,env,"VALIDATION_ERROR","O roteiro da gravação não foi identificado",422,id);
+    await ensureAdminMediaScriptsSchema(env);
+    scriptToFinish=await env.DB.prepare(`SELECT id,author_id authorId,status FROM admin_media_scripts WHERE id=?`).bind(scriptId).first();
+    if(!scriptToFinish)return fail(req,env,"SCRIPT_NOT_FOUND","Roteiro não encontrado",404,id);
+    if(!mediaScriptCanEditAll(actor)&&scriptToFinish.authorId!==actor.id)return fail(req,env,"FORBIDDEN","Você não pode encerrar este roteiro",403,id);
+  }
   if (!title) return fail(req,env,"VALIDATION_ERROR","Informe um título",422,id);
   if (!(file instanceof File) || !file.size || file.size > maxBytes)
     return fail(req,env,"INVALID_FILE",`Envie um arquivo de até ${formatFileSize(maxBytes)}`,422,id);
@@ -6712,12 +6721,14 @@ async function createAdminSharedFile(req, env, id) {
   const expiresAt=new Date(Date.now()+ADMIN_SHARED_FILE_RETENTION_DAYS*86400000).toISOString();
   try {
     await env.MEDIA.put(storageKey,file.stream(),{httpMetadata:{contentType:file.type||"application/octet-stream",cacheControl:"private, no-store"},customMetadata:{originalName:file.name.slice(0,180),expiresAt}});
-    await env.DB.prepare(`INSERT INTO admin_shared_files(id,title,comment,original_name,content_type,size_bytes,storage_key,sender_id,sender_name,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)`).bind(fileId,title,comment,file.name.slice(0,180),file.type||"application/octet-stream",file.size,storageKey,actor.id,actor.name,expiresAt).run();
+    const insertFile=env.DB.prepare(`INSERT INTO admin_shared_files(id,title,comment,original_name,content_type,size_bytes,storage_key,sender_id,sender_name,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)`).bind(fileId,title,comment,file.name.slice(0,180),file.type||"application/octet-stream",file.size,storageKey,actor.id,actor.name,expiresAt);
+    if(scriptToFinish)await env.DB.batch([insertFile,env.DB.prepare(`UPDATE admin_media_scripts SET status='used',updated_by_id=?,updated_by_name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(actor.id,actor.name,scriptToFinish.id)]);
+    else await insertFile.run();
   } catch(error) {
     await env.MEDIA.delete(storageKey).catch(()=>{});
     throw error;
   }
-  return ok(req,env,{id:fileId,title,originalName:file.name.slice(0,180),expiresAt},id);
+  return ok(req,env,{id:fileId,title,originalName:file.name.slice(0,180),expiresAt,scriptFinished:Boolean(scriptToFinish)},id);
 }
 
 function formatFileSize(value) {

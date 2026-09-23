@@ -97,12 +97,12 @@ const recordingDb = () =>
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
-async function cacheRecording(file, id = crypto.randomUUID()) {
+async function cacheRecording(file, id = crypto.randomUUID(), script = null) {
   const database = await recordingDb(),
     transaction = database.transaction("recordings", "readwrite");
   transaction
     .objectStore("recordings")
-    .put({ id, file, name: file.name, createdAt: Date.now() });
+    .put({ id, file, name: file.name, script, createdAt: Date.now() });
   return new Promise((resolve, reject) => {
     transaction.oncomplete = () => resolve(id);
     transaction.onerror = () => reject(transaction.error);
@@ -160,7 +160,7 @@ function render() {
       .map(([key, item]) => `<option value="${key}">${item.label}</option>`)
       .join(
         "",
-      )}</select><button class="btn primary recorder-icon-btn" id="recording-download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg><span>Preparar download</span></button><button class="btn ghost recorder-icon-btn" id="recording-to-mixer" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 6v12M12 3v18M16 7v10M20 10v4"/></svg><span>Enviar ao Mixer</span></button><button class="btn ghost recorder-icon-btn" id="recording-to-share" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 3-7.5 18-3.8-7.7L2 9.5Z"/><path d="M9.7 13.3 21 3"/></svg><span>Compartilhar com a equipe</span></button><p id="recording-export-status"></p></div></section><section class="recording-library" id="recording-library"><div class="recording-library-head"><div><span>BIBLIOTECA LOCAL</span><h3>Suas gravações</h3></div><small>Salvas somente neste navegador</small></div><div class="recording-library-toolbar"><label class="recording-library-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="recording-library-search" type="search" placeholder="Buscar gravação…"></label><label class="recording-select-all"><input id="recording-select-all" type="checkbox"> Selecionar tudo</label><button class="danger" id="recording-delete-selected" type="button" disabled><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M8 7l1 13h6l1-13"/></svg>Excluir selecionadas</button></div><div id="recording-library-list"></div></section><section class="recorder-tips"><article><b>RAW/PCM</b><p>Escolha WAV para preservar áudio sem compressão em 48 kHz e 24 bits.</p></article><article><b>Voz limpa</b><p>Reduz ruído constante, corta frequências desnecessárias e normaliza o volume.</p></article><article><b>Podcast</b><p>Aplica compressão de voz e volume final adequado para publicação.</p></article></section>`;
+      )}</select><button class="btn primary recorder-icon-btn" id="recording-download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg><span>Preparar download</span></button><button class="btn ghost recorder-icon-btn" id="recording-to-mixer" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 6v12M12 3v18M16 7v10M20 10v4"/></svg><span>Enviar ao Mixer</span></button><button class="btn ghost recorder-icon-btn" id="recording-to-share" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 3-7.5 18-3.8-7.7L2 9.5Z"/><path d="M9.7 13.3 21 3"/></svg><span>Compartilhar com a equipe</span></button><button class="btn ghost recorder-icon-btn" id="recording-to-share-finish" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/><path d="M4 21h16"/></svg><span>Compartilhar com a equipe e arquivar roteiro</span></button><p id="recording-export-status"></p></div></section><section class="recording-library" id="recording-library"><div class="recording-library-head"><div><span>BIBLIOTECA LOCAL</span><h3>Suas gravações</h3></div><small>Salvas somente neste navegador</small></div><div class="recording-library-toolbar"><label class="recording-library-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="recording-library-search" type="search" placeholder="Buscar gravação…"></label><label class="recording-select-all"><input id="recording-select-all" type="checkbox"> Selecionar tudo</label><button class="danger" id="recording-delete-selected" type="button" disabled><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M8 7l1 13h6l1-13"/></svg>Excluir selecionadas</button></div><div id="recording-library-list"></div></section><section class="recorder-tips"><article><b>RAW/PCM</b><p>Escolha WAV para preservar áudio sem compressão em 48 kHz e 24 bits.</p></article><article><b>Voz limpa</b><p>Reduz ruído constante, corta frequências desnecessárias e normaliza o volume.</p></article><article><b>Podcast</b><p>Aplica compressão de voz e volume final adequado para publicação.</p></article></section>`;
 }
 function pcmWav(chunks, sampleRate) {
   const channels = Math.max(1, chunks[0]?.length || 1),
@@ -227,6 +227,8 @@ async function run() {
     phase = 0,
     recordedFile = null,
     recordedId = null,
+    recordingScript = null,
+    recordedScript = null,
     recordingUrl = "",
     selectedRecordings = new Set(),
     treatedUrl = "",
@@ -687,6 +689,7 @@ async function run() {
       if (recordingUrl) URL.revokeObjectURL(recordingUrl);
       recordedId = item.id;
       recordedFile = item.file;
+      recordedScript = item.script || null;
       recordingUrl = URL.createObjectURL(recordedFile);
       player.src = recordingUrl;
       $("#recording-size").textContent =
@@ -772,12 +775,12 @@ async function run() {
         team?.dataset.sendTeam,
       item = items.find((entry) => entry.id === id);
     if (mixer && item) {
-      window.ShoplabAudioBridge.toMixer = item.file;
+      window.ShoplabAudioBridge.toMixer = { file: item.file, script: item.script || null };
       window.ShoplabAdminApp.navigate("mixer");
       return;
     }
     if (team && item) {
-      window.ShoplabAudioBridge.toShare = item.file;
+      window.ShoplabAudioBridge.toShare = { file: item.file, script: item.script || null, finishScript: false, source: "recorder" };
       window.ShoplabAdminApp.navigate("arquivos");
       return;
     }
@@ -808,7 +811,7 @@ async function run() {
         type: item.file.type,
         lastModified: item.file.lastModified,
       });
-      await cacheRecording(file, item.id);
+      await cacheRecording(file, item.id, item.script || recordedScript);
       if (recordedId === item.id) {
         recordedFile = file;
         $("#recording-size").textContent =
@@ -904,6 +907,7 @@ async function run() {
   };
   $("#audio-start").onclick = async () => {
     try {
+      recordingScript = window.ShoplabAudioBridge?.selectedScript || null;
       const mode = $("#recorder-capture-mode").value,
         deviceId = $("#recorder-device").value,
         studioMode = mode === "studio",
@@ -964,7 +968,8 @@ async function run() {
         recordedFile = new File([blob], fileName(extension), {
           type: blob.type,
         });
-        cacheRecording(recordedFile)
+        recordedScript = recordingScript;
+        cacheRecording(recordedFile, undefined, recordedScript)
           .then((id) => {
             recordedId = id;
             renderRecordingLibrary();
@@ -1076,16 +1081,28 @@ async function run() {
     }
   };
   window.ShoplabAudioBridge = window.ShoplabAudioBridge || {};
-  $("#recording-to-mixer").onclick = () => {
+  const shareRecording = (finishScript = false) => {
     if (!recordedFile) return;
-    window.ShoplabAudioBridge.toMixer = recordedFile;
-    window.ShoplabAdminApp.navigate("mixer");
-  };
-  $("#recording-to-share").onclick = () => {
-    if (!recordedFile) return;
-    window.ShoplabAudioBridge.toShare = recordedFile;
+    if (finishScript && !recordedScript) {
+      $("#recording-export-status").textContent =
+        "Esta gravação não está vinculada a um roteiro.";
+      return;
+    }
+    window.ShoplabAudioBridge.toShare = {
+      file: recordedFile,
+      script: recordedScript,
+      finishScript,
+      source: "recorder",
+    };
     window.ShoplabAdminApp.navigate("arquivos");
   };
+  $("#recording-to-mixer").onclick = () => {
+    if (!recordedFile) return;
+    window.ShoplabAudioBridge.toMixer = { file: recordedFile, script: recordedScript };
+    window.ShoplabAdminApp.navigate("mixer");
+  };
+  $("#recording-to-share").onclick = () => shareRecording(false);
+  $("#recording-to-share-finish").onclick = () => shareRecording(true);
   applyPreset("natural");
   $("#treatment-preset").onchange = (event) => applyPreset(event.target.value);
   $("#treatment-reset").onclick = () => {
