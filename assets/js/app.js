@@ -89,6 +89,7 @@ function bindHomeBanner(){
   let current=0,timer=null,animating=false;
   let dragging=false,pointerId=null,startX=0,startY=0,deltaX=0,incoming=null,dir=0;
   const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const instant=matchMedia("(max-width: 760px)").matches;
 
   const clearInline=function(slide){if(!slide)return;["transition","transform","opacity","visibility","zIndex"].forEach(function(prop){slide.style.removeProperty(prop)})};
 
@@ -104,7 +105,7 @@ function bindHomeBanner(){
   const animateTo=function(index,userInitiated){
     var target=(index+slides.length)%slides.length;
     if(target===current||animating)return;
-    if(reduced){show(target,userInitiated);play();return}
+    if(reduced||instant){show(target,userInitiated);play();return}
     stop();animating=true;
     var active=slides[current],next=slides[target],direction=target===(current-1+slides.length)%slides.length?-1:1,w=carousel.clientWidth||1;
     clearInline(active);clearInline(next);
@@ -142,6 +143,14 @@ function bindHomeBanner(){
     var inc=incoming;
     var d=dir;
     var incomingStart=d>0?w:-w;
+    if(instant){
+      carousel.classList.remove("is-dragging");
+      carousel.style.userSelect="";
+      dragging=false;incoming=null;dir=0;deltaX=0;pointerId=null;
+      if(toNext&&inc)show(current+(d>0?1:-1),true);
+      play();
+      return;
+    }
     if(inc){
       active.style.setProperty("transition","transform 220ms cubic-bezier(.22,1,.36,1)","important");inc.style.setProperty("transition","transform 220ms cubic-bezier(.22,1,.36,1)","important");
       active.style.setProperty("transform",toNext?("translateX("+(-incomingStart)+"px)"):"translateX(0)","important");
@@ -174,7 +183,7 @@ function bindHomeBanner(){
       moveEvent.preventDefault();
       deltaX=dx;
       if(!incoming){dir=dx<0?1:-1;incoming=slides[(current+dir+slides.length)%slides.length]}
-      layoutDrag();
+      if(!instant)layoutDrag();
     };
     onUp=function(upEvent){
       if(!dragging)return;
@@ -498,7 +507,7 @@ async function waitForPageImages(root){const images=[...root.querySelectorAll('i
   if(nextLogo&&currentLogo&&nextLogo.innerHTML!==currentLogo.innerHTML)currentLogo.innerHTML=nextLogo.innerHTML;
   if(nextHighlight&&currentHighlight)currentHighlight.replaceWith(nextHighlight);else if(nextHighlight&&!currentHighlight)currentHeader?.querySelector('.header-row')?.append(nextHighlight);else currentHighlight?.remove();
   if(nextHeaderAd&&currentHeaderAd)currentHeaderAd.replaceWith(nextHeaderAd);else if(nextHeaderAd&&!currentHeaderAd)currentHeader?.append(nextHeaderAd);else currentHeaderAd?.remove();
-  const pendingContent=app.querySelector('.page-content-pending'),stage=document.createElement('div');stage.className='page-content-stage';stage.style.visibility='hidden';stage.innerHTML=body+footer();if(pendingContent)pendingContent.replaceWith(stage);else app.append(stage);void mountShoplabAds();await waitForPageImages(stage);stage.style.visibility='';stage.classList.add('is-ready');const pageLoader=app.querySelector('.shoplab-page-loader');pageLoader?.classList.add('is-leaving');setTimeout(()=>pageLoader?.remove(),240);
+  const pendingContent=app.querySelector('.page-content-pending'),stage=document.createElement('div');stage.className='page-content-stage';stage.style.visibility='hidden';stage.innerHTML=body+footer();if(pendingContent)pendingContent.replaceWith(stage);else app.append(stage);void mountShoplabAds();if(page==='search')void waitForPageImages(stage);else await waitForPageImages(stage);stage.style.visibility='';stage.classList.add('is-ready');const pageLoader=app.querySelector('.shoplab-page-loader');pageLoader?.classList.add('is-leaving');setTimeout(()=>pageLoader?.remove(),240);
   if(page==='compare')initializeComparisonPage();
   bindHeaderSpotlights();
   bindHeaderAdStrip();

@@ -8248,6 +8248,19 @@ body[data-page="home"] .home-banner-slide.is-active{transform:none!important;opa
 body[data-page="home"] .home-banner-slide picture{transform:none!important;animation:none!important;transition:none!important;filter:none!important}
 body[data-page="home"] .home-banner-slide :is(img,.home-banner-copy,.home-banner-copy small,.home-banner-copy strong,.home-banner-copy>span,.home-banner-copy b,.home-banner-shade,.home-banner-overlay){animation:none!important;transition:none!important;filter:none!important;clip-path:none!important}
 
+/* Mobile: o carrossel troca de banner de forma totalmente instantanea. */
+@media(max-width:760px){
+  body[data-page="home"] .home-banner-progress{display:none!important}
+  body[data-page="home"] .home-banner-slide,
+  body[data-page="home"] .home-banner-slide.is-active,
+  body[data-page="home"] .home-banner-slide picture{transform:none!important}
+  body[data-page="home"] .home-banner-slide picture img{transform:translateY(-3px) scale(var(--banner-mobile-scale,1))!important;transform-origin:var(--banner-mobile-x,50%) var(--banner-mobile-y,50%)!important}
+  body[data-page="home"] .home-banner,
+  body[data-page="home"] .home-banner *,
+  body[data-page="home"] .home-banner *::before,
+  body[data-page="home"] .home-banner *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+
 /* Home mobile: hero colado ao cabe�alho e sem moldura lateral do container. */
 @media(max-width:760px){
   html body[data-page="home"] .header,

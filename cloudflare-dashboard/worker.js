@@ -4475,9 +4475,11 @@ async function searchV2(req, env, url, ctx, id) {
   const searchUser = req.headers.has("authorization") ? await activeUser(req, env) : null;
   const premium = searchUser ? await premiumSubscriptionData(env, searchUser.id) : null;
   const premiumEnabled = Boolean(premium?.premium);
+  const smartSearch = url.searchParams.get("smart") === "1" && premiumEnabled;
   const localIntent = localSearchIntent(originalQuery);
-  const aiIntentTask = cachedSearchIntent(env, originalQuery, ctx);
-  const aiIntent = await searchIntentWithinBudget(aiIntentTask, ctx);
+  const aiIntent = smartSearch
+    ? await searchIntentWithinBudget(cachedSearchIntent(env, originalQuery, ctx), ctx)
+    : null;
   const intent = mergeSearchIntent(localIntent, aiIntent);
   const correctedQuery = correctedSearch(intent?.searchTerms || normalizedQuery);
   const ftsQuery = intent
@@ -4582,10 +4584,9 @@ async function searchV2(req, env, url, ctx, id) {
   }
   if (intent && results.length && !sort) results = rankContextualCandidates(results, intent.searchTerms);
   results = rankProductFamilyCandidates(results, intent?.searchTerms || correctedQuery);
-  const smartSearch = url.searchParams.get("smart") === "1" && premiumEnabled;
   const personalContext = smartSearch ? await premiumPersonalSearchContext(env, searchUser.id) : null;
   let premiumRanking = null;
-  if (premiumEnabled && results.length)
+  if (smartSearch && results.length)
     premiumRanking = await premiumSearchRank(env, ctx, originalQuery, intent, results, personalContext);
   if (premiumRanking) results = premiumRanking.products;
   ctx.waitUntil(
