@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {performance} from 'node:perf_hooks';
+import {readFile} from 'node:fs/promises';
 
 class MemoryStorage{
   constructor(){this.values=new Map()}
@@ -35,4 +36,9 @@ test('cold load waits for the network; warm load returns immediately and revalid
   assert.ok(warmMs<10,`warm=${warmMs.toFixed(2)}ms`);
   assert.equal(requests,2,'warm navigation starts one silent revalidation');
   console.log(JSON.stringify({scenario:'public-cache',coldMs:Number(coldMs.toFixed(2)),warmMs:Number(warmMs.toFixed(2)),improvement:Number((coldMs/Math.max(warmMs,.01)).toFixed(1))+'x'}));
+});
+
+test('public cache refresh never forces a page reload',async()=>{
+  const source=await readFile(new URL('../assets/js/app-20260827-v5.js',import.meta.url),'utf8');
+  assert.doesNotMatch(source,/shoplab:cache-update[^\n]*location\.reload\s*\(/,'cache updates must stay in the background');
 });

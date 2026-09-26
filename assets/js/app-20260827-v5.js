@@ -20,8 +20,6 @@ async function bindPremiumBrand(){
 }
 document.addEventListener('click',event=>{if(event.target.closest('.premium-grant-alert>button'))event.target.closest('.premium-grant-alert')?.remove()});
 const params=new URLSearchParams(location.search), page=document.body.dataset.page||'home';
-let cacheRefreshPending=false;
-addEventListener('shoplab:cache-update',event=>{if(cacheRefreshPending||!String(event.detail?.key||'').startsWith('GET/api/v1/'))return;cacheRefreshPending=true;setTimeout(()=>location.reload(),60)});
 const productSlugFromTarget=target=>{const direct=target.closest?.('a[href*="produto.html?slug="]')?.href,card=target.closest?.('.product-card,[data-product-slug]'),candidate=direct||card?.dataset.cardUrl||(card?.dataset.productSlug?`produto.html?slug=${encodeURIComponent(card.dataset.productSlug)}`:'');try{return candidate?new URL(candidate,location.href).searchParams.get('slug')||'':''}catch{return''}};
 let lastPrefetchedProduct='';
 const warmProductTarget=event=>{const slug=productSlugFromTarget(event.target);if(!slug||slug===lastPrefetchedProduct)return;lastPrefetchedProduct=slug;prefetchProductMedia(slug).catch(()=>{})};
