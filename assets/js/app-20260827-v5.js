@@ -1,4 +1,4 @@
-import'./favicon.js?v=20260920-mobile-header-stable-3';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260922-live-revalidate-1';
+import'./favicon.js?v=20260926-dismissible-offer-dock-1';import{getProducts,getTrendingProducts,getCategories,getWeeklyCategoryHighlights,getPromotions,getCollection,getProductBySlug,prefetchProduct,prefetchProductMedia,searchProducts,searchProductsWithMeta,getRecommendations,getFeaturedCollections,getSiteConfig,getHomeData,cachedHomeData,cachedSiteConfig,trackEvent}from'./api.js?v=20260922-live-revalidate-1';
 import'./search-ui.js?v=20260906-search-history-1';
 import{session as authSession,currentUser,signOut,startPresence,userApi}from'./auth-20260827-v5.js?v=20260922-invalid-refresh-cleanup-2';
 import{bindLibraryUI,syncAccountLibrary,localLibrary,getPersonalizedRecommendations}from'./user-library-20260827-v5.js';
@@ -515,7 +515,7 @@ async function init(){
     }
   }
   if(page==='search')import('./universal-search.js?v=20260919-smart-pt-1').then(module=>module.initUniversalSearch()).catch(()=>{});
-  if(page==='product'||document.querySelector('.product-card,.home-price-drop-card'))import('./public-media-20260827-v5.js?v=20260922-desktop-hover-only-1').catch(()=>{});
+  if(page==='product'||document.querySelector('.product-card,.home-price-drop-card'))import('./public-media-20260827-v5.js?v=20260926-news-cards-no-heading-1').catch(()=>{});
   void shoplabAdsModule.then(module=>module.mountShoplabAds()).catch(()=>{});
   if(page==='product')loadProductRecommendations();
   document.addEventListener('click',e=>{const a=e.target.closest('[data-offer]');if(a){e.preventDefault();trackEvent({type:'offer_click',slug:a.dataset.offer});alert('Oferta demonstrativa. O redirecionamento será ativado pela futura API.') }});

@@ -1,4 +1,4 @@
-if(!location.pathname.includes('/admin/')){import('./mobile-enhancements.js?v=20260920-mobile-header-stable-3');import('./pwa.js?v=20260917-cache-swr-1')}
+if(!location.pathname.includes('/admin/')){import('./mobile-enhancements.js?v=20260926-dismissible-offer-dock-1');import('./pwa.js?v=20260917-cache-swr-1')}
 const faviconUrl=new URL('../img/favicon.svg?v=20260721-cart-lab-1',import.meta.url).href;
 const current=[...document.querySelectorAll('link[rel~="icon"]')];
 const icon=current[0]||document.createElement('link');

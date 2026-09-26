@@ -64,7 +64,7 @@ function productDock(){
   const dock=document.createElement('aside');
   dock.className='mobile-product-dock';
   dock.setAttribute('aria-label','Oferta do produto');
-  dock.innerHTML='<div class="mobile-product-dock-price"><small>Melhor preço</small><strong></strong><span hidden>Antes <s></s></span></div><a class="btn primary">Ver oferta <span aria-hidden="true"></span></a>';
+  dock.innerHTML='<div class="mobile-product-dock-price"><small>Melhor preço</small><strong></strong><span hidden>Antes <s></s></span></div><a class="btn primary">Ver oferta <span aria-hidden="true"></span></a><button class="mobile-product-dock-close" type="button" aria-label="Fechar oferta flutuante">×</button>';
   const current=dock.querySelector('.mobile-product-dock-price>strong'),before=dock.querySelector('.mobile-product-dock-price>span'),beforeValue=before.querySelector('s');
   const syncPrice=()=>{
     const price=offer.querySelector(':scope>.price,.price'),old=offer.querySelector('.offer-price-top .old,.price .old');
@@ -80,7 +80,9 @@ function productDock(){
   link.dataset.offer=action.dataset.offer||'';
   document.body.append(dock);
   new MutationObserver(syncPrice).observe(offer,{childList:true,subtree:true,characterData:true});
-  const observer=new IntersectionObserver(entries=>{
+  let observer;
+  dock.querySelector('.mobile-product-dock-close').addEventListener('click',()=>{observer?.disconnect();dock.classList.remove('is-visible');setTimeout(()=>dock.remove(),200)});
+  observer=new IntersectionObserver(entries=>{
     dock.classList.toggle('is-visible',!entries[0].isIntersecting&&entries[0].boundingClientRect.top<0);
   },{rootMargin:'-72px 0px -20% 0px'});
   observer.observe(offer);

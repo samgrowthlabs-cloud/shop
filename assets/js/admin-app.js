@@ -51,12 +51,12 @@ const groups=[
   {id:'content',label:'Conteúdo institucional',icon:icons.overview}
 ];
 const legacy={'index.html':'painel','usuarios.html':'usuarios','produtos.html':'produtos','produto-formulario.html':'produto-formulario','categorias.html':'categorias','colecoes.html':'colecoes','marcas.html':'marcas','parceiros.html':'parceiros','promocoes.html':'promocoes','banners.html':'banners','destaque-cabecalho.html':'destaques','anuncios-cabecalho.html':'shoplab-ads','premium.html':'premium','ia.html':'ia','colaboradores.html':'equipe','arquivos.html':'arquivos','call.html':'call','temas.html':'aparencia'};
-let session,navigating=false,currentRoute='',routeRequests=new AbortController();const deniedRoutes=new Set();
+let session,currentRoute='',navigationVersion=0,routeRequests=new AbortController();const deniedRoutes=new Set();
 const moduleImports={taxonomy:()=>import('./admin-taxonomy.js?v=20260922-product-editor-desktop-3'),main:()=>import('./admin.js?v=20260922-dashboard-help-3'),v2:()=>import('./admin-v2.js?v=20260923-finish-recording-script-1'),security:()=>import('./admin-security.js?v=20260924-permanent-request-1'),news:()=>import('./admin-news.js?v=20260911-news-engagement-2'),ads:()=>import('./shoplab-ads.js?v=20260911-ads-delivery-fix-1'),converter:()=>import('./media-converter.js?v=20260829-r2-ffmpeg-21'),recorder:()=>import('./audio-recorder.js?v=20260923-finish-recording-script-1'),mixer:()=>import('./audio-mixer.js?v=20260923-finish-recording-script-1'),call:()=>import('./admin-team-call.js?v=20260905-team-call-v5')};
 const loadedModules=new Map();
 const ensureModule=name=>{if(!loadedModules.has(name))loadedModules.set(name,moduleImports[name]().catch(error=>{loadedModules.delete(name);throw error}));return loadedModules.get(name)};
 const nativeFetch=window.fetch.bind(window),nativeSetTimeout=window.setTimeout.bind(window),nativeSetInterval=window.setInterval.bind(window),nativeClearTimeout=window.clearTimeout.bind(window),nativeClearInterval=window.clearInterval.bind(window),routeTimers=new Set();
-window.fetch=(input,options={})=>{const url=typeof input==='string'?input:input?.url||'',request=url.includes('/api/v1/admin/')&&!options.signal?{...options,signal:routeRequests.signal}:options;return nativeFetch(input,request).catch(error=>error?.name==='AbortError'?new Promise(()=>{}):Promise.reject(error))};
+window.fetch=(input,options={})=>{const url=typeof input==='string'?input:input?.url||'',request=url.includes('/api/v1/admin/')&&!options.signal?{...options,signal:routeRequests.signal}:options;return nativeFetch(input,request)};
 window.setTimeout=(callback,delay,...args)=>{const id=nativeSetTimeout((...values)=>{routeTimers.delete(id);callback(...values)},delay,...args);routeTimers.add(id);return id};
 window.setInterval=(callback,delay,...args)=>{const id=nativeSetInterval(callback,delay,...args);routeTimers.add(id);return id};
 window.clearTimeout=id=>{routeTimers.delete(id);nativeClearTimeout(id)};
@@ -121,26 +121,29 @@ function renderNavigation(route){
 
 async function api(path,options={}){const response=await fetch(C.API_BASE_URL+path,{...options,credentials:'include'});const json=await response.json();if(response.status===401){location.href=cleanAdminUrls()?'/login':'login.html';throw new Error('Sessão expirada')}if(!response.ok||!json.success){const error=new Error(json.error?.message||`Erro ${response.status}`);error.status=response.status;error.code=json.error?.code||'';throw error}return json.data}
 
+function recordActivity(route){nativeFetch(C.API_BASE_URL+'/api/v1/admin/auth/session?section='+encodeURIComponent(routes[route].label),{credentials:'include',keepalive:true}).catch(error=>console.warn('Falha ao registrar atividade administrativa',error))}
+
 async function navigate(requested,{push=true,source}={}){
-  if(navigating)return;
   let route=allowed(requested)?requested:Object.keys(routes).find(allowed);
   if(!route){location.href=cleanAdminUrls()?'/login':'login.html';return}
-  cancelPreviousRoute();navigating=true;currentRoute=route;document.documentElement.classList.add('admin-is-navigating');
+  const navigationId=++navigationVersion;
+  cancelPreviousRoute();currentRoute=route;document.documentElement.classList.add('admin-is-navigating');
   if(push)history.pushState({route},'',routeUrl(route,source));
   document.body.dataset.adminPage=routes[route].target;
   renderNavigation(route);
-  document.querySelectorAll('[role="tab"]').forEach(tab=>tab.disabled=true);
   document.querySelector('#content').innerHTML='<div class="admin-loading">Carregando dados…</div>';
   try{
     document.querySelector('.admin-main')?.classList.remove('ads-editor');document.querySelector('.ads-view-tabs')?.remove();
     await ensureModule(routes[route].module);
+    if(navigationId!==navigationVersion)return;
     const controller=routes[route].module==='taxonomy'?window.ShoplabTaxonomy:routes[route].module==='main'?window.ShoplabAdminMain:routes[route].module==='security'?window.ShoplabAdminSecurity:routes[route].module==='news'?window.ShoplabAdminNews:routes[route].module==='ads'?window.ShoplabAdsAdmin:routes[route].module==='converter'?window.ShoplabMediaConverter:routes[route].module==='recorder'?window.ShoplabAudioRecorder:routes[route].module==='mixer'?window.ShoplabAudioMixer:routes[route].module==='call'?window.ShoplabTeamCall:window.ShoplabAdminV2;
     await controller.run(routes[route].target,session);
+    if(navigationId!==navigationVersion)return;
     if(routes[route].target==='product-form'){const taxonomy=await import('./admin-taxonomy.js?v=20260922-product-editor-desktop-3');await taxonomy.mountProductClassification();}
-    await api('/api/v1/admin/auth/session?section='+encodeURIComponent(routes[route].label)).catch(error=>console.warn('Falha ao registrar atividade administrativa',error));
-    renderNavigation(route);
+    if(navigationId!==navigationVersion)return;
+    recordActivity(route);
   }catch(error){
-    if(error?.name==='AbortError')return;
+    if(error?.name==='AbortError'||navigationId!==navigationVersion)return;
     if(error?.status===403){
       deniedRoutes.add(route);renderNavigation(route);
       const fallback=Object.keys(routes).find(allowed);
@@ -150,12 +153,13 @@ async function navigate(requested,{push=true,source}={}){
     }
     document.querySelector('#message').textContent=error.message;document.querySelector('#message').className='admin-message show error';
   }finally{
-    navigating=false;document.documentElement.classList.remove('admin-is-navigating');document.querySelectorAll('[role="tab"]').forEach(tab=>tab.disabled=false);
+    if(navigationId===navigationVersion)document.documentElement.classList.remove('admin-is-navigating');
   }
 }
 window.ShoplabAdminApp={navigate:(route,options={})=>navigate(route,options),refresh:()=>navigate(currentRoute,{push:false}),restoreChrome:()=>renderNavigation(currentRoute)};
 
 document.addEventListener('click',event=>{const control=event.target.closest('[data-admin-route],.admin-main a[href]');if(!control)return;const href=control.getAttribute('href')||'',file=href.split('?')[0].split('/').pop(),route=control.dataset.adminRoute||legacy[file];if(!route)return;event.preventDefault();navigate(route,{source:href})});
+document.addEventListener('pointerdown',event=>{const control=event.target.closest('[data-admin-route]'),route=control?.dataset.adminRoute,moduleName=routes[route]?.module;if(moduleName)ensureModule(moduleName).catch(()=>{})},{passive:true});
 document.addEventListener('pointerover',event=>{const control=event.target.closest('[data-admin-route]'),route=control?.dataset.adminRoute,moduleName=routes[route]?.module;if(moduleName)ensureModule(moduleName).catch(()=>{})},{passive:true});
 document.addEventListener('keydown',event=>{const tab=event.target.closest('[role="tab"][data-admin-route]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const tabs=[...tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]:not(:disabled)')];let index=tabs.indexOf(tab);if(event.key==='Home')index=0;else if(event.key==='End')index=tabs.length-1;else index=(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;event.preventDefault();tabs[index]?.focus()});
 addEventListener('popstate',()=>navigate(routeFromUrl(),{push:false}));

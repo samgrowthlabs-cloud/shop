@@ -14,7 +14,8 @@
 /* quiet pending surface: preserve layout without spinner, skeleton or white flash */
 .page-content-pending{display:block!important;min-height:calc(100dvh - 150px)!important;background:var(--page-pending-bg,#f4f8f7)!important}
 body[data-page="home"]{--page-pending-bg:var(--home-content-background,#f4f8fb)}
-body[data-page="product"],body[data-page="search"],body[data-page="catalog"],body[data-page="category"],body[data-page="brand"]{--page-pending-bg:#f7f9f8}
+body[data-page="product"]{--page-pending-bg:#fff}
+body[data-page="search"],body[data-page="catalog"],body[data-page="category"],body[data-page="brand"]{--page-pending-bg:#f7f9f8}
 .page-content-stage,.news-content-stage{opacity:1!important;transition:none!important}
 body[data-page="news"] .news-shell{min-height:calc(100dvh - 150px);background:#f7f9f8}
 body[data-page="news"] #news-app{min-height:calc(100dvh - 190px)}

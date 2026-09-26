@@ -29,7 +29,7 @@ O Worker protege `admin.shoplab.com.br` e todas as rotas `/api/v1/admin/*` antes
 
 ## Dispositivos confiaveis
 
-A migration `admin-trusted-devices-upgrade.sql` adiciona o modo hibrido, mas preserva `strict` como padrao. Tokens possuem 256 bits aleatorios, duram 180 dias, ficam apenas no cookie `shoplab_trusted_device` (`Secure`, `HttpOnly`, `SameSite=None`, `Path=/api/v1/`) e somente SHA-256 e armazenado no D1. O token gira depois de cada desafio de nova rede.
+A migration `admin-trusted-devices-upgrade.sql` adiciona o modo `hybrid`, mas preserva `strict` como padrao. Em producao, selecione `hybrid` para a politica device-first: Trusted Device valido + sessao valida + identidade ativa + RBAC permitem acesso, enquanto o IP vira contexto de risco e auditoria. Tokens possuem 256 bits aleatorios, duram 180 dias, ficam no cookie `shoplab_trusted_device` (`Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`) e somente SHA-256 e armazenado no D1. A troca normal de rede nao rotaciona nem revoga o token.
 
 `https://admin.shoplab.com.br/admin-access` e o unico corredor que ignora a allowlist inicial, inclusive quando a politica continua em modo estrito. Ele permite somente consultar o estado do proprio fluxo, autenticar com Turnstile, criar/consultar uma solicitacao e consumir uma aprovacao mediante o desafio secreto. As APIs `/api/v1/admin/*` continuam fail-closed. No modo hibrido, uma concessao temporaria dura 2 horas e vincula IP, hash da sessao, dispositivo e identidade.
 
@@ -38,3 +38,13 @@ A migration `admin-trusted-devices-upgrade.sql` adiciona o modo hibrido, mas pre
 A migration `admin-device-requests-upgrade.sql` cria pedidos com duracao de 10 minutos e estados `PENDING`, `APPROVED`, `DENIED`, `EXPIRED` e `CONSUMED`. Em bancos onde essa tabela ja existe, execute tambem `admin-device-request-metadata-upgrade.sql` antes do deploy do Worker para adicionar o snapshot de e-mail e o pais detectado pela Cloudflare. O navegador gera um desafio de 256 bits e guarda-o em `sessionStorage`; o D1 recebe somente SHA-256. O `request_id` sem esse desafio nao permite consultar nem consumir a aprovacao.
 
 O proprietario aprova ou nega no Admin com reautenticacao, mas nunca recebe o token final. Autorizar o IP observado e uma escolha separada, desmarcada por padrao; aprovar apenas o dispositivo nao altera a allowlist. Depois da aprovacao, o navegador original envia o desafio pelo header `X-Device-Request-Secret`, o Worker revalida sessao, identidade, colaborador ativo, status e expiracao, cria o Trusted Device e marca o pedido como `CONSUMED` atomicamente. Sao permitidos no maximo tres pedidos por colaborador ou IP em uma janela de dez minutos; desafios invalidos acumulam tentativas e o pedido e negado na oitava falha. O polling ocorre a cada sete segundos e para nos estados terminais.
+
+
+## Semantica device-first
+
+- Mudanca de IP registra NEW_NETWORK_DETECTED, atualiza o ultimo IP e nao cria nova solicitacao.
+- Logout encerra somente shoplab_session; o Trusted Device permanente continua ativo.
+- Sessao expirada exige novo login, mas nao novo enrollment.
+- Cookie perdido, dispositivo revogado/excluido, token invalido, identidade divergente ou colaborador inativo falham fechados.
+- strict continua exigindo allowlist de IP. Para o comportamento solicitado, selecione hybrid em Admin > Seguranca.
+- ADMIN_RECOVERY_IPS, IPv4, IPv6 e CIDR continuam disponiveis.
